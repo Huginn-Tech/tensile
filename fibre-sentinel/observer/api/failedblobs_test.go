@@ -553,7 +553,8 @@ func fbAsk(t *testing.T, ts *httptest.Server, path string) (fbPage, string) {
 // failed_total leave the failure out, a page is no longer held back from a
 // cache for it, and /v1/txs/{hash} answers the same success. It has landed
 // when a publication carries the hash, in either case, or a cost line does
-// (a block whose publication the scanner could not build).
+// (a block whose publication the scanner could not build); then a lookup by
+// the hash answers no failed_tx either.
 func TestAFailureThatLandedLaterIsNotListed(t *testing.T) {
 	ts, _, st := fbFixture(t, true)
 	const all = "/v1/blobs?include_failed=1&limit=50"
@@ -588,6 +589,9 @@ func TestAFailureThatLandedLaterIsNotListed(t *testing.T) {
 	if p.Total != 17 || *p.FailedTotal != 6 || !strings.HasPrefix(p.ids(), "f113:0,f111:0,") || cache != "no-store" {
 		t.Fatalf("a second failure, not final: total %d, failed_total %d, %q: %s", p.Total, *p.FailedTotal, cache, p.ids())
 	}
+	if lookup := ftxAsk(t, ts, "/v1/blobs?tx="+gap); lookup.keys["failed_tx"] == nil || lookup.cache != "no-store" {
+		t.Errorf("/v1/blobs?tx= of the failure: %q %s", lookup.cache, lookup.body)
+	}
 	at := ftxAt.Add(114 * time.Second)
 	cost := txcost.Record{SchemaVersion: txcost.SchemaVersion, DedupeKey: txcost.Key(114, 0), Height: 114, TxIndex: 0, Time: at, TxHash: gap,
 		GasWanted: 200000, GasUsed: 150000, Fee: "2000utia", FeePayer: samplePublisher,
@@ -605,5 +609,8 @@ func TestAFailureThatLandedLaterIsNotListed(t *testing.T) {
 	}
 	if tx := ftxAsk(t, ts, "/v1/txs/"+gap); tx.status != 200 || string(tx.keys["status"]) != `"success"` {
 		t.Errorf("/v1/txs of the transaction landed in a gap: %d %s", tx.status, tx.body)
+	}
+	if lookup := ftxAsk(t, ts, "/v1/blobs?tx="+gap); lookup.keys["failed_tx"] != nil || string(lookup.keys["total"]) != "0" || lookup.cache != "no-store" {
+		t.Errorf("/v1/blobs?tx= of the transaction landed in a gap: %q %s", lookup.cache, lookup.body)
 	}
 }

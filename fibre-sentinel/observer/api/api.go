@@ -4189,6 +4189,19 @@ func (s *Server) handleBlobs(w http.ResponseWriter, r *http.Request) {
 			s.writeInternal(w, r.URL.Path, err)
 			return
 		}
+		// A failure that was not final, whose transaction has since landed
+		// where the scanner recorded no publication (its cost line or its
+		// movement is the success): a success wins, as on /v1/txs/{hash}.
+		if failed != nil && !failed.AntePassed {
+			landed, err := hashLanded(r.Context(), s.st.DB(), tx)
+			if err != nil {
+				s.writeInternal(w, r.URL.Path, err)
+				return
+			}
+			if landed {
+				failed = nil
+			}
+		}
 		if failed != nil {
 			out["failed_tx"] = failed
 		}

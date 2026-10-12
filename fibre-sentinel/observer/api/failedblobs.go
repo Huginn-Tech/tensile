@@ -207,6 +207,14 @@ type blobsAsk struct {
 	before *[2]int64
 }
 
+// hashLanded reports whether the transaction hash h (lower-case hex) is a
+// success on record (landedSQL).
+func hashLanded(ctx context.Context, db *sql.DB, h string) (bool, error) {
+	var landed bool
+	err := db.QueryRowContext(ctx, landedSQL, h, h, strings.ToUpper(h), h).Scan(&landed)
+	return landed, err
+}
+
 // hasLanded reports whether r, a failure that was not final, has since
 // landed under its hash. The caller holds f.mu.
 func (f *failedPays) hasLanded(ctx context.Context, db *sql.DB, r failedPayRow) (bool, error) {
@@ -214,8 +222,8 @@ func (f *failedPays) hasLanded(ctx context.Context, db *sql.DB, r failedPayRow) 
 	if f.landed[h] {
 		return true, nil
 	}
-	var landed bool
-	if err := db.QueryRowContext(ctx, landedSQL, h, h, strings.ToUpper(h), h).Scan(&landed); err != nil {
+	landed, err := hashLanded(ctx, db, h)
+	if err != nil {
 		return false, err
 	}
 	if landed {
