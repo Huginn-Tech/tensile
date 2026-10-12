@@ -132,7 +132,8 @@ derived index of them.
 
 `failed_txs.jsonl` is read only by the transaction lookups (`/v1/blobs?tx=`
 and `/v1/txs/{hash}`, section 9), the Blobs list's failed blob payments
-(`/v1/blobs?include_failed=1`) and a validator's endpoint history (a
+(`/v1/blobs?include_failed=1`), a publisher's transactions
+(`/v1/publishers/{addr}/txs`) and a validator's endpoint history (a
 final failed registration signed by its current operator address): a
 transaction that failed in a block settled nothing, so it is
 in no count, rollup or figure, and `publications.jsonl` and
@@ -364,8 +365,8 @@ older *or* newer than the binary expects.
 | 27 | the slim record: `publications.original_rows` / `total_rows` (the two values queries read out of `raw_json`), `slim_entries`, `reading_rows` |
 | 28 | the slim endpoint check record in `reachability.raw_json`; no table change (the version keeps an older build, which would read the column as JSON, off the store) |
 | 29 | what the earlier sampling and the second vantage's confirmations left goes: the indexes `probes_sampling_started` and `probes_cleared`, and the empty table `probe_confirmations` with its indexes (the migration refuses if it holds a row; the columns `probes.cleared_by` and `confirmed_by` stay, unread, since dropping a column rewrites the table). `must_serve_until_ambiguous` is set from the records where they say so, and written on every insert. No row is rewritten but those; an older build refuses the store, and the way back is a copy taken before (`deploy/README.md`, "Going back past schema 29") |
-| 30 | `failed_txs` and its index `failed_txs_tx (tx_hash, height, tx_index)`: one row per failed inclusion from `failed_txs.jsonl`, its line verbatim, read only by the transaction lookup and in no count, rollup, slim encoder or aggregate. Pure DDL: `meta.migration_rewrites` does not move, so the day partials are kept, but the schema version does, so the endorsement ledger, which is keyed on it, is built again once (and on the way back only if the kept schema-29 ledger is not put back). The way back deletes the version row and the file's `ingest_cursors` row (`deploy/README.md`, "Going back past schema 30") |
-| 31 | the transaction page: `tx_costs` and its index `tx_costs_tx (tx_hash, height, tx_index)`, one row per line of `tx_costs.jsonl`, its line verbatim, keyed `(height, tx_index)`; `failed_tx_msgs`, one row per top-level Fibre message of a final failure, by the account a list names it under (a set-host by its operator address); and the indexes `payments_tx (tx_hash, msg_index)` and `host_events_at (from_height, from_tx_index, cons_address)`, by which `/v1/txs/{hash}` seeks a movement and a registration. Read only by `/v1/txs/{hash}`, the blob's `tx_cost` and a validator's `endpoint_history`; in no count, rollup, slim encoder or aggregate. Pure DDL: `meta.migration_rewrites` does not move, so the day partials are kept, but the schema version does, so the endorsement ledger is built again once (and on the way back only if the kept schema-30 ledger is not put back). `failed_tx_msgs` is written with each failure, in the same transaction, from the record `failed_txs` keeps for its key (never from a later line with the same key); the failures stored before 31 was applied get theirs from the collector's first pass (`store.FillFailedTxMsgs`, recorded in meta `failed_tx_msgs_from` as the version-31 row's `applied_at`), and again by itself after any way back and second upgrade, which applies 31 again. The way back deletes the version row and the `tx_costs.jsonl` cursor row (`deploy/README.md`, "Going back past schema 31") |
+| 30 | `failed_txs` and its index `failed_txs_tx (tx_hash, height, tx_index)`: one row per failed inclusion from `failed_txs.jsonl`, its line verbatim, read only by the lookups and lists section 4 names under `failed_txs.jsonl`, and in no count, rollup, slim encoder or aggregate. Pure DDL: `meta.migration_rewrites` does not move, so the day partials are kept, but the schema version does, so the endorsement ledger, which is keyed on it, is built again once (and on the way back only if the kept schema-29 ledger is not put back). The way back deletes the version row and the file's `ingest_cursors` row (`deploy/README.md`, "Going back past schema 30") |
+| 31 | the transaction page: `tx_costs` and its index `tx_costs_tx (tx_hash, height, tx_index)`, one row per line of `tx_costs.jsonl`, its line verbatim, keyed `(height, tx_index)`; `failed_tx_msgs`, one row per top-level Fibre message of a final failure, by the account a list names it under (a set-host by its operator address); and the indexes `payments_tx (tx_hash, msg_index)` and `host_events_at (from_height, from_tx_index, cons_address)`, by which `/v1/txs/{hash}` seeks a movement and a registration. Read only by `/v1/txs/{hash}`, the blob's `tx_cost`, a validator's `endpoint_history` and a publisher's transactions (`/v1/publishers/{addr}/txs`: its failed deposits and withdrawal requests from `failed_tx_msgs`); in no count, rollup, slim encoder or aggregate. Pure DDL: `meta.migration_rewrites` does not move, so the day partials are kept, but the schema version does, so the endorsement ledger is built again once (and on the way back only if the kept schema-30 ledger is not put back). `failed_tx_msgs` is written with each failure, in the same transaction, from the record `failed_txs` keeps for its key (never from a later line with the same key); the failures stored before 31 was applied get theirs from the collector's first pass (`store.FillFailedTxMsgs`, recorded in meta `failed_tx_msgs_from` as the version-31 row's `applied_at`), and again by itself after any way back and second upgrade, which applies 31 again. The way back deletes the version row and the `tx_costs.jsonl` cursor row (`deploy/README.md`, "Going back past schema 31") |
 
 **The slim record (migration 27, `store/slim.go`, `internal/slim`).** A row this
 build writes keeps in `raw_json` the slim form of its record: every field of the
@@ -740,6 +741,9 @@ GET /v1/tip                   the newest block read, and the newest blob stored 
 GET /v1/market                the publisher side, and the network's reading totals over the whole
                               record (readings: available, unavailable, not_read)
 GET /v1/publishers[/{addr}]   incl. the escrow withdrawal queue read from state
+GET /v1/publishers/{addr}/txs one account's Fibre transactions, successful and failed, newest first,
+                              paged over its whole record (?view=all|escrow, ?limit=, ?offset=):
+                              a withdrawal request with its payout, escrow with its statement (sums)
 GET /v1/params                x/fibre params + change log (heights, block times), pinned protocol
                               constants, the fee formula (price_formula)
 GET /v1/signing               endorsements per settled promise against the ⅔ quorum
@@ -759,8 +763,35 @@ Any other failed answer is `no-store`. `/v1/txs/{hash}` keeps the default
 for a success and a final failure, and is `no-store` for a failure that was
 not final (its bytes could still take effect in a later block), for a
 success that says nothing of what it did (its cost line is stored before the
-rest of its block) and for a 404; `/v1/blobs?include_failed=1` is
-`no-store` for a page holding a failure that was not final.
+rest of its block) and for a 404; `/v1/blobs?include_failed=1` and
+`/v1/publishers/{addr}/txs` are `no-store` for a page holding a failure that
+was not final.
+
+**A publisher's transactions.** `/v1/publishers/{addr}/txs` lists an
+account's successes from `payments` (its blob payments, deposits,
+withdrawal requests and the timeouts of its promises, one row per message;
+a payout is no transaction and stands on the request it paid) and its
+failures one row per transaction, under the lists' rules: a failed blob
+payment as `/v1/blobs?include_failed=1&publisher=` lists it (by its
+promise's publisher, final or not, MsgExec included), a failed deposit or
+withdrawal request by `failed_tx_msgs` (a final failure's top-level
+message, by its signer), a failed timeout under no account. Newest first by
+height, transaction and message, paged by `limit` and `offset` over the
+whole record: the failures are placed among the successes by counting the
+successes before each (bounded ranges of `payments_publisher_time`), as
+the Blobs list places its failures. A withdrawal request's `payout` is
+its `withdrawal_queue` row, sought by its primary key: x/fibre keys a
+withdrawal by its signer and the block time of its request, which is the
+request's own payments time, so the link is exact. It is `paid` only when
+the queue history attributed a payout on record to it (`executed`), with
+that payout's height, time and amount; `pending` while it is queued or its
+outcome is not settled yet, whatever the time; `consumed` or
+`unattributed` as the history says; absent when the history never saw the
+withdrawal. `view=escrow` carries `sums`, the successful movements over
+the whole record (deposited, fees, timed-out charges, every payout), which
+close on the escrow's balance once the escrow read and the scanner stand at
+the same block. No schema change: every statement seeks an index the store
+already has.
 
 **Validator addresses.** Every row is keyed by the consensus address in
 lower-case hex, and the answers keep naming validators by it (`address`,
@@ -787,7 +818,8 @@ with, so a feed reader never sees an entry twice.
 
 The public documentation is the site's API page (`web/src/app/api`, served at `/api/`):
 every documented route in order, with its parameters, a Try it and an
-example answer (`endpoints.ts`), then what every route shares. `/v1/meta`
+example answer (`endpoints.ts`; `/v1/publishers/{addr}/txs`'s is taken from a
+real answer once the route is deployed), then what every route shares. `/v1/meta`
 and `/v1/avatars` are the site's own and are not on it. A
 response carries what some reader uses: a field nothing reads is dropped
 from the answer, never from the store (the snapshot rows keep their
@@ -960,7 +992,7 @@ without that second request.
 | `/blob/?hash=`, `?id=`, `?tx=` | `/v1/blobs/{hash}`; a blob ID (`?id=`) or a settlement transaction (`?tx=`) is found first with `/v1/blobs?commitment=` or `?tx=`, and several matches open the Blobs list of them; a blob not on record yet is asked for again each time `/v1/tip`'s `latest_blob` changes, and every 30 s. A `?tx=` answer with a `failed_tx` renders the transaction page (`/v1/txs/{hash}`, below; with an API before that route, the `failed_tx` itself) and stops asking: it is the answer, final or not. The blob's Gas and Transaction fee are its `tx_cost`, and the transaction hash in its mast opens `/tx/` |
 | `/tx/?hash=` | `/v1/txs/{hash}`: one Fibre transaction, successful or failed, its block, messages, gas and fee, what it did or asked for, the error, and the blob, publisher or validator it touches |
 | `/publishers/` | `/v1/market`, `/v1/publishers` |
-| `/publisher/?addr=` | `/v1/publishers/{addr}` |
+| `/publisher/?addr=` | `/v1/publishers/{addr}` (the account's figures; none counts a failed transaction); its tabs: All and Escrow `/v1/publishers/{addr}/txs?view=all` and `?view=escrow` (a row opens `/tx/`; a withdrawal request's payout under its type; Escrow's statement under its last page, shown when it closes on the balance), Blobs `/v1/blobs?publisher=&include_failed=1` (the first page live, the namespace picker) |
 | `/methodology/` | `/v1/params` (the protocol-parameters section; the rest is static) |
 | `/api/` | `/v1/health` once a minute, only to say when the API does not answer (a 429 reads busy, not down; the observer's own checks are not shown), and each route when its Try it is sent; its example answers are fixed text (`endpoints.ts`) |
 

@@ -8,7 +8,8 @@
  * responses are real answers of the Mocha API (mocha-5), taken between 4
  * and 12 October 2026 with the Try it values below; all but the ones marked
  * `whole` are trimmed to a few fields. Nothing is added and no value is
- * changed.
+ * changed. /v1/publishers/{addr}/txs has none yet: its example is taken
+ * from a real answer once the route is deployed, as the others were.
  *
  * In descriptions and error lines, `backticks` mark a field or parameter.
  */
@@ -781,6 +782,19 @@ export const GROUPS: Group[] = [
         ],
         errors: "404 when the account has no escrow movement on record.",
         example: EX_PUBLISHER,
+      },
+      {
+        id: "publisher-txs",
+        path: "/v1/publishers/{addr}/txs",
+        summary: "One publisher's Fibre transactions, successful and failed, newest first, paged.",
+        desc: "Blob payments, deposits, withdrawal requests and timeouts, each with its `status`: a failure has `code`, `reason` and `final` and no `amount_utia`; a withdrawal request has its `payout`, `paid` only once a payout is on record. A page holding a failure that is not `final` is not cached.",
+        params: [
+          { name: "addr", in: "path", type: "string", required: true, desc: "The publisher's celestia1… account.", example: PUBLISHER },
+          { name: "view", in: "query", type: "string", values: ["all", "escrow"], default: "all", desc: "escrow lists the deposits and withdrawal requests alone, with `sums`: what went in, the fees, the timed-out charges and the payouts, over the whole record.", example: "escrow" },
+          { name: "limit", in: "query", type: "integer", range: "1–100", default: "25", desc: "Transactions per page.", example: "3" },
+          { name: "offset", in: "query", type: "integer", range: "0–100000", default: "0", desc: "Transactions to skip, for numbered pages." },
+        ],
+        errors: "400 when `addr` is not a celestia1… account, `view` is neither all nor escrow, or `limit` or `offset` is out of range.",
       },
       {
         id: "market",
