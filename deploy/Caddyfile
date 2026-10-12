@@ -15,7 +15,9 @@
 		# 'unsafe-inline' is required by the export itself: Next.js emits two
 		# inline <script> blocks (hydration data) and inline style attributes,
 		# and a static site cannot carry per-response nonces. Serving the API
-		# on a different origin means widening connect-src to match.
+		# on a different origin means widening connect-src to match, and so
+		# does a build that asks the other network's site for records
+		# (NEXT_PUBLIC_OTHER_SITE_URL): add that site's origin after 'self'.
 		Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 		X-Frame-Options DENY
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"

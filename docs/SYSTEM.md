@@ -973,7 +973,24 @@ Next.js `output: "export"` — plain files, all data fetched in the browser from
 Two things are fixed when it is built, so each network gets its own build
 (`deploy/README.md`, "5. The site"): `NEXT_PUBLIC_API_URL`, the public API
 the methodology page links the exports, the signing key and the recompute
-command to, and `NEXT_PUBLIC_SELF_VALIDATOR` (below).
+command to, and `NEXT_PUBLIC_SELF_VALIDATOR` (below). `NEXT_PUBLIC_NETWORK_LABEL`
+puts the network's name after "Tensile" in the titles ("Tensile Mocha · …")
+and picks the link preview's image (`public/og-mocha.png`; mainnet's build
+leaves it empty: "Tensile · …" and `og.png`).
+
+The other network's site (`NEXT_PUBLIC_OTHER_SITE_URL`, with
+`NEXT_PUBLIC_OTHER_NETWORK_LABEL`) is asked for a record this one does not
+have, so a link made for one network that lands on the other still opens.
+Only after this site's API has said "not found" (a 404 from
+`/v1/blobs/{hash}`, `/v1/txs/{hash}`, `/v1/publishers/{addr}` or
+`/v1/validators/{addr}`, or a blob lookup that matched nothing), never while
+it loads or fails, the page asks the same route of the other site's API
+once (`lib/othernet.tsx`, 6 s at most); a success there replaces the
+not-found words with "This is on Mocha. Open it there →", a link to the
+same page there, and anything else shows them as before. The blob, `/tx/`,
+publisher and validator pages, the Blobs list's search and the header's
+search do this. Unset, nothing is asked; the site's server lets the pages
+reach that origin (`SITE_CONNECT_SRC`).
 
 Every page's header and footer read `/v1/meta` and `/v1/tip`. The header's
 search asks for a blob identifier that found nothing again each time

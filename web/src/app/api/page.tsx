@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Mark } from "@/components/Chrome";
+import { SITE_NAME } from "@/lib/site";
 import { BaseUrl, Health, Reference } from "./reference";
 
 export const metadata: Metadata = {
-  title: "API · Tensile · Celestia Fibre",
+  title: `API · ${SITE_NAME} · Celestia Fibre`,
   description: "Reference for the Tensile API: its endpoints, their parameters and example responses. Read-only, no key.",
 };
 

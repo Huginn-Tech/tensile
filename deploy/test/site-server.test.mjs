@@ -205,3 +205,56 @@ test("past CLIENTS_MAX addresses a new one shares one allowance with the rest", 
   for (let i = 0; i < 150; i++) got.push(await ask("/api/v1/blobs?limit=50", `198.19.${i >> 8}.${i & 255}`));
   assert.ok(got.includes(429), "new addresses past the cap each got an allowance of their own");
 });
+
+// the policy as it was before SITE_CONNECT_SRC, byte for byte: a server without it sends exactly this
+const CSP = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'";
+const policyOf = async (at, p) => {
+  const r = await fetch(at + p, { headers: { "x-forwarded-for": "198.51.100.40" } });
+  await r.arrayBuffer();
+  return r.headers.get("content-security-policy");
+};
+
+// a second server beside the first, with SITE_CONNECT_SRC set to value: its address once it listens, or its exit code
+// and what it printed when it stops instead
+async function another(value) {
+  const port = await freePort();
+  const p = spawn(process.execPath, [SERVER], {
+    env: { ...process.env, SITE_ROOT: root, SITE_LISTEN: `127.0.0.1:${port}`, API_LISTEN: `127.0.0.1:${api.address().port}`, SITE_CONNECT_SRC: value },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  let err = "";
+  p.stderr.on("data", (b) => { err += b; });
+  const got = await new Promise((ok) => {
+    p.once("close", (code) => ok({ code, err }));
+    p.stdout.on("data", (b) => { if (String(b).includes(" on 127.0.0.1:")) ok({ at: `http://127.0.0.1:${port}` }); });
+  });
+  return { ...got, stop: () => p.kill() };
+}
+
+test("without SITE_CONNECT_SRC the pages may ask this origin alone, as before", async () => {
+  for (const p of ["/", "/api/v1/meta"]) assert.equal(await policyOf(base, p), CSP, p);
+});
+
+test("SITE_CONNECT_SRC adds the other network's site to connect-src, and changes nothing else", async () => {
+  const s = await another("https://tensile-mocha.huginn.tech/");
+  try {
+    assert.ok(s.at, `it did not start: ${s.err}`);
+    const want = CSP.replace("connect-src 'self';", "connect-src 'self' https://tensile-mocha.huginn.tech;");
+    for (const p of ["/", "/api/v1/meta"]) assert.equal(await policyOf(s.at, p), want, p);
+  } finally {
+    s.stop();
+  }
+});
+
+test("a SITE_CONNECT_SRC that is not one https origin stops the server with a message", async () => {
+  for (const v of [
+    "http://tensile-mocha.huginn.tech", "tensile-mocha.huginn.tech", "https://tensile-mocha.huginn.tech/api", "*", "https:",
+    "https://*.huginn.tech", "https://a.huginn.tech https://b.huginn.tech", "https://a.huginn.tech,https://b.huginn.tech",
+    "https://a.huginn.tech; script-src *", "https://a.huginn.tech?x", "https://user@a.huginn.tech", "'self'",
+  ]) {
+    const s = await another(v);
+    s.stop();
+    assert.equal(s.code, 2, v);
+    assert.match(s.err, /SITE_CONNECT_SRC \(.*\) is not one https origin/, v);
+  }
+});

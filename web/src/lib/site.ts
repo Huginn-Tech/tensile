@@ -1,3 +1,5 @@
+import { otherSiteOf, previewImage, siteName } from "@/lib/othernet-core";
+
 /**
  * Who this deployment says it is.
  *
@@ -38,3 +40,21 @@ export const DISPUTE_URL = `${SOURCE_URL}/blob/main/docs/verdicts.md#disputing-a
  * everyone else's, which is the point of saying which row it is.
  */
 export const SELF_VALIDATOR = (process.env.NEXT_PUBLIC_SELF_VALIDATOR ?? "").trim().toLowerCase();
+
+/**
+ * The site's name in its titles, the tab's and a shared link's preview: "Tensile" with this network's name after it
+ * (NEXT_PUBLIC_NETWORK_LABEL, "Mocha" in web/.env.production), so a Mocha page is never taken for mainnet's. The
+ * mainnet build sets it empty, and its titles stay plain "Tensile".
+ */
+export const SITE_NAME = siteName(process.env.NEXT_PUBLIC_NETWORK_LABEL);
+
+/** A shared link's preview image, by the same name: public/og.png on mainnet, public/og-mocha.png on Mocha. */
+export const PREVIEW_IMAGE_PATH = previewImage(process.env.NEXT_PUBLIC_NETWORK_LABEL);
+
+/**
+ * The other network's site, its origin (NEXT_PUBLIC_OTHER_SITE_URL) and its name (NEXT_PUBLIC_OTHER_NETWORK_LABEL): a
+ * blob, a transaction, a publisher or a validator this site has no record of is asked for there, once, and one there
+ * shows as a line with a link to its page (lib/othernet.tsx). Unset, or either one missing, nothing is ever asked. The
+ * site's server has to let the pages reach it (SITE_CONNECT_SRC, deploy/site-server.cjs).
+ */
+export const OTHER_SITE = otherSiteOf(process.env.NEXT_PUBLIC_OTHER_SITE_URL, process.env.NEXT_PUBLIC_OTHER_NETWORK_LABEL);

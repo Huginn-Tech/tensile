@@ -991,19 +991,44 @@ API is down for those minutes.
 ## 5. The site
 
 The site is a static export of `web/`, and each network gets its own build.
-Two settings are fixed when it is built, and a build made for one network
+These settings are fixed when it is built, and a build made for one network
 is wrong on the other:
 
 - `NEXT_PUBLIC_API_URL`, that site's public API
   (`https://mocha.observer.example.org/api/v1`). The methodology page's
   links to the exports and the signing key, and the recompute command it
   prints, use it, and a shared link's preview takes the site's address
-  from it. Unset, it is Mocha's live API.
+  (its image's) from it. `web/.env.production` holds Mocha's
+  (`https://tensile-mocha.huginn.tech/api/v1`).
 - `NEXT_PUBLIC_SELF_VALIDATOR`, the consensus address
   (`celestiavalcons1…`) of the validator the operator runs on that
   network, which the site marks "runs Tensile". `web/.env.production`
   holds Mocha's; a value given on the command line wins over it. Each
   network has its own validator key, so each build needs its own value.
+- `NEXT_PUBLIC_NETWORK_LABEL`, the network's name in the site's titles,
+  after "Tensile": "Tensile Mocha · Real-time Celestia Fibre explorer" in
+  the browser tab and "Tensile Mocha · Celestia Fibre explorer" in a shared
+  link's preview, so a Mocha page is never taken for mainnet's. It also
+  picks the preview's image, `web/public/og-<name in lower case>.png`
+  (`og-mocha.png`, "Tensile Mocha" and Mocha's address); a new name needs
+  its image there. `web/.env.production` holds Mocha's (`Mocha`); the
+  mainnet build gives it empty on the command line
+  (`NEXT_PUBLIC_NETWORK_LABEL=`), and its titles stay "Tensile · …" with
+  `og.png`.
+
+Two more, `NEXT_PUBLIC_OTHER_SITE_URL` and
+`NEXT_PUBLIC_OTHER_NETWORK_LABEL`, name the other network's site (its https
+origin) and that network's name. A blob, a transaction, a publisher or a
+validator this site has no record of (its API answered "not found") is
+asked for once on that site's API, and one there shows as a line, "This is
+on Mocha. Open it there →", a link to the same page there: a link made for
+one network that lands on the other still opens. With either unset nothing
+is asked. The browser must be allowed to reach that origin: with
+site-server, `SITE_CONNECT_SRC` (below); with Caddy, add the origin to
+`connect-src` in the Caddyfile's policy. Mainnet's build names Mocha's site
+(`NEXT_PUBLIC_OTHER_SITE_URL=https://mocha.observer.example.org`,
+`NEXT_PUBLIC_OTHER_NETWORK_LABEL=Mocha`); Mocha's names none until mainnet's
+site exists, and can then name it the same way (`Mainnet`).
 
 `NEXT_PUBLIC_NETWORKS` lists every network's site for the header's switch
 (the current one is marked by origin) and is the same in every build.
@@ -1016,9 +1041,20 @@ NEXT_PUBLIC_SELF_VALIDATOR=celestiavalcons1... \
 NEXT_PUBLIC_NETWORKS="mainnet=https://observer.example.org,mocha=https://mocha.observer.example.org" \
   npm run build
 sudo install -d /var/www/fibre-observer/mocha && sudo cp -r out/. /var/www/fibre-observer/mocha/
+
+# mainnet: plain titles, and the records it has none of asked of Mocha's site
+NEXT_PUBLIC_API_URL=https://observer.example.org/api/v1 \
+NEXT_PUBLIC_SELF_VALIDATOR=celestiavalcons1... \
+NEXT_PUBLIC_NETWORK_LABEL= \
+NEXT_PUBLIC_OTHER_SITE_URL=https://mocha.observer.example.org \
+NEXT_PUBLIC_OTHER_NETWORK_LABEL=Mocha \
+NEXT_PUBLIC_NETWORKS="mainnet=https://observer.example.org,mocha=https://mocha.observer.example.org" \
+  npm run build
+sudo install -d /var/www/fibre-observer/mainnet && sudo cp -r out/. /var/www/fibre-observer/mainnet/
 ```
 
-`make build` builds the site with none of them set, which is a Mocha build.
+`make build` builds the site with none of them set, which is a Mocha build
+(`web/.env.production`).
 
 ### Caddy
 
@@ -1051,20 +1087,31 @@ sudo systemctl enable --now fibre-site@mocha
 ```
 
 The unit reads `SITE_LISTEN` (a port of its own per network, for example
-`127.0.0.1:3112` for mocha and `127.0.0.1:3113` for mainnet) and
-`API_LISTEN` (that network's API, as in its env file) from
-`/etc/fibre-observer/site-<network>.env`, which holds those two lines and
-nothing else, and the site from `/srv/fibre-site/<network>`. It does not
-load the network's env file: that one holds the alert and backup
-credentials, and site-server faces the internet and needs none of them.
+`127.0.0.1:3112` for mocha and `127.0.0.1:3113` for mainnet),
+`API_LISTEN` (that network's API, as in its env file) and
+`SITE_CONNECT_SRC` from `/etc/fibre-observer/site-<network>.env`, which
+holds those lines and nothing else, and the site from
+`/srv/fibre-site/<network>`. It does not load the network's env file: that
+one holds the alert and backup credentials, and site-server faces the
+internet and needs none of them.
+
+`SITE_CONNECT_SRC` is for a build that asks the other network's site for
+records (`NEXT_PUBLIC_OTHER_SITE_URL`, section 5): that site's origin
+(`https://mocha.observer.example.org`), the one origin the pages may reach
+besides their own (`connect-src` in the policy site-server sends). It must
+be one https origin and nothing more; any other value stops site-server at
+start with a message. Unset, the policy is `connect-src 'self'`, as before.
 
 ```bash
 printf 'SITE_LISTEN=127.0.0.1:3112\nAPI_LISTEN=127.0.0.1:8081\n' | sudo tee /etc/fibre-observer/site-mocha.env >/dev/null
+# mainnet, which asks Mocha's site for what it has none of
+printf 'SITE_LISTEN=127.0.0.1:3113\nAPI_LISTEN=127.0.0.1:8080\nSITE_CONNECT_SRC=https://mocha.observer.example.org\n' | sudo tee /etc/fibre-observer/site-mainnet.env >/dev/null
 ```
 
 Point the front proxy's site for that network at `SITE_LISTEN`. A new
 build is copied over the directory; the server picks up the changed files
-without a restart.
+without a restart. A change to the env file, or to `site-server.cjs`,
+takes `sudo systemctl restart fibre-site@<network>`.
 
 site-server rations the API for the visitors. Each client, an IPv4
 address or an IPv6 /64 (one host is given a whole /64), has a token bucket
@@ -1089,7 +1136,8 @@ Mocha and mainnet are two instances of everything, side by side:
 | `POLICY` | empty: the prober's unit passes no `-policy` | empty |
 | API | `127.0.0.1:8081` | `127.0.0.1:8080` |
 | units | `fibre-*@mocha`, `fibre-*@mocha.timer` | `fibre-*@mainnet`, `fibre-*@mainnet.timer` |
-| site build | `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SELF_VALIDATOR` of mocha | the same, of mainnet |
+| site build | `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SELF_VALIDATOR` of mocha, `NEXT_PUBLIC_NETWORK_LABEL=Mocha` | the same, of mainnet; `NEXT_PUBLIC_NETWORK_LABEL=` empty, `NEXT_PUBLIC_OTHER_SITE_URL` and `NEXT_PUBLIC_OTHER_NETWORK_LABEL` Mocha's site |
+| site-server env | `SITE_LISTEN`, `API_LISTEN` | the same, and `SITE_CONNECT_SRC` Mocha's site |
 | site files | `/var/www/fibre-observer/mocha` or `/srv/fibre-site/mocha` | `/var/www/fibre-observer/mainnet` or `/srv/fibre-site/mainnet` |
 | site | `mocha.observer.example.org` | `observer.example.org` |
 | litestream | `litestream-mocha.yml`, bucket path `mocha/observer.db` | `litestream-mainnet.yml`, bucket path `mainnet/observer.db` |
@@ -2135,11 +2183,16 @@ differ from Mocha's, in order.
    `fibre-hosting-db@mainnet.timer` with the hosting lookup, 7b).
 5. **The site.** A build of its own (section 5):
    `NEXT_PUBLIC_API_URL=https://<mainnet site>/api/v1`,
-   `NEXT_PUBLIC_SELF_VALIDATOR=<the operator's mainnet celestiavalcons1…>`
-   and the same `NEXT_PUBLIC_NETWORKS` as Mocha's build. Serve it with
-   Caddy from `/var/www/fibre-observer/mainnet`, or with site-server:
+   `NEXT_PUBLIC_SELF_VALIDATOR=<the operator's mainnet celestiavalcons1…>`,
+   `NEXT_PUBLIC_NETWORK_LABEL=` (empty: plain "Tensile" titles),
+   `NEXT_PUBLIC_OTHER_SITE_URL=https://<mocha site>` and
+   `NEXT_PUBLIC_OTHER_NETWORK_LABEL=Mocha`, so Mocha's links that land on
+   mainnet's site still open, and the same `NEXT_PUBLIC_NETWORKS` as Mocha's
+   build. Serve it with Caddy from `/var/www/fibre-observer/mainnet` (its
+   policy's `connect-src` with Mocha's site added), or with site-server:
    `site-server.cjs` in `/usr/local/lib/fibre-observer/`, the build in
-   `/srv/fibre-site/mainnet`, `fibre-site@mainnet` enabled, the front
+   `/srv/fibre-site/mainnet`, `fibre-site@mainnet` enabled with
+   `SITE_CONNECT_SRC=https://<mocha site>` in `site-mainnet.env`, the front
    proxy pointed at `SITE_LISTEN`. When `NEXT_PUBLIC_NETWORKS` changes,
    build and copy Mocha's site again too, so its switch links to mainnet.
 6. **Backups.** `litestream-mainnet.yml` with both `<network>` lines set to

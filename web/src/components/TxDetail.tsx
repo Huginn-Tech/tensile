@@ -15,6 +15,7 @@ import { CopyMark, Who } from "@/components/Ledger";
 import { unit } from "@/components/Unit";
 import { monthDayTime } from "@/components/BlobsDeck";
 import { KIND_OF, KIND_WORD } from "@/lib/txkind";
+import { useOther, OnOther } from "@/lib/othernet";
 
 /**
  * One Fibre transaction by its hash (/tx/?hash=, and /blob/?tx= for a failure), the same page whether it took effect or
@@ -105,6 +106,9 @@ export default function TxDetail({ hex, fallback }: { hex: string; fallback?: Fa
   const HEX = hex.toUpperCase();
   // an API before /v1/txs answers 404 for every hash: a failure /blob/?tx= found already stands in
   const t = q.data ?? (notFound(q) && fallback ? fromFailed(hex, fallback) : null);
+  // not on record here, said for certain: the other network's site is asked for the same transaction, once, and one
+  // there is a line with a link to this page there in place of the notice
+  const other = useOther(!t && notFound(q) ? [{ route: `/v1/txs/${hex.toLowerCase()}` }] : null);
   if (!t) {
     return (
       <>
@@ -113,7 +117,8 @@ export default function TxDetail({ hex, fallback }: { hex: string; fallback?: Fa
           <div className="pb-addr"><span className="bd-idl">Hash</span><span className="mono">{HEX}</span><Copy text={HEX} label="transaction hash" /></div>
         </section>
         <StatusLine meta={meta} metaError={metaErr} snap={null} client={{ error: notFound(q) ? null : q.error, fetchedAt: q.fetchedAt, status: q.status }} />
-        {notFound(q) && <p className="notice">No Fibre transaction with this hash on record. Tensile keeps Fibre transactions: blob payments, escrow deposits and withdrawals, promise timeouts and endpoint registrations.</p>}
+        {other.href && <p className="elsewhere"><OnOther href={other.href} /></p>}
+        {notFound(q) && !other.asking && !other.href && <p className="notice">No Fibre transaction with this hash on record. Tensile keeps Fibre transactions: blob payments, escrow deposits and withdrawals, promise timeouts and endpoint registrations.</p>}
       </>
     );
   }

@@ -1,5 +1,5 @@
 import { Legend } from "@/components/Verdict";
-import { API_URL, DISPUTE_URL, SOURCE_URL } from "@/lib/site";
+import { API_URL, DISPUTE_URL, SITE_NAME, SOURCE_URL } from "@/lib/site";
 import ProtocolParams from "@/components/ProtocolParams";
 import OnThisPage, { type Section } from "@/components/OnThisPage";
 import { H2, H3 } from "@/components/RefHeading";
@@ -9,7 +9,7 @@ import { H2, H3 } from "@/components/RefHeading";
 // same change as any rule that can move a figure.
 const METHODOLOGY_VERSION = "2026-10-08";
 
-export const metadata = { title: "Methodology · Tensile · Celestia Fibre" };
+export const metadata = { title: `Methodology · ${SITE_NAME} · Celestia Fibre` };
 
 /*
  * A reference page: what a figure means, how it is computed, and where its
