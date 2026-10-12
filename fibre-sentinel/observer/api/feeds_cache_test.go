@@ -18,7 +18,7 @@ import (
 
 // feedsOf is the keys s has feeds cached under.
 func feedsOf(s *Server) []string {
-	prefix := fmt.Sprintf("%p|", s)
+	prefix := fmt.Sprintf("%p|%d|", s, s.feedID)
 	feedCache.Lock()
 	defer feedCache.Unlock()
 	var out []string

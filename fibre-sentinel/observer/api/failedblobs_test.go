@@ -17,6 +17,7 @@ import (
 
 	"github.com/plsgiveup/fibre/fibre-sentinel/internal/failedtx"
 	"github.com/plsgiveup/fibre/fibre-sentinel/internal/scan"
+	"github.com/plsgiveup/fibre/fibre-sentinel/internal/txcost"
 	"github.com/plsgiveup/fibre/fibre-sentinel/observer/api"
 	"github.com/plsgiveup/fibre/fibre-sentinel/observer/store"
 )
@@ -154,6 +155,31 @@ func fbInsert(t *testing.T, st *store.Store, r failedtx.Record) {
 	}
 }
 
+// fbPublish stores the blob b as the collector does: settled at its place
+// by the transaction tx, its promise signed by key.
+func fbPublish(t *testing.T, st *store.Store, b fbRow, tx, key string) {
+	t.Helper()
+	settled := ftxAt.Add(time.Duration(b.height) * time.Second)
+	pub := scan.Publication{
+		SchemaVersion: scan.AttestationSchemaVersion, PromiseHash: b.id, SettlementHeight: b.height, SettlementTxIndex: b.index, SettlementTime: settled,
+		SettlementTxHash: tx, MustServeUntil: settled.Add(time.Hour), RecordedAt: settled, Signer: samplePublisher,
+		Promise: scan.PromiseFields{ChainID: "t", Height: b.height - 1, Commitment: fmt.Sprintf("%064x", b.height), CreationTimestamp: settled, BlobSize: 262144,
+			SignerPublicKey: key, Namespace: b.ns},
+		Assignment: scan.AssignmentTable{
+			ProtocolParams:     scan.ProtocolParamsSnapshot{OriginalRows: 4096, TotalRows: 16384},
+			ValidatorSetHeight: b.height - 1, TotalVotingPower: 10, Sigma: 148, Distinct: 148, ValidatorsWithRows: 1,
+			Validators: []scan.ValidatorAssignment{{Address: sampleValidator, VotingPower: 10, RowCount: 148}},
+		},
+	}
+	raw, err := json.Marshal(pub)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.UpsertPublication(pub, raw); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // fbFixture is the fixture's server, with its own and its store: the blobs
 // and, with failures, the failed transactions of fbFailures and the row
 // that does not decode.
@@ -170,25 +196,7 @@ func fbFixture(t *testing.T, failures bool) (*httptest.Server, *api.Server, *sto
 		if b.pub == other {
 			key = fbOtherKey
 		}
-		settled := ftxAt.Add(time.Duration(b.height) * time.Second)
-		pub := scan.Publication{
-			SchemaVersion: scan.AttestationSchemaVersion, PromiseHash: b.id, SettlementHeight: b.height, SettlementTxIndex: b.index, SettlementTime: settled,
-			SettlementTxHash: txOf(b.id), MustServeUntil: settled.Add(time.Hour), RecordedAt: settled, Signer: samplePublisher,
-			Promise: scan.PromiseFields{ChainID: "t", Height: b.height - 1, Commitment: fmt.Sprintf("%064x", b.height), CreationTimestamp: settled, BlobSize: 262144,
-				SignerPublicKey: key, Namespace: b.ns},
-			Assignment: scan.AssignmentTable{
-				ProtocolParams:     scan.ProtocolParamsSnapshot{OriginalRows: 4096, TotalRows: 16384},
-				ValidatorSetHeight: b.height - 1, TotalVotingPower: 10, Sigma: 148, Distinct: 148, ValidatorsWithRows: 1,
-				Validators: []scan.ValidatorAssignment{{Address: sampleValidator, VotingPower: 10, RowCount: 148}},
-			},
-		}
-		raw, err := json.Marshal(pub)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := st.UpsertPublication(pub, raw); err != nil {
-			t.Fatal(err)
-		}
+		fbPublish(t, st, b, txOf(b.id), key)
 	}
 	if failures {
 		for _, f := range fbFailures(other) {
@@ -520,5 +528,89 @@ func TestTheFailedPaymentsAreReadOnAsTheyAreStored(t *testing.T) {
 	}
 	if n, _, _ := srv.UndecodableRows(); n != 1 {
 		t.Fatalf("undecodable rows %d after reading the list again; want 1", n)
+	}
+}
+
+// fbAsk is a page of the list and its Cache-Control.
+func fbAsk(t *testing.T, ts *httptest.Server, path string) (fbPage, string) {
+	t.Helper()
+	a := ftxAsk(t, ts, path)
+	if a.status != 200 {
+		t.Fatalf("%s: %d %s", path, a.status, a.body)
+	}
+	var p fbPage
+	if err := json.Unmarshal(a.body, &p); err != nil {
+		t.Fatalf("%s: %v", path, err)
+	}
+	if p.FailedTotal == nil {
+		t.Fatalf("%s: no failed_total", path)
+	}
+	return p, a.cache
+}
+
+// A failure that was not final can land in a later block under the same
+// hash. Once it has, the list has its blob and not the failure: total and
+// failed_total leave the failure out, a page is no longer held back from a
+// cache for it, and /v1/txs/{hash} answers the same success. It has landed
+// when a publication carries the hash, in either case, or a cost line does
+// (a block whose publication the scanner could not build); then a lookup by
+// the hash answers no failed_tx either.
+func TestAFailureThatLandedLaterIsNotListed(t *testing.T) {
+	ts, _, st := fbFixture(t, true)
+	const all = "/v1/blobs?include_failed=1&limit=50"
+	open := fbHash("104")
+	p, cache := fbAsk(t, ts, all)
+	if p.Total != 16 || *p.FailedTotal != 6 || !strings.Contains(p.ids(), ",f104:2,") || cache != "no-store" {
+		t.Fatalf("before: total %d, failed_total %d, %q: %s", p.Total, *p.FailedTotal, cache, p.ids())
+	}
+
+	// the same transaction, settled at block 110, its hash written in upper
+	// case as sentinel-synth writes one
+	fbPublish(t, st, fbRow{id: "b110", height: 110, index: 0, ns: fixtureNS}, strings.ToUpper(open), fbSampleKey)
+	p, cache = fbAsk(t, ts, all)
+	if p.Total != 16 || *p.FailedTotal != 5 || strings.Contains(p.ids(), "f104:2") || !strings.HasPrefix(p.ids(), "f111:0,b110,b109,") ||
+		cache != "public, max-age=15" {
+		t.Errorf("landed: total %d, failed_total %d, %q: %s", p.Total, *p.FailedTotal, cache, p.ids())
+	}
+	tx := ftxAsk(t, ts, "/v1/txs/"+open)
+	if tx.status != 200 || string(tx.keys["status"]) != `"success"` || string(tx.keys["height"]) != "110" {
+		t.Errorf("/v1/txs of the landed transaction: %d %s", tx.status, tx.body)
+	}
+	if lookup := ftxAsk(t, ts, "/v1/blobs?tx="+open); string(lookup.keys["total"]) != "1" || lookup.keys["failed_tx"] != nil {
+		t.Errorf("/v1/blobs?tx= of the landed transaction: %s", lookup.body)
+	}
+
+	// another, whose block's publication is a gap: its cost line is the
+	// success
+	gap := fbHash("113")
+	invalid := errorsmod.Wrap(sdkerrors.ErrInvalidRequest, "payment promise height must be positive")
+	fbInsert(t, st, ftxRecord(gap, 113, 0, invalid, false, "", fbPFF(0, fixtureNS, samplePublisher, "q113")))
+	p, cache = fbAsk(t, ts, all)
+	if p.Total != 17 || *p.FailedTotal != 6 || !strings.HasPrefix(p.ids(), "f113:0,f111:0,") || cache != "no-store" {
+		t.Fatalf("a second failure, not final: total %d, failed_total %d, %q: %s", p.Total, *p.FailedTotal, cache, p.ids())
+	}
+	if lookup := ftxAsk(t, ts, "/v1/blobs?tx="+gap); lookup.keys["failed_tx"] == nil || lookup.cache != "no-store" {
+		t.Errorf("/v1/blobs?tx= of the failure: %q %s", lookup.cache, lookup.body)
+	}
+	at := ftxAt.Add(114 * time.Second)
+	cost := txcost.Record{SchemaVersion: txcost.SchemaVersion, DedupeKey: txcost.Key(114, 0), Height: 114, TxIndex: 0, Time: at, TxHash: gap,
+		GasWanted: 200000, GasUsed: 150000, Fee: "2000utia", FeePayer: samplePublisher,
+		Messages: []failedtx.Msg{{Index: 0, TypeURL: ftxURLPFF, Signer: samplePublisher}}, RecordedAt: at}
+	raw, err := json.Marshal(cost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := st.InsertTxCost(cost, raw); err != nil || !ok {
+		t.Fatalf("insert the cost line: %v %v", ok, err)
+	}
+	p, cache = fbAsk(t, ts, all)
+	if p.Total != 16 || *p.FailedTotal != 5 || strings.Contains(p.ids(), "f113:0") || cache != "public, max-age=15" {
+		t.Errorf("landed in a gap: total %d, failed_total %d, %q: %s", p.Total, *p.FailedTotal, cache, p.ids())
+	}
+	if tx := ftxAsk(t, ts, "/v1/txs/"+gap); tx.status != 200 || string(tx.keys["status"]) != `"success"` {
+		t.Errorf("/v1/txs of the transaction landed in a gap: %d %s", tx.status, tx.body)
+	}
+	if lookup := ftxAsk(t, ts, "/v1/blobs?tx="+gap); lookup.keys["failed_tx"] != nil || string(lookup.keys["total"]) != "0" || lookup.cache != "no-store" {
+		t.Errorf("/v1/blobs?tx= of the transaction landed in a gap: %q %s", lookup.cache, lookup.body)
 	}
 }

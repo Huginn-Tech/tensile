@@ -202,6 +202,25 @@ func (c *Collector) Pass(ctx context.Context, now time.Time) []string {
 		c.logf("%s: %v", what, err)
 		passErrs = append(passErrs, fmt.Sprintf("%s: %v", what, err))
 	}
+	// What each successful Fibre transaction cost, before the publications,
+	// the escrow movements and the endpoint registrations: the scanner writes
+	// a block's cost lines with its other records, and read first they are in
+	// the store by the time the blob, the movement or the registration is, so
+	// no answer has a settlement without its cost. Read by the transaction and
+	// blob pages and a validator's endpoint history alone: the ingest reads no
+	// table, and nothing this pass does after reads them.
+	if c.Paths.TxCosts != "" {
+		if r, err := ingest.TxCosts(st, c.Paths.TxCosts, now); err != nil {
+			fail("tx costs", err)
+		} else {
+			if r.Inserted > 0 {
+				c.logf("tx costs: +%d (read %d, line %d)", r.Inserted, r.Read, r.Line)
+			}
+			if r.Skipped > 0 {
+				c.logf("tx costs: WARNING skipped %d undecodable line(s); last: %s", r.Skipped, r.LastSkipped)
+			}
+		}
+	}
 	if r, err := ingest.Publications(st, c.Paths.Publications, now); err != nil {
 		fail("publications", err)
 	} else {
@@ -367,20 +386,6 @@ func (c *Collector) Pass(ctx context.Context, now time.Time) []string {
 			}
 			if r.Skipped > 0 {
 				c.logf("failed txs: WARNING skipped %d undecodable line(s); last: %s", r.Skipped, r.LastSkipped)
-			}
-		}
-	}
-	// What each successful Fibre transaction cost: read by the transaction
-	// and blob pages alone, and by nothing this pass does after.
-	if c.Paths.TxCosts != "" {
-		if r, err := ingest.TxCosts(st, c.Paths.TxCosts, now); err != nil {
-			fail("tx costs", err)
-		} else {
-			if r.Inserted > 0 {
-				c.logf("tx costs: +%d (read %d, line %d)", r.Inserted, r.Read, r.Line)
-			}
-			if r.Skipped > 0 {
-				c.logf("tx costs: WARNING skipped %d undecodable line(s); last: %s", r.Skipped, r.LastSkipped)
 			}
 		}
 	}

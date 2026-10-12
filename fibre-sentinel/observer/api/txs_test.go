@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -424,6 +425,11 @@ func tqTx(t *testing.T, f tqFix, hash, status, kind string) tqGot {
 	if g.a.Final != nil && !*g.a.Final {
 		want = "no-store"
 	}
+	// a success that says nothing of what it did: its block's records are
+	// not all stored yet
+	if status == "success" && string(g.keys["effect"]) == "{}" && string(g.keys["related"]) == "{}" {
+		want = "no-store"
+	}
 	if g.cache != want {
 		t.Errorf("%s: Cache-Control %q, want %q", hash, g.cache, want)
 	}
@@ -539,11 +545,12 @@ func TestTxPageFindsATransactionEveryWay(t *testing.T) {
 	}
 	tqWant(t, "timeout", g.rel, "publisher", ctPublisher)
 
-	// A movement cost line with no payment row cannot come from the chain
-	// (a successful movement is top-level and has its row): nothing is said.
+	// A movement cost line with no payment row (a successful movement is
+	// top-level and has its row; this one's is not stored yet): nothing is
+	// said, and the answer is not cached.
 	g = tqTx(t, f, tqGhost, "success", failedtx.KindDeposit)
-	if string(g.keys["effect"]) != "{}" || string(g.keys["related"]) != "{}" {
-		t.Errorf("a deposit with no row: effect %s, related %s", g.keys["effect"], g.keys["related"])
+	if string(g.keys["effect"]) != "{}" || string(g.keys["related"]) != "{}" || g.cache != "no-store" {
+		t.Errorf("a deposit with no row: effect %s, related %s, Cache-Control %q", g.keys["effect"], g.keys["related"], g.cache)
 	}
 
 	// A publication with no cost line: its one message, whole; no cost.
@@ -561,7 +568,7 @@ func TestTxPageFindsATransactionEveryWay(t *testing.T) {
 	for _, k := range []string{"cost", "messages_partial", "failure"} {
 		tqWant(t, "a publication alone", g.keys, k, nil)
 	}
-	if g.a.Height != 36 || g.a.TxIndex != 0 || !g.a.Time.Equal(parseTS(settledAt)) {
+	if g.a.Height != 36 || g.a.TxIndex != 0 || g.a.Time != settledAt || settledAt == "" {
 		t.Errorf("a publication alone: block %d/%d at %s, want 36/0 at %s", g.a.Height, g.a.TxIndex, g.a.Time, settledAt)
 	}
 	tqWant(t, "a publication alone", g.effect, "promise_hash", tqPub2Promise)
@@ -788,6 +795,153 @@ func TestTxPageRowsThatDoNotDecode(t *testing.T) {
 	if n, _, _ := f.srv.UndecodableRows(); n != before+2 {
 		t.Errorf("row faults %d after the failure, want %d", n, before+2)
 	}
+}
+
+// Every time the transaction page gives is the store's string for its
+// instant (store.TS: nine fractional digits, trailing zeros kept), so one
+// block reads the same on every route: a success by its cost line, its
+// publication or its movements alone, a failure, the same failure's
+// failed_tx and its row among the failed blob payments, and each row of an
+// endpoint history that names a transaction.
+func TestTxPageTimesAreTheStoresStrings(t *testing.T) {
+	f := tqFixture(t)
+	fixed := regexp.MustCompile(`^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{9}Z$`)
+	txTime := func(hash string) string {
+		t.Helper()
+		g := tqAsk(t, f.srv, "/v1/txs/"+hash)
+		if g.status != 200 || !fixed.MatchString(g.a.Time) {
+			t.Errorf("%s: %d, time %q", hash, g.status, g.a.Time)
+		}
+		return g.a.Time
+	}
+	// Block 32 is at 17:00:27.2 and block 45 at 17:00:48: the zeros are
+	// kept. The first is found by its cost line, the second by its
+	// movement alone, the third is a failure.
+	for _, c := range []struct{ hash, want string }{
+		{ctSettledTx, "2026-09-06T17:00:27.200000000Z"},
+		{ctWithdrawTx, "2026-09-06T17:00:48.000000000Z"},
+		{tqFDep, store.TS(ctBlockTime(79))},
+	} {
+		if got := txTime(c.hash); got != c.want {
+			t.Errorf("%s: time %q, want %q", c.hash, got, c.want)
+		}
+	}
+
+	// by its publication alone: the blob row's settlement_time
+	var page struct {
+		Blobs []struct {
+			Status           string `json:"status"`
+			SettlementTxHash string `json:"settlement_tx_hash"`
+			SettlementTime   string `json:"settlement_time"`
+		} `json:"blobs"`
+	}
+	if err := json.Unmarshal(tqAsk(t, f.srv, "/v1/blobs?tx="+tqPub2Tx).body, &page); err != nil || len(page.Blobs) != 1 {
+		t.Fatalf("/v1/blobs?tx=%s: %v", tqPub2Tx, err)
+	}
+	if got, want := txTime(tqPub2Tx), page.Blobs[0].SettlementTime; got != want {
+		t.Errorf("a publication alone: time %q, the blob row's %q", got, want)
+	}
+
+	// a failed blob payment: its failed_tx, and its row in the list
+	want := txTime(tqFPFF)
+	var lookup struct {
+		FailedTx struct {
+			Time string `json:"time"`
+		} `json:"failed_tx"`
+	}
+	if err := json.Unmarshal(tqAsk(t, f.srv, "/v1/blobs?tx="+tqFPFF).body, &lookup); err != nil || lookup.FailedTx.Time != want {
+		t.Errorf("failed_tx time %q (%v), /v1/txs %q", lookup.FailedTx.Time, err, want)
+	}
+	page.Blobs = nil
+	if err := json.Unmarshal(tqAsk(t, f.srv, "/v1/blobs?include_failed=1&limit=500").body, &page); err != nil {
+		t.Fatal(err)
+	}
+	listed := false
+	for _, r := range page.Blobs {
+		if r.Status == "failed" && r.SettlementTxHash == tqFPFF {
+			listed = true
+			if r.SettlementTime != want {
+				t.Errorf("the failed payment's row: settlement_time %q, /v1/txs %q", r.SettlementTime, want)
+			}
+		}
+	}
+	if !listed {
+		t.Errorf("%s is not among the failed blob payments", tqFPFF)
+	}
+
+	// each row of an endpoint history that names a transaction
+	for _, v := range []string{tqValA, tqValB} {
+		rows, _, err := f.srv.endpointHistory(context.Background(), v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range rows {
+			if r.TxHash == "" {
+				continue
+			}
+			if got := txTime(r.TxHash); got != r.Time {
+				t.Errorf("%s's %s row %s: time %q, /v1/txs %q", v, r.Outcome, r.TxHash, r.Time, got)
+			}
+		}
+	}
+}
+
+// A success whose cost line is stored before what its block did (the
+// collector stores the cost lines first, and a registration only on its
+// full pass) says nothing of what it did and is not cached; once the
+// registration is stored, it says what it did and keeps the default.
+func TestTxPageASuccessAheadOfItsRegistrationIsNotCached(t *testing.T) {
+	f := tqFixture(t)
+	hash := tqHash("A's registration whose event is not stored yet")
+	rec := tqCost(hash, 95, 0, tqBech("celestia", 0xa1), tqMsg(0, failedtx.KindSetHost, tqOpA))
+	raw, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := f.st.InsertTxCost(rec, raw); err != nil || !ok {
+		t.Fatalf("insert the cost line: %v %v", ok, err)
+	}
+	g := tqTx(t, f, hash, "success", failedtx.KindSetHost)
+	if g.cache != "no-store" || g.a.Cost == nil || string(g.keys["effect"]) != "{}" || string(g.keys["related"]) != "{}" {
+		t.Errorf("ahead of its registration: %q %s", g.cache, g.body)
+	}
+	if _, err := f.st.ReplayHostEvent(tqEvent(tqValA, 95, 1, "10.0.0.9:7980", scan.HostFromEvent)); err != nil {
+		t.Fatal(err)
+	}
+	g = tqTx(t, f, hash, "success", failedtx.KindSetHost)
+	if g.cache != "public, max-age=15" {
+		t.Errorf("with its registration: Cache-Control %q", g.cache)
+	}
+	want := tqJSON(t, map[string]any{"action": "changed", "host": "10.0.0.9:7980", "previous_host": tqHostA3})
+	if got := string(g.keys["effect"]); got != want {
+		t.Errorf("with its registration: effect %s, want %s", got, want)
+	}
+}
+
+// A reading's settlement_tx_hash is the one the blob's row carries, in lower
+// case, though the record holds it in upper case as sentinel-synth writes
+// it; and the transaction page finds it.
+func TestAReadingsSettlementTxHashIsTheBlobRows(t *testing.T) {
+	f := tqFixture(t)
+	upper := strings.ToUpper(tqPub2Tx)
+	tqExec(t, f.st, `UPDATE publications SET settlement_tx_hash = ? WHERE promise_hash = ?`, upper, tqPub2Promise)
+	rs := []validatorReading{{PromiseHash: tqPub2Promise}}
+	if err := f.srv.fillSettledAt(context.Background(), rs); err != nil {
+		t.Fatal(err)
+	}
+	var page struct {
+		Blobs []struct {
+			SettlementTxHash string `json:"settlement_tx_hash"`
+			SettlementTime   string `json:"settlement_time"`
+		} `json:"blobs"`
+	}
+	if err := json.Unmarshal(tqAsk(t, f.srv, "/v1/blobs?tx="+tqPub2Tx).body, &page); err != nil || len(page.Blobs) != 1 {
+		t.Fatalf("/v1/blobs?tx=%s: %v", tqPub2Tx, err)
+	}
+	if b := page.Blobs[0]; rs[0].SettlementTxHash != tqPub2Tx || b.SettlementTxHash != tqPub2Tx || rs[0].SettledAt != b.SettlementTime {
+		t.Errorf("the reading: %q at %q; the blob row: %q at %q", rs[0].SettlementTxHash, rs[0].SettledAt, b.SettlementTxHash, b.SettlementTime)
+	}
+	tqTx(t, f, rs[0].SettlementTxHash, "success", failedtx.KindSettlement)
 }
 
 // failedtx.OperatorForm, which lists a failure under its signer's operator

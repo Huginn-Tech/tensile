@@ -75,7 +75,7 @@ func TestAStaleFeedIsServedAtOnceAndRebuiltBehindIt(t *testing.T) {
 // its feeds under the address a new one is given.
 func ownFeeds(t *testing.T, s *Server) {
 	forget := func() {
-		prefix := fmt.Sprintf("%p|", s)
+		prefix := fmt.Sprintf("%p|%d|", s, s.feedID)
 		feedCache.Lock()
 		defer feedCache.Unlock()
 		for k := range feedCache.m {
@@ -103,7 +103,7 @@ func ownFeeds(t *testing.T, s *Server) {
 
 // ageFeeds makes every feed s has cached older than the TTL.
 func ageFeeds(s *Server) {
-	prefix := fmt.Sprintf("%p|", s)
+	prefix := fmt.Sprintf("%p|%d|", s, s.feedID)
 	feedCache.Lock()
 	defer feedCache.Unlock()
 	for k, c := range feedCache.m {

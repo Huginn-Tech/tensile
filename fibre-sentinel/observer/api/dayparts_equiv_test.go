@@ -338,8 +338,9 @@ func equivRun(t *testing.T, cfg simConfig, sample int, restart bool, step [2]int
 	for at := s.t0.Add(time.Hour); !at.After(end); at = at.Add(time.Duration(step[0]+rng.IntN(step[1]-step[0])) * time.Minute) {
 		down := func(t time.Time) bool { return !t.Before(sc.backlog[0]) && t.Before(sc.backlog[1]) }
 		// Between two passes the collector's fast tick stores what the
-		// scanner wrote since (state.json, publications, payments), and the
-		// API computes before the pass brings in the rest.
+		// scanner wrote since (state.json, tx costs, publications,
+		// payments), and the API computes before the pass brings in the
+		// rest.
 		if fast := prev.Add(time.Duration(float64(at.Sub(prev)) * (0.2 + 0.7*frng.Float64()))); fast.After(prev) && !down(fast) {
 			s.advance(fast)
 			s.fastTick()

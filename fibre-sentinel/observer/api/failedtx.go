@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"time"
 
 	"github.com/plsgiveup/fibre/fibre-sentinel/internal/failedtx"
+	"github.com/plsgiveup/fibre/fibre-sentinel/observer/store"
 )
 
 // A transaction that failed in a block while carrying a Fibre message
@@ -38,10 +38,12 @@ type failedTxMsg struct {
 
 // failedTxAnswer is /v1/blobs?tx='s failed_tx: only the fields the site reads.
 type failedTxAnswer struct {
-	Height    int64     `json:"height"`
-	Time      time.Time `json:"time"`
-	Code      uint32    `json:"code"`
-	Codespace string    `json:"codespace"`
+	Height int64 `json:"height"`
+	// Time is the block's time as the store writes it (store.TS), as every
+	// other answer writes a time.
+	Time      string `json:"time"`
+	Code      uint32 `json:"code"`
+	Codespace string `json:"codespace"`
 	// Reason and FailedMsgIndex are failedtx.Explain's: absent when it has
 	// no reason that rests on exact information, or the log names no
 	// message.
@@ -95,7 +97,7 @@ func (s *Server) failedTx(ctx context.Context, hash string) (*failedTxAnswer, er
 	}
 	e := failedtx.Explain(r)
 	out := &failedTxAnswer{
-		Height: r.Height, Time: r.Time.UTC(), Code: r.Code, Codespace: r.Codespace, Reason: e.Reason,
+		Height: r.Height, Time: store.TS(r.Time), Code: r.Code, Codespace: r.Codespace, Reason: e.Reason,
 		Messages: failedTxMsgs(r.Messages), GasWanted: r.GasWanted, GasUsed: r.GasUsed,
 		AntePassed: r.AntePassed, Fee: r.Fee, Log: r.Log, LogCut: r.LogCut,
 	}
