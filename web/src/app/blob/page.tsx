@@ -292,7 +292,7 @@ function Page() {
   const viaNone = !hash && !!via && via.kind !== "bad" && !!hit && !hit.error && hit.total === 0 && !hit.failedTx && !(via.kind === "tx" && hit.noTx);
   const other = useOther(
     path && missing && !d.data ? [{ route: path }]
-    : viaNone && via && via.kind !== "bad" ? [{ blob: via.key, as: [via.kind === "tx" ? "tx" : "commitment"] }]
+    : viaNone && via ? [{ blob: via.key, as: [via.kind === "tx" ? "tx" : "commitment"] }]
     : null);
   if (named.trim() && !hash) {
     return (
