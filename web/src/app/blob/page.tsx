@@ -439,7 +439,7 @@ function Page() {
     <dl className="pb-meta bd-meta bd-figs">
       <dt>Blob size</dt><dd title="The size the blob paid for: Celestia's upload size, with header and padding, without parity."><b>{unit(bytes(b.blob_size))}</b></dd>
       {/* the two fees one under the other, under their two labels: the blob's (Fee paid, its one name on every page), from
-          the escrow, and the transaction's own, from its fee payer's bank balance */}
+          the escrow, and the transaction's own, its figure alone */}
       <dt>Fee paid</dt><dd title="Charged to the publisher's escrow; not the settlement transaction's own fee.">{b.charge ? <><b>{unit(tia(b.charge.fee_utia))}</b><em>from escrow · {b.charge.timed_out ? "timed out" : b.charge.settled ? "settled" : "not settled yet"}</em></> : <em>not recorded</em>}</dd>
       <dt title={FEE_TITLE}>Transaction fee</dt>
       <dd>{data.tx_cost ? <FeeValue fee={data.tx_cost.fee} payer={data.tx_cost.fee_payer} owner={pub} messages={data.tx_cost.messages} /> : <em>not recorded</em>}</dd>
