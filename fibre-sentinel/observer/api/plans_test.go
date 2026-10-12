@@ -200,6 +200,9 @@ func TestHotQueriesUseIndexes(t *testing.T) {
 		c{"failed payments since", failedTxsSinceSQL, []any{0, 10}, []string{"SEARCH failed_txs USING INTEGER PRIMARY KEY (rowid>? AND rowid<?)"}},
 		c{"blobs before a failed payment", blobsBeforeSQL(""), []any{1, 1, 0, 25}, []string{"SEARCH publications USING INDEX publications_settlement (settlement_height>?)"}},
 		c{"blobs before a failed payment in a namespace", blobsBeforeSQL(blobInNamespaceSQL), []any{"ns", 1, 1, 0, 25}, []string{"SEARCH publications USING INDEX"}},
+		// whether a failure that was not final has landed: three seeks
+		c{"a failed payment's landing", landedSQL, []any{"ab", "ab", "AB", "ab"},
+			[]string{"tx_costs_tx (tx_hash=?)", "publications_tx (settlement_tx_hash=?)", "payments_tx (tx_hash=?)"}},
 	)
 	noSort["failed payments since"] = true
 	// The tip's newest blob, asked up to four times a second whoever is

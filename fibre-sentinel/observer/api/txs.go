@@ -86,10 +86,13 @@ type txAnswer struct {
 	// Final is a failure's ante_passed, false included: the fee and every
 	// signer's sequence were taken, so the same transaction can never be
 	// in a block again. Absent on a success.
-	Final   *bool     `json:"final,omitempty"`
-	Height  int64     `json:"height"`
-	TxIndex int       `json:"tx_index"`
-	Time    time.Time `json:"time"`
+	Final   *bool `json:"final,omitempty"`
+	Height  int64 `json:"height"`
+	TxIndex int   `json:"tx_index"`
+	// Time is its block's time as the store writes it (store.TS, nine
+	// fractional digits), so it is the same string as the same instant on
+	// /v1/blobs and in an endpoint history.
+	Time string `json:"time"`
 	// Kind is failedtx's kind of its Fibre messages, top level and one level
 	// inside a MsgExec, or "several".
 	Kind     string  `json:"kind"`
@@ -219,7 +222,20 @@ func (s *Server) handleTx(w http.ResponseWriter, r *http.Request) {
 	if a.Final != nil && !*a.Final {
 		w.Header().Set("Cache-Control", "no-store")
 	}
+	// A success that says nothing of what it did has its cost line on record
+	// and not yet what its block did: the collector stores the cost lines
+	// first, then the publications and escrow movements, and the endpoint
+	// registrations only on its full pass. Not cached, so the next asking
+	// has them.
+	if a.Status == "success" && len(a.Effect) == 0 && a.Related.empty() {
+		w.Header().Set("Cache-Control", "no-store")
+	}
 	writeJSON(w, 200, a)
+}
+
+// empty reports whether r links no page.
+func (r txRelated) empty() bool {
+	return r.Publisher == "" && r.Blob == nil && r.Validator == nil && len(r.Validators) == 0
 }
 
 // txByHash is the answer for hash (lower-case hex), or nil when no Fibre
@@ -425,7 +441,7 @@ func firstOfKind(ms []failedtx.Msg, kind string) (first *failedtx.Msg, top bool)
 
 // txFromCost is a success with its cost line.
 func (s *Server) txFromCost(ctx context.Context, hash string, rec txcost.Record) (*txAnswer, error) {
-	a := &txAnswer{TxHash: hash, Status: "success", Height: rec.Height, TxIndex: rec.TxIndex, Time: rec.Time.UTC(),
+	a := &txAnswer{TxHash: hash, Status: "success", Height: rec.Height, TxIndex: rec.TxIndex, Time: store.TS(rec.Time),
 		Kind: txKindOf(rec.Messages), Messages: txMsgsOf(rec.Messages),
 		Cost:   &txCost{GasWanted: rec.GasWanted, GasUsed: rec.GasUsed, Fee: rec.Fee, FeePayer: rec.FeePayer},
 		Effect: map[string]any{}}
@@ -449,7 +465,7 @@ func (s *Server) txFromCost(ctx context.Context, hash string, rec txcost.Record)
 // txFromBlob is a settlement found by its publication, before cost lines:
 // a PFF transaction holds exactly one message, so its list is whole.
 func txFromBlob(hash string, b blobRow) *txAnswer {
-	a := &txAnswer{TxHash: hash, Status: "success", Height: b.SettlementHeight, TxIndex: b.SettlementTxIndex, Time: parseTS(b.SettlementTime),
+	a := &txAnswer{TxHash: hash, Status: "success", Height: b.SettlementHeight, TxIndex: b.SettlementTxIndex, Time: b.SettlementTime,
 		Kind:     failedtx.KindSettlement,
 		Messages: []txMsg{{Index: 0, TypeURL: kindTypeURL[failedtx.KindSettlement], Fibre: true, Signer: b.Signer}},
 		Effect:   map[string]any{}}
@@ -470,7 +486,7 @@ func (s *Server) txFromPayments(ctx context.Context, hash string, pays []txPayme
 		}
 		msgs = append(msgs, txMsg{Index: p.MsgIndex, TypeURL: kindTypeURL[p.Kind], Fibre: true, Signer: signer})
 	}
-	a := &txAnswer{TxHash: hash, Status: "success", Height: pays[0].Height, TxIndex: pays[0].TxIndex, Time: parseTS(pays[0].Time),
+	a := &txAnswer{TxHash: hash, Status: "success", Height: pays[0].Height, TxIndex: pays[0].TxIndex, Time: pays[0].Time,
 		Kind: kindOfSet(kinds), Messages: msgs, MessagesPartial: true, Effect: map[string]any{}}
 	return a, s.txSuccess(ctx, a, pays)
 }
@@ -687,7 +703,7 @@ var requestedUtia = regexp.MustCompile(`^(\d+)utia$`)
 func (s *Server) txFromFailure(ctx context.Context, hash string, r failedtx.Record) (*txAnswer, error) {
 	final := r.AntePassed
 	e := failedtx.Explain(r)
-	a := &txAnswer{TxHash: hash, Status: "failed", Final: &final, Height: r.Height, TxIndex: r.TxIndex, Time: r.Time.UTC(),
+	a := &txAnswer{TxHash: hash, Status: "failed", Final: &final, Height: r.Height, TxIndex: r.TxIndex, Time: store.TS(r.Time),
 		Kind: txKindOf(r.Messages), Messages: txMsgsOf(r.Messages),
 		Cost:    &txCost{GasWanted: r.GasWanted, GasUsed: r.GasUsed, Fee: r.Fee},
 		Failure: &txFailure{Code: r.Code, Codespace: r.Codespace, Reason: e.Reason, Log: r.Log, LogCut: r.LogCut},

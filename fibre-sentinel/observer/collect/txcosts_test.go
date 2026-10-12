@@ -2,6 +2,7 @@ package collect_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/plsgiveup/fibre/fibre-sentinel/internal/failedtx"
+	"github.com/plsgiveup/fibre/fibre-sentinel/internal/scan"
 	"github.com/plsgiveup/fibre/fibre-sentinel/internal/txcost"
 	"github.com/plsgiveup/fibre/fibre-sentinel/observer/store"
 )
@@ -169,5 +171,66 @@ func TestThePassListsTheFinalFailuresMessages(t *testing.T) {
 	}
 	if applied := column(t, a.St, `SELECT applied_at FROM schema_migrations WHERE version = 31`); len(applied) != 1 || mark != applied[0] {
 		t.Fatalf("%s = %q, the version-31 row %v", store.MetaFailedTxMsgsFrom, mark, applied)
+	}
+}
+
+// A pass reads the cost lines before the publications, the escrow movements
+// and the endpoint registrations: every settlement, movement and
+// registration whose transaction has a cost line goes into the store with
+// that line already there, so no answer serves a blob, a movement or a
+// registration of the pass without what its transaction cost.
+func TestThePassStoresTheCostsBeforeWhatTheTransactionsDid(t *testing.T) {
+	now := time.Date(2026, 9, 7, 0, 0, 0, 0, time.UTC)
+	dir := testdataDir(t, false)
+	// a registration at block 26, transaction 1, with its cost line
+	regTx := strings.Repeat("e5", 32)
+	f, err := os.OpenFile(filepath.Join(dir, "host_history.jsonl"), os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line, err := json.Marshal(scan.HostEvent{HostEntry: scan.HostEntry{FromHeight: 26, FromTxIndex: 2, ConsAddress: validator, Host: "127.0.0.1:7982",
+		Source: "event"}, Time: testdataAt.Add(-20 * time.Second)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.Write(append(line, '\n')); err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	reg := txcost.Record{SchemaVersion: txcost.SchemaVersion, DedupeKey: txcost.Key(26, 1), Height: 26, TxIndex: 1, Time: testdataAt.Add(-20 * time.Second),
+		TxHash: regTx, GasWanted: 90000, GasUsed: 60000, Fee: "120utia", FeePayer: publisher,
+		Messages: []failedtx.Msg{{Index: 0, TypeURL: "/celestia.valaddr.v1.MsgSetFibreProviderInfo", Signer: "celestiavaloper1v"}}, RecordedAt: testdataAt}
+	writeLines(t, filepath.Join(dir, txcost.FileName), append(costLines(), reg)...)
+
+	// what the store held of each transaction's cost line as its row went in
+	c := newCollector(t, dir, &fakeStatus{})
+	for _, q := range []string{
+		`CREATE TABLE cost_at_insert (what TEXT, n INTEGER)`,
+		`CREATE TRIGGER publication_cost AFTER INSERT ON publications BEGIN
+			INSERT INTO cost_at_insert SELECT 'publication ' || NEW.settlement_height, COUNT(*) FROM tx_costs
+				WHERE height = NEW.settlement_height AND tx_index = NEW.settlement_tx_index;
+		END`,
+		`CREATE TRIGGER payment_cost AFTER INSERT ON payments BEGIN
+			INSERT INTO cost_at_insert SELECT 'payment ' || NEW.height, COUNT(*) FROM tx_costs WHERE tx_hash = NEW.tx_hash;
+		END`,
+		`CREATE TRIGGER registration_cost AFTER INSERT ON host_events WHEN NEW.source = 'event' BEGIN
+			INSERT INTO cost_at_insert SELECT 'registration ' || NEW.from_height, COUNT(*) FROM tx_costs
+				WHERE height = NEW.from_height AND tx_index = NEW.from_tx_index - 1;
+		END`,
+	} {
+		if _, err := c.St.DB().Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if errs := c.Pass(context.Background(), now); len(errs) != 0 {
+		t.Fatalf("the pass: %v", errs)
+	}
+	want := "payment 20,payment 32,publication 32,registration 26"
+	if got := strings.Join(column(t, c.St, `SELECT what FROM cost_at_insert WHERE n = 1 ORDER BY what`), ","); got != want {
+		t.Errorf("stored with their cost line: %s, want %s (all stored: %s)", got, want,
+			strings.Join(column(t, c.St, `SELECT what || ' ' || n FROM cost_at_insert ORDER BY what`), ", "))
+	}
+	if n := countRows(t, c.St, "tx_costs"); n != 3 {
+		t.Errorf("%d cost rows after the pass, want 3", n)
 	}
 }

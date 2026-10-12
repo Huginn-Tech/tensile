@@ -5130,7 +5130,9 @@ func (s *Server) fillSettledAt(ctx context.Context, rs []validatorReading) error
 		if err := rows.Scan(&h, &t, &x); err != nil {
 			return err
 		}
-		at[h], tx[h] = t, x
+		// in lower case, as a blob row carries it (blobRows): sentinel-synth
+		// writes it in upper
+		at[h], tx[h] = t, strings.ToLower(x)
 	}
 	if err := rows.Err(); err != nil {
 		return err
