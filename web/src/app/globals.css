@@ -2780,7 +2780,7 @@ button.warn:focus-visible { outline-offset: 0; }
   .lg-t.eh-t .ph { display: inline; white-space: pre; }
   /* the time and its age on one line, as the endpoint and "current"; a host that wraps puts "current" under its last line */
   .lg-t.eh-t .tw, .lg-t.eh-t .ew { flex-direction: row; align-items: baseline; gap: 6px; min-height: 0; }
-  .lg-t.eh-t .ew { flex-wrap: wrap; row-gap: 0; }
+  .lg-t.eh-t .ew { flex-wrap: wrap; justify-content: flex-start; row-gap: 0; }
   .lg-t.eh-t .eh-pre { min-height: 0; }
   .lg-t.eh-t .ew .cur { margin-left: 0; }
   .lg-t.eh-t .c-x .cp { margin-right: 0; }
