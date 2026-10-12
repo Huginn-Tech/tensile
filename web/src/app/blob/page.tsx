@@ -315,7 +315,7 @@ function Page() {
     const unasked = none && via.kind === "tx" && hit.noTx;
     return (
       <>
-        <div className="head"><div><p className="crumb"><Link href="/blobs/">Blobs</Link> › {via.text.slice(0, 10)}…</p><h1>{none && !unasked ? "Not indexed yet" : unasked || via.kind === "bad" || hit?.error ? "Blob" : "Loading…"}</h1></div></div>
+        <div className="head"><div><p className="crumb"><Link href="/blobs/">Blobs</Link> › {via.text.slice(0, 10)}…</p><h1>{none && !unasked ? (other.asking ? "Loading…" : other.href ? "Not on this network" : "Not indexed yet") : unasked || via.kind === "bad" || hit?.error ? "Blob" : "Loading…"}</h1></div></div>
         <StatusLine meta={meta} metaError={metaErr} snap={null} client={{ error: hit?.error ?? null, fetchedAt: hit && !hit.error ? hit.at : null }} />
         {via.kind === "bad" && <p className="notice"><span className="mono">{shortMid(via.text, 10, 6)}</span> is not a {name}: {via.of === "id" ? "the client's blob ID is a version byte, 0, then the 32-byte commitment, in base64, or 66 hex characters" : "one is 64 hex characters"}.</p>}
         {other.href && <p className="elsewhere"><OnOther href={other.href} /></p>}
@@ -331,7 +331,7 @@ function Page() {
   if (!data) {
     return (
       <>
-        <div className="head"><div><p className="crumb"><Link href="/blobs/">Blobs</Link> › {hash.slice(0, 10)}…</p><h1>{notFound(d) ? "Blob not recorded yet" : d.error ? "Blob" : "Loading…"}</h1></div></div>
+        <div className="head"><div><p className="crumb"><Link href="/blobs/">Blobs</Link> › {hash.slice(0, 10)}…</p><h1>{notFound(d) ? (other.asking ? "Loading…" : other.href ? "Not on this network" : "Blob not recorded yet") : d.error ? "Blob" : "Loading…"}</h1></div></div>
         <StatusLine meta={meta} metaError={metaErr} snap={null} client={{ error: d.error, fetchedAt: d.fetchedAt, status: d.status }} />
         {other.href && <p className="elsewhere"><OnOther href={other.href} /></p>}
         {notFound(d) && !other.asking && !other.href && <p className="notice">No publication with the promise hash <span className="mono">{shortMid(hash, 10, 6)}</span> is on record. A blob appears here once the scanner has read the block that settled it; this page checks again each time Tensile records a new blob, and every 30 seconds.</p>}
