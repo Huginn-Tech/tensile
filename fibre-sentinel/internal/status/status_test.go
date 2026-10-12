@@ -16,10 +16,18 @@ func TestWriterRoundTrip(t *testing.T) {
 	w.Progress(42)
 	w.Error("boom")
 	w.Set("rows", 7)
-	time.Sleep(1200 * time.Millisecond) // the delayed write lands within a second
-	rs, err := ReadAll(dir)
-	if err != nil || len(rs) != 1 {
-		t.Fatalf("read: %v %d", err, len(rs))
+	// The delayed write lands within about a second. Wait for it to show
+	// rather than for a fixed time, which a busy runner can outlast.
+	var rs []Report
+	for deadline := time.Now().Add(10 * time.Second); ; time.Sleep(50 * time.Millisecond) {
+		var err error
+		rs, err = ReadAll(dir)
+		if err == nil && len(rs) == 1 && rs[0].Height == 42 && rs[0].LastError == "boom" && rs[0].Detail["rows"] != nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("read: %v %d %+v", err, len(rs), rs)
+		}
 	}
 	r := rs[0]
 	if r.Component != "scanner" || r.Vantage != "eu1" || r.Height != 42 || r.OK || r.LastError != "boom" || r.Detail["rows"] != float64(7) {

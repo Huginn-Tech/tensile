@@ -353,7 +353,7 @@ function Page() {
             )
             : (
               <Ledger feed={feed} size={SIZE} live={live} skew={skew} status onNs={setNs}>
-                {(total, _, failed = 0) => (total === 0 && page === 1 ? null : <Pager total={total} page={page} size={SIZE} maxPages={MAX_PAGE} onPage={setPage}
+                {(total, failed = 0) => (total === 0 && page === 1 ? null : <Pager total={total} page={page} size={SIZE} maxPages={MAX_PAGE} onPage={setPage}
                   noun={`${rowsNoun(total, failed)} ${q ? "with this filter" : "on record"}`} />)}
               </Ledger>
             ))

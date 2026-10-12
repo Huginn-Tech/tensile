@@ -2162,8 +2162,7 @@ button.pp-params[aria-expanded="true"] .pp-i { color: var(--paper); background: 
 /* =============================================================================
    A publisher's page (app/publisher): whose account it is; under it two
    frames of the same make, its four figures and when and where it posted;
-   then its transactions, its blobs as the Blobs list draws them with
-   its escrow movements between them.
+   then its transactions, and its blobs as the Blobs list draws them.
    ========================================================================== */
 /* ---- whose account it is ---- */
 .pb-mast { padding: 34px 0 0; min-width: 0; }
@@ -2288,17 +2287,6 @@ button.warn:focus-visible { outline-offset: 0; }
 .lg-one th.c-sz { width: 104px; }
 .lg-one th.c-fee { width: 124px; }
 .lg-one th.c-e { width: 158px; }
-/* an escrow movement among the blobs: its kind where a blob's hash is, what qualifies it quietly over the namespace
-   and the size, the amount on its digits; it opens nothing. A request only moves money into the queue: its amount is
-   quieter; a request settlements used up says so in amber; a timed-out promise is red */
-.lg-t tr.mv { cursor: default; }
-.lg-t tr.mv .c-b .k { font-weight: 500; }
-/* a blob's hash is set in the mono face, whose line stands a pixel taller: a movement's row keeps the same line */
-.lg-t tr.mv .c-b .k::after { content: "\200b"; font-family: var(--mono); font-size: 12.5px; }
-.lg-t td.c-q { font-family: var(--sans); font-size: var(--t-small); color: var(--text-3); }
-.lg-t tr.req td.c-fee { color: var(--text-2); font-weight: 400; }
-.lg-t tr.hold td.c-q { color: var(--hold-ink); }
-.lg-t tr.fault .c-b .k, .lg-t tr.fault td.c-fee { color: var(--fault); }
 /* a long account's escrow movements are not all here: where they are, in one quiet line under its blobs */
 .pb-more { margin: 12px 0 0; font-size: var(--t-cell); color: var(--text-2); }
 .pb-more a { font-weight: 500; color: var(--accent-ink); }
@@ -2323,15 +2311,7 @@ button.warn:focus-visible { outline-offset: 0; }
   .lg-one th.c-fee { width: 116px; }
   .lg-one th.c-e { width: 128px; }
 }
-/* an escrow movement in the list's two lines, as a blob's: its kind and when, then what qualifies it and its amount,
-   which closes the line as a blob's fee closes its own */
 @media (max-width: 1080px) {
-  .lg-t tr.mv td.c-e { display: none; }
-  .lg-t tr.mv .c-b .k { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .lg-t tr.mv td.c-m .q { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-family: var(--sans); font-size: var(--t-small); color: var(--text-3); }
-  .lg-t tr.hold td.c-m .q { color: var(--hold-ink); }
-  .lg-t tr.req td.c-m .fe { color: var(--text-3); }
-  .lg-t tr.fault td.c-m .fe { color: var(--fault); }
   /* the statement's lines under its rows: the label, the figure at the line's end, Tensile's lane beside them */
   .pb-st tfoot { display: block; }
   .pb-st tfoot tr { --pt: 5px; --pb: 5px; display: grid; grid-template-columns: minmax(0, 1fr) auto 104px; column-gap: 14px; padding: var(--pt) 0 var(--pb) 16px; background: var(--surface-2); }
@@ -2364,10 +2344,9 @@ button.warn:focus-visible { outline-offset: 0; }
   .lg-t.pb-st tfoot tr td.tn { display: none; }
   .pb-st tfoot tr.tot { background: linear-gradient(var(--line), var(--line)) 14px 4px / calc(100% - 28px) 1px no-repeat, var(--surface-2); }
 }
-/* a small phone: a movement's first line says what and when, its height on the wide table; a blob's second line its
-   namespace and its fee, so every row keeps its amount, the size on the blob's page */
+/* a small phone: a blob's second line its namespace and its fee, so every row keeps its amount, the size on the
+   blob's page */
 @media (max-width: 440px) {
-  .lg-t tr.mv .c-b .ht { display: none; }
   .lg-one .c-m .sz { display: none; }
 }
 @media (max-width: 400px) {
