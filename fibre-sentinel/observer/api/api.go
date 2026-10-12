@@ -169,6 +169,9 @@ type Server struct {
 	// hs is what /v1/health remembers between calls: the API's own 5xx
 	// answers among it (health_checks.go, health_errors.go).
 	hs healthState
+	// feedID tells this server's feeds in the package's feed cache from
+	// those of a server that had its address before it (feedKey).
+	feedID uint64
 }
 
 // withMergeDays has windows of more than n sealed days ranked in bounded
@@ -385,6 +388,7 @@ func newServer(st *store.Store, info VantageInfo, log *scan.Logger, opts ...Opti
 	s := &Server{st: st, vantage: info.Name, info: info, mux: http.NewServeMux(), log: log, blobs: newBlobCache(), labels: map[string]PublisherLabel{},
 		histCacheMB: -1, mergeDays: -1, probeScans: make(chan struct{}, probeScanSlots), blobWork: make(chan struct{}, blobWorkSlots)}
 	s.txSlots = readSlots(st.DB().Stats().MaxOpenConnections)
+	s.feedID = feedServers.Add(1)
 	for _, o := range opts {
 		o(s)
 	}
