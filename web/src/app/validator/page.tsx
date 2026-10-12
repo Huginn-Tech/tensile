@@ -22,6 +22,7 @@ import PreLive from "@/components/PreLive";
 import { diagnose } from "@/components/Diagnosis";
 import { pageAddr } from "@/lib/addr";
 import { validatorAddr } from "@/lib/sitefind";
+import { useOther, OnOther } from "@/lib/othernet";
 
 
 type Span = { window: Window; obligations: Obligations; provisional_faults?: ProvisionalFaults };
@@ -342,7 +343,11 @@ function Page() {
     setTabRaw(params.get("tab") === "endpoints" ? "endpoints" : "checks");
   }, [addr]); // eslint-disable-line react-hooks/exhaustive-deps
   const { data: meta, error: metaErr } = useApi<Meta>("/v1/meta");
-  const d = useApi<Detail>(addr ? `/v1/validators/${encodeURIComponent(addr)}?window=${win}` : null);
+  const path = addr ? `/v1/validators/${encodeURIComponent(addr)}?window=${win}` : null;
+  const d = useApi<Detail>(path);
+  // no validator with this address here, said for certain: the other network's site is asked for it, once, and one
+  // there is a line with a link to this page there in place of the notice
+  const other = useOther(path && !d.data && notFound(d) ? [{ route: path }] : null);
   const notLive = !!meta?.app_version && !meta.fibre_active;
   if (!asked.trim()) return <p className="notice">Open a validator from the <Link href="/">overview</Link>, or add <code>?addr=</code> with its consensus, operator (<code>celestiavaloper1…</code>) or account address to the address.</p>;
   if (!addr) {
@@ -359,7 +364,8 @@ function Page() {
       <>
         <div className="head"><div><p className="crumb"><Link href="/">Validators</Link> › …</p><h1>{notFound(d) ? "Validator not found" : badRequest(d) ? "Not a validator address" : d.error ? "Validator" : "Loading…"}</h1></div></div>
         <StatusLine meta={meta} metaError={metaErr} snap={null} client={{ error: d.error, fetchedAt: d.fetchedAt, status: d.status }} />
-        {notFound(d) && <p className="notice">No validator with the address <span className="mono">{addr}</span> is on record: neither in the staking set nor in any reading. Check the address, or open one from the <Link href="/">overview</Link>.</p>}
+        {other.href && <p className="elsewhere"><OnOther href={other.href} /></p>}
+        {notFound(d) && !other.asking && !other.href && <p className="notice">No validator with the address <span className="mono">{addr}</span> is on record: neither in the staking set nor in any reading. Check the address, or open one from the <Link href="/">overview</Link>.</p>}
         {badRequest(d) && <p className="notice"><span className="mono">{addr}</span> is not a validator address ({d.error}). Open a validator from the <Link href="/">overview</Link>.</p>}
       </>
     );

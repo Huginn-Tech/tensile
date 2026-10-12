@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { API_BASE, useNewestBlob, type Blob, type Validator, type Publisher, type TxAnswer, type TxKind, type FailedTx, int, utcWord } from "@/lib/api";
 import { blobKey } from "@/lib/blobkey";
 import { useFind } from "@/lib/blobfind";
+import { ALL } from "@/lib/blobfind-core";
+import { useOther, OnOther } from "@/lib/othernet";
 import { siteTarget, type SiteTarget } from "@/lib/sitefind";
 import Ident from "@/components/Ident";
 import { KIND_WORD, KIND_OF } from "@/lib/txkind";
@@ -200,6 +202,18 @@ export default function HeaderSearch() {
   const tx = useRecord<TxAnswer>(txPath, again, on ? newest : null);
   const val = useRecord<{ validator: Validator }>(asked?.kind === "validator" ? `/v1/validators/${asked.id}?window=24h` : null, again);
   const pub = useRecord<{ publisher: Publisher }>(asked?.kind === "publisher" ? `/v1/publishers/${asked.id}?window=all` : null, again);
+  // nothing on record here, said for certain: the other network's site is asked for the same identifier, once, and a
+  // record there is the note, a line with a link to its page there (a lone blob's own, else the list of what it
+  // matches, or the transaction's), in place of the words that say it is not on record
+  const blobNone = !!blob && !!hit && !hit.error && hit.rows.length === 0 && !hit.failedTx && (blob.kind === "id" || (!!txPath && !!tx?.missing));
+  const other = useOther(
+    asked?.kind === "blob" && blob && blobNone
+      ? [{ blob, as: ALL, href: asked.href, one: true }, ...(blob.kind === "hash" ? [{ route: `/v1/txs/${blob.hex}`, href: `/tx/?hash=${blob.hex}` }] : [])]
+    : asked?.kind === "validator" && val?.missing ? [{ route: `/v1/validators/${asked.id}?window=24h`, href: asked.href }]
+    : asked?.kind === "publisher" && pub?.missing ? [{ route: `/v1/publishers/${asked.id}?window=all`, href: asked.href }]
+    : null);
+  const notHere = (words: ReactNode): ReactNode =>
+    other.href ? <OnOther href={other.href} /> : other.asking ? <span className="hs-wait">Looking it up…</span> : words;
   // the lookup shown ended with the observer not answering
   const failed = asked?.kind === "blob" ? (!!hit?.error && hit.rows.length === 0) || (!!txPath && !!tx?.error && !tx.missing)
     : asked?.kind === "validator" ? !!val?.error && !val.missing && !val.invalid
@@ -225,12 +239,12 @@ export default function HeaderSearch() {
       }
       // an API without the transaction lookup: the failure the blob lookup found opens on the blob page's address
       else if (tx.missing && hit.failedTx) items = [failedItem(`/blob/?tx=${blob!.hex}`, blob!.hex, hit.failedTx)];
-      else if (tx.missing) note = <>Tensile has no blob or Fibre transaction with this hash on record yet.</>;
+      else if (tx.missing) note = notHere(<>Tensile has no blob or Fibre transaction with this hash on record yet.</>);
       else note = <>The observer did not answer ({tx.error}). Try again in a moment.</>;
     }
-    else if (hit.total === 0) note = blob?.kind === "id"
+    else if (hit.total === 0) note = notHere(blob?.kind === "id"
       ? <>Tensile has not indexed a blob with this blob ID yet. A blob appears once Tensile has read the block that settled it.</>
-      : <>Tensile has not indexed a blob with this hash yet, or the transaction carries no Fibre blob.</>;
+      : <>Tensile has not indexed a blob with this hash yet, or the transaction carries no Fibre blob.</>);
     else {
       items = hit.rows.slice(0, SHOWN).map((b) => blobItem(b, blob?.kind === "hash" ? blob.hex : undefined));
       if (hit.partial) note = <>The observer did not answer every lookup, so there may be more.</>;
@@ -244,7 +258,7 @@ export default function HeaderSearch() {
         glyph: <Ident addr={v.operator_address || asked.id} />, kind: "Validator",
         title: <span className="hs-nm" title={v.operator_address || asked.id}>{v.moniker || short(asked.id, 16, 4)}</span>,
       }];
-    } else if (val?.missing) note = <>No validator with this address is on record.</>;
+    } else if (val?.missing) note = notHere(<>No validator with this address is on record.</>);
     else if (val?.invalid) note = <>Not a valid validator address. Check it and paste it again.</>;
     else if (val?.error) note = <>The observer did not answer ({val.error}). Try again in a moment.</>;
     else note = <span className="hs-wait">Looking it up…</span>;
@@ -256,7 +270,7 @@ export default function HeaderSearch() {
         glyph: <Ident addr={p.publisher} />, kind: "Publisher",
         title: <span className="hs-nm" title={p.publisher}>{p.label || addrWords(p.publisher)}</span>,
       }];
-    } else if (pub?.missing) note = <>No publisher with this address is on record.</>;
+    } else if (pub?.missing) note = notHere(<>No publisher with this address is on record.</>);
     else if (pub?.invalid) note = <>Not a valid account address. Check it and paste it again.</>;
     else if (pub?.error) note = <>The observer did not answer ({pub.error}). Try again in a moment.</>;
     else note = <span className="hs-wait">Looking it up…</span>;

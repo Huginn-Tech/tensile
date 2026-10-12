@@ -14,6 +14,8 @@ import { nsHex, NsName, NS_ICON } from "@/components/Namespace";
 import Info from "@/components/Info";
 import { blobKey, keyText, type BlobKey } from "@/lib/blobkey";
 import { useFind, type Found } from "@/lib/blobfind";
+import { ALL } from "@/lib/blobfind-core";
+import { useOther, OnOther } from "@/lib/othernet";
 
 /** rows per page of the blob list */
 const SIZE = 25;
@@ -282,8 +284,12 @@ function Page() {
   // what matched was a transaction: the blobs it settled, or a Fibre transaction that failed in a block
   const tx = !!hit && ((hit.by.length === 1 && hit.by[0] === "tx") || (hit.rows.length === 0 && !!hit.failedTx));
   const foundLabel = key?.kind === "id" ? "Blob ID" : tx ? "Tx" : !hit?.by.length || hit.by.length > 1 ? "Search" : hit.by[0] === "commitment" ? "Commitment" : "Blob";
+  // nothing matched here, said for certain: the other network's site is asked the same search, once, and a match there
+  // is a line with a link to the same list there in place of the words below (the list waits for its answer)
+  const other = useOther(key && hit && !hit.error && hit.total === 0 && !hit.failedTx && !hit.noTx
+    ? [{ blob: key, as: ALL, href: `/blobs/?blob=${encodeURIComponent(found)}` }] : null);
   const foundFeed: Feed | null = key
-    ? { path: `find:${found}`, rows: hit?.rows ?? [], total: hit?.rows.length ?? 0, failed: 0, loaded: !!hit && !hit.error, error: hit?.error ?? null, refused: false, lastNewAt: 0 }
+    ? { path: `find:${found}`, rows: hit?.rows ?? [], total: hit?.rows.length ?? 0, failed: 0, loaded: !!hit && !hit.error && !other.asking, error: hit?.error ?? null, refused: false, lastNewAt: 0 }
     : null;
   // nothing matched: the transaction failed in a block, as the chain recorded it (its page says why); or Tensile has not
   // indexed it yet, or the transaction carries no blob
@@ -340,7 +346,7 @@ function Page() {
             ? (
               <>
                 {matched && <p className="lg-matched">{matched}</p>}
-                <Ledger feed={foundFeed} size={SIZE} live={false} skew={skew} status emptyText={none || undefined} onNs={(v) => { setFound(""); setNs(v); }}>
+                <Ledger feed={foundFeed} size={SIZE} live={false} skew={skew} status emptyText={other.href ? <OnOther href={other.href} /> : none || undefined} onNs={(v) => { setFound(""); setNs(v); }}>
                   {() => null}
                 </Ledger>
               </>

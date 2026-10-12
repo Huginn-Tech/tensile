@@ -3,7 +3,7 @@ import { preload } from "react-dom";
 import "./fonts.css";
 import "./globals.css";
 import { Header, Footer } from "@/components/Chrome";
-import { SITE_URL } from "@/lib/site";
+import { PREVIEW_IMAGE_PATH, SITE_NAME, SITE_URL } from "@/lib/site";
 
 // Fonts are served from this site's own origin (fonts.css, public/fonts): a
 // visitor's browser opens no connection to a font CDN, which is the same
@@ -14,21 +14,23 @@ import { SITE_URL } from "@/lib/site";
 const preloaded = ["ibm-plex-sans-latin", "ibm-plex-mono-latin", "ibm-plex-mono-latin-500", "dm-sans-latin"];
 
 // What a shared link shows (X, Discord, Telegram, Slack): the preview's title, one plain sentence, and
-// public/og.png. Pages that set only their own title keep this preview.
+// public/og.png. Pages that set only their own title keep this preview. A network with a name of its own has it after
+// "Tensile" in the titles ("Tensile Mocha · …", SITE_NAME) and its own image (public/og-mocha.png, which says so and
+// carries its address); mainnet's are "Tensile · …" and og.png.
 const DESCRIPTION = "Real-time data for Fibre on Celestia: blobs, publishers, escrow, Fibre providers, validators and endorsements, with blob availability and an open API.";
-const PREVIEW_TITLE = "Tensile · Celestia Fibre explorer";
+const PREVIEW_TITLE = `${SITE_NAME} · Celestia Fibre explorer`;
 const PREVIEW_IMAGE = {
-  url: "/og.png",
+  url: PREVIEW_IMAGE_PATH,
   width: 1200,
   height: 630,
-  alt: "Tensile: real-time explorer for blobs and validators on Celestia Fibre, beside a bundle of fibres held between two grips",
+  alt: `${SITE_NAME}: real-time explorer for blobs and validators on Celestia Fibre, beside a bundle of fibres held between two grips`,
 };
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "Tensile · Real-time Celestia Fibre explorer",
+  title: `${SITE_NAME} · Real-time Celestia Fibre explorer`,
   description: DESCRIPTION,
-  openGraph: { type: "website", siteName: "Tensile", title: PREVIEW_TITLE, description: DESCRIPTION, images: [PREVIEW_IMAGE] },
+  openGraph: { type: "website", siteName: SITE_NAME, title: PREVIEW_TITLE, description: DESCRIPTION, images: [PREVIEW_IMAGE] },
   twitter: { card: "summary_large_image", title: PREVIEW_TITLE, description: DESCRIPTION, images: [PREVIEW_IMAGE] },
 };
 

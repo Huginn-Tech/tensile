@@ -12,6 +12,10 @@
 //   SITE_ROOT    the static export (web/out), required
 //   SITE_LISTEN  host:port to listen on, default 127.0.0.1:3112
 //   API_LISTEN   observer-api's host:port, the same variable its unit reads
+//   SITE_CONNECT_SRC  the other network's site, one https origin the pages may
+//                ask besides this one (connect-src): a record this network has
+//                none of is looked for on its API (web/src/lib/othernet.tsx);
+//                unset, the pages ask this origin alone
 //
 // Node's standard library only, so it runs from a copied file with no install.
 "use strict";
@@ -34,6 +38,22 @@ function hostPort(v, def) {
 const LISTEN = hostPort(process.env.SITE_LISTEN, "127.0.0.1:3112");
 const API = hostPort(process.env.API_LISTEN, "127.0.0.1:8081");
 
+// The other network's site: one https origin, a scheme, a host and perhaps a
+// port, and nothing else. A path, a second origin, a wildcard or anything a
+// policy would read as more is refused at start, so a typo stops the server
+// with this message rather than opening connect-src wider than that one site.
+function originOf(v) {
+  const s = (v || "").trim().replace(/\/$/, "");
+  if (!s) return "";
+  if (!/^https:\/\/[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{1,5})?$/i.test(s)) return null;
+  try { return new URL(s).origin; } catch { return null; }
+}
+const CONNECT = originOf(process.env.SITE_CONNECT_SRC);
+if (CONNECT === null) {
+  console.error(`site-server: SITE_CONNECT_SRC (${process.env.SITE_CONNECT_SRC}) is not one https origin, such as https://tensile-mocha.huginn.tech`);
+  process.exit(2);
+}
+
 const TYPES = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
   ".json": "application/json", ".txt": "text/plain; charset=utf-8", ".svg": "image/svg+xml", ".ico": "image/x-icon",
@@ -45,16 +65,17 @@ const COMPRESSIBLE = new Set([".html", ".js", ".css", ".json", ".txt", ".svg", "
 // flags and avatars (the API serves the Keybase pictures itself). Inline
 // scripts stay allowed because the static export inlines its bootstrap and
 // the theme script, and a nonce needs a server that renders; everything else
-// is held to 'self'. The site is only reached through the front proxy over
-// HTTPS, so HSTS is safe to send (no includeSubDomains: other hosts share the
-// parent domain).
+// is held to 'self', but for the other network's site (SITE_CONNECT_SRC),
+// which the pages may ask for a record. The site is only reached through the
+// front proxy over HTTPS, so HSTS is safe to send (no includeSubDomains: other
+// hosts share the parent domain).
 const SECURITY = {
   "x-content-type-options": "nosniff",
   "referrer-policy": "strict-origin-when-cross-origin",
   "x-frame-options": "DENY",
   "content-security-policy": [
     "default-src 'self'", "script-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data:", "font-src 'self'", "connect-src 'self'", "form-action 'self'",
+    "img-src 'self' data:", "font-src 'self'", CONNECT ? `connect-src 'self' ${CONNECT}` : "connect-src 'self'", "form-action 'self'",
     "frame-ancestors 'none'", "object-src 'none'", "base-uri 'self'",
   ].join("; "),
   "permissions-policy": "camera=(), microphone=(), geolocation=(), interest-cohort=()",
@@ -349,7 +370,7 @@ server.headersTimeout = 20_000;
 server.requestTimeout = 60_000;
 server.on("clientError", (_e, sock) => { if (sock.writable) sock.end("HTTP/1.1 400 Bad Request\r\n\r\n"); });
 server.listen(LISTEN.port, LISTEN.host, () => {
-  console.log(`site-server: ${ROOT} on ${LISTEN.host}:${LISTEN.port}, /api/v1 -> ${API.host}:${API.port}`);
+  console.log(`site-server: ${ROOT} on ${LISTEN.host}:${LISTEN.port}, /api/v1 -> ${API.host}:${API.port}${CONNECT ? `, connect-src also ${CONNECT}` : ""}`);
   const t0 = Date.now();
   warm().then(() => console.log(`site-server: ${packed.size} files compressed in ${Date.now() - t0} ms (${Math.round(packedBytes / 1024)} KB kept)`));
 });

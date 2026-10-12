@@ -1,5 +1,6 @@
 "use client";
 import { Suspense, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { API_BASE, useApi, notFound, badRequest, throttled, hhmm, ago, shortMid, type Blob, type Payment, type PublisherNamespace, type RecentBlob, type Tip, type Window, blobFee, bytes, int, isBlob, nsDisplay, tia, utcWord, TIP_MS } from "@/lib/api";
 import type { Params, PublisherWithQueue, PublisherWithdrawals } from "@/lib/withdrawals";
@@ -16,6 +17,7 @@ import { Eye } from "@/components/Metrics";
 import { age, monthDayTime } from "@/components/BlobsDeck";
 import Warn from "@/components/Warn";
 import { publisherAddr } from "@/lib/sitefind";
+import { useOther, OnOther } from "@/lib/othernet";
 
 /** the publisher's figures over one of the periods, with the namespaces of its settlements in it (the most used first, at most 10) */
 type Span = {
@@ -159,7 +161,20 @@ function Publisher({ addr }: { addr: string }) {
   const oldest = useFirstBlob(addr, firstAt === undefined && head.data && !whole ? head.data.total : null);
   const seen = apiNs === undefined && head.data && !whole ? [...new Set(head.data.blobs.map((b) => b.namespace))] : null;
 
+  // no publisher with this address here, said for certain: the other network's site is asked for it, once, and one
+  // there is a line with a link to this page there in place of the notice
+  const other = useOther(!pub.data && notFound(pub) ? [{ route: `/v1/publishers/${encodeURIComponent(addr)}?window=all` }] : null);
+
   const { data, error, loading } = pub;
+  if (!data && other.href) {
+    return (
+      <>
+        <div className="head"><div><p className="crumb"><Link href="/publishers/">Publishers</Link> › …</p><h1>Publisher not found</h1></div></div>
+        <p className="elsewhere"><OnOther href={other.href} /></p>
+      </>
+    );
+  }
+  if (!data && other.asking) return <p className="muted">Loading…</p>;
   if (!data && error) return <p className="notice">{
     notFound(pub) ? <>No publisher with this address is on record.</>
     : badRequest(pub) ? <><span className="mono">{addr}</span> is not a publisher account address ({error}).</>

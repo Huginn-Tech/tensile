@@ -15,6 +15,7 @@ import { monthDayTime } from "@/components/BlobsDeck";
 import { validatorHref } from "@/lib/addr";
 import { blobKey, blobIdOf, type BlobKey } from "@/lib/blobkey";
 import { useFind } from "@/lib/blobfind";
+import { useOther, OnOther } from "@/lib/othernet";
 
 type Assignment = {
   validator_address: string; moniker?: string; voting_power: number; row_count: number; attested: boolean | null; host_at_settlement: string | null;
@@ -286,6 +287,13 @@ function Page() {
   useEffect(() => {
     if (missing && path) askAgain(path);
   }, [newest]); // eslint-disable-line react-hooks/exhaustive-deps
+  // nothing on record here, said for certain (not while it loads or fails): the other network's site is asked for the
+  // same blob, once, and a blob there is one line with a link to this page there in place of the notice
+  const viaNone = !hash && !!via && via.kind !== "bad" && !!hit && !hit.error && hit.total === 0 && !hit.failedTx && !(via.kind === "tx" && hit.noTx);
+  const other = useOther(
+    path && missing && !d.data ? [{ route: path }]
+    : viaNone && via ? [{ blob: via.key, as: [via.kind === "tx" ? "tx" : "commitment"] }]
+    : null);
   if (named.trim() && !hash) {
     return (
       <>
@@ -310,7 +318,8 @@ function Page() {
         <div className="head"><div><p className="crumb"><Link href="/blobs/">Blobs</Link> › {via.text.slice(0, 10)}…</p><h1>{none && !unasked ? "Not indexed yet" : unasked || via.kind === "bad" || hit?.error ? "Blob" : "Loading…"}</h1></div></div>
         <StatusLine meta={meta} metaError={metaErr} snap={null} client={{ error: hit?.error ?? null, fetchedAt: hit && !hit.error ? hit.at : null }} />
         {via.kind === "bad" && <p className="notice"><span className="mono">{shortMid(via.text, 10, 6)}</span> is not a {name}: {via.of === "id" ? "the client's blob ID is a version byte, 0, then the 32-byte commitment, in base64, or 66 hex characters" : "one is 64 hex characters"}.</p>}
-        {none && (via.kind === "tx"
+        {other.href && <p className="elsewhere"><OnOther href={other.href} /></p>}
+        {none && !other.asking && !other.href && (via.kind === "tx"
           ? hit.noTx
             ? <p className="notice">This observer does not look blobs up by transaction hash yet. Open the blob from the <Link href="/blobs/">list</Link> or by its blob ID.</p>
             : <p className="notice">Tensile has not indexed <span className="mono" title={via.text}>{shortMid(via.text, 10, 6)}</span> yet, or the transaction carries no Fibre blob. A blob appears here once Tensile has read the block that settled it; this page checks again each time Tensile records a new blob, and every 30 seconds.</p>
@@ -324,7 +333,8 @@ function Page() {
       <>
         <div className="head"><div><p className="crumb"><Link href="/blobs/">Blobs</Link> › {hash.slice(0, 10)}…</p><h1>{notFound(d) ? "Blob not recorded yet" : d.error ? "Blob" : "Loading…"}</h1></div></div>
         <StatusLine meta={meta} metaError={metaErr} snap={null} client={{ error: d.error, fetchedAt: d.fetchedAt, status: d.status }} />
-        {notFound(d) && <p className="notice">No publication with the promise hash <span className="mono">{shortMid(hash, 10, 6)}</span> is on record. A blob appears here once the scanner has read the block that settled it; this page checks again each time Tensile records a new blob, and every 30 seconds.</p>}
+        {other.href && <p className="elsewhere"><OnOther href={other.href} /></p>}
+        {notFound(d) && !other.asking && !other.href && <p className="notice">No publication with the promise hash <span className="mono">{shortMid(hash, 10, 6)}</span> is on record. A blob appears here once the scanner has read the block that settled it; this page checks again each time Tensile records a new blob, and every 30 seconds.</p>}
       </>
     );
   }
