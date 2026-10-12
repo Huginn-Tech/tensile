@@ -34,8 +34,12 @@ port, behind one Caddy with a site per network (see "Two networks").
   `storage.discard_abci_responses = false` in `config.toml`: the scanner
   reads `block_results` for every block, and a node that discards ABCI
   responses answers "node is not persisting finalize block responses"
-  (rpc-mocha.pops.one did on 8 September 2026). Public RPCs on
-  celestia-core v0.41.0 also cap heavy requests at 20 in flight. The
+  (rpc-mocha.pops.one did on 8 September 2026). Every node on
+  celestia-core v0.40.9 or later, your own included, caps heavy requests
+  (`block_results` among them) at `max_concurrent_heavy_requests` in
+  flight, 20 by default. A node saturated by them answers 503, which the
+  scanner retries without recording a gap; it only falls behind while
+  others keep the node busy, so keep heavy users off the observer's node. The
   scanner also subscribes to the node's new block headers on the same
   address's websocket (`/websocket`, which CometBFT serves on the RPC
   port), so it reads each block the moment the node has it. A proxy in

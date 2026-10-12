@@ -8,8 +8,7 @@
  * responses are real answers of the Mocha API (mocha-5), taken between 4
  * and 12 October 2026 with the Try it values below; all but the ones marked
  * `whole` are trimmed to a few fields. Nothing is added and no value is
- * changed. /v1/publishers/{addr}/txs has none yet: its example is taken
- * from a real answer once the route is deployed, as the others were.
+ * changed.
  *
  * In descriptions and error lines, `backticks` mark a field or parameter.
  */
@@ -441,6 +440,45 @@ const EX_PUBLISHER = `{
   ]
 }`;
 
+const EX_PUBLISHER_TXS = `{
+  "publisher": "celestia1las83d0dt9gew3faq2mxp2gtupq5drclee9snr",
+  "view": "escrow",
+  "limit": 3,
+  "offset": 0,
+  "total": 2,
+  "failed_total": 0,
+  "txs": [
+    {
+      "kind": "deposit",
+      "status": "success",
+      "height": 1316265,
+      "tx_index": 0,
+      "msg_index": 0,
+      "time": "2026-10-02T14:00:18.634759532Z",
+      "tx_hash": "014a24c36ac087b8181f1ee9a3b9af355fc4baa889879f0b7d119df1cc785fb8",
+      "amount_utia": 20000000000
+    },
+    {
+      "kind": "deposit",
+      "status": "success",
+      "height": 1193648,
+      "tx_index": 0,
+      "msg_index": 0,
+      "time": "2026-09-28T12:32:19.985143198Z",
+      "tx_hash": "b4ed81c319c4b2aec4a9a1a8807d6f12031c1e0f0c7a91d962eb370d616d6197",
+      "amount_utia": 30000000000
+    }
+  ],
+  "sums": {
+    "deposited_utia": 50000000000,
+    "settlements": 8472,
+    "fees_utia": 30006960000,
+    "timeouts": 0,
+    "charged_utia": 0,
+    "withdrawn_utia": 0
+  }
+}`;
+
 const EX_MARKET = `{
   "window": {"name": "7d"},
   "settlements": 8524,
@@ -795,6 +833,8 @@ export const GROUPS: Group[] = [
           { name: "offset", in: "query", type: "integer", range: "0–100000", default: "0", desc: "Transactions to skip, for numbered pages." },
         ],
         errors: "400 when `addr` is not a celestia1… account, `view` is neither all nor escrow, or `limit` or `offset` is out of range.",
+        example: EX_PUBLISHER_TXS,
+        whole: true,
       },
       {
         id: "market",

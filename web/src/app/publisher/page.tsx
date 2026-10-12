@@ -376,7 +376,7 @@ function Publisher({ addr }: { addr: string }) {
             // its blobs as the Blobs list draws them, a failed blob payment among them in its place; the pager names its
             // rows blob payments once a failed one is among them, as the Blobs list does
             <Ledger feed={feed} size={SIZE} live={live} skew={skew} onePublisher status onNs={setNs}>
-              {(n, _, failed = 0) => (n === 0 && page === 1 ? null : <Pager total={n} page={page} size={SIZE} maxPages={MAX_PAGE} onPage={setPage}
+              {(n, failed = 0) => (n === 0 && page === 1 ? null : <Pager total={n} page={page} size={SIZE} maxPages={MAX_PAGE} onPage={setPage}
                 noun={`${failed === 0 ? "settlement" : "blob payment"}${n === 1 ? "" : "s"}${ns ? " with this filter" : ""}`} />)}
             </Ledger>
           )
