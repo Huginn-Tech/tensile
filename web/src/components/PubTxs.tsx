@@ -92,7 +92,7 @@ function Head({ c, esc }: { c: Col; esc: boolean }) {
     case "x": return <th className="c-x">TX hash</th>;
     case "k": return <th className="c-k">Type</th>;
     case "am": return <th className="c-am" title={`What each transaction moved into the escrow (+) or out of it (−)${esc ? "" : ": a blob's fee, a deposit"}; a withdrawal request's amount, unsigned, moves only when it is paid out. A failed one moved nothing.`}>Amount</th>;
-    case "st": return <th className="c-st" title="The transaction's outcome on chain.">Status</th>;
+    case "st": return <th className="c-st" title="The transaction's outcome on chain.">TX status</th>;
   }
 }
 
