@@ -251,9 +251,11 @@ button { font: inherit; color: inherit; }
 .hs-top .hs-nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hs-at { flex: none; margin-left: auto; padding-left: 8px; font-size: 12px; font-weight: 400; color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .hs-hash { font-size: 12px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hs-sub { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.hs-sub .hs-hash { flex: 1; min-width: 0; }
-.hs-st { flex: none; display: inline-flex; align-items: center; font-size: 12px; font-weight: 500; color: var(--text-2); white-space: nowrap; }
+/* the hash whole beside its status, the status at the row's end; on a phone too narrow for both, the status takes its own
+   line under the hash rather than cutting it */
+.hs-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; min-width: 0; }
+.hs-sub .hs-hash { flex: none; max-width: 100%; }
+.hs-st { margin-left: auto; flex: none; display: inline-flex; align-items: center; font-size: 12px; font-weight: 500; color: var(--text-2); white-space: nowrap; }
 .hs-st .dot { width: 7px; height: 7px; margin-right: 6px; }
 .hs-st.f { color: var(--text); }
 .hs-dd .hs-note { margin: 6px 10px 4px; font-size: 12.5px; line-height: 18px; color: var(--text-2); }
@@ -2776,8 +2778,9 @@ button.warn:focus-visible { outline-offset: 0; }
   .lg-t.eh-t td.c-bh { grid-area: bh; font-weight: 400; color: var(--text-3); }
   .lg-t.eh-t td.c-x { grid-area: x; }
   .lg-t.eh-t .ph { display: inline; white-space: pre; }
-  /* the time and its age on one line, as the endpoint and "current" */
+  /* the time and its age on one line, as the endpoint and "current"; a host that wraps puts "current" under its last line */
   .lg-t.eh-t .tw, .lg-t.eh-t .ew { flex-direction: row; align-items: baseline; gap: 6px; min-height: 0; }
+  .lg-t.eh-t .ew { flex-wrap: wrap; justify-content: flex-start; row-gap: 0; }
   .lg-t.eh-t .eh-pre { min-height: 0; }
   .lg-t.eh-t .ew .cur { margin-left: 0; }
   .lg-t.eh-t .c-x .cp { margin-right: 0; }
