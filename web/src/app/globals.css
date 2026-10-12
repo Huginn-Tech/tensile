@@ -316,6 +316,7 @@ button.dis:hover, a.dis:hover { text-decoration: underline; }
 .notice a { font-weight: 500; }
 /* a record on the other network's site, where the page would say it is not on record here (lib/othernet.tsx) */
 .elsewhere { margin: 12px 0 0; font-size: var(--t-body); color: var(--text-2); }
+.go-line { font-family: var(--sans); }
 a.go-other { font-weight: 500; white-space: nowrap; }
 .stale { color: var(--hold); font-weight: 500; }
 .sep { color: var(--text-3); margin: 0 8px; }

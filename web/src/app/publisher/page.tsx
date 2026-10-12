@@ -1,5 +1,6 @@
 "use client";
 import { Suspense, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { API_BASE, useApi, notFound, badRequest, throttled, hhmm, ago, shortMid, type Blob, type Payment, type PublisherNamespace, type RecentBlob, type Tip, type Window, blobFee, bytes, int, isBlob, nsDisplay, tia, utcWord, TIP_MS } from "@/lib/api";
 import type { Params, PublisherWithQueue, PublisherWithdrawals } from "@/lib/withdrawals";
@@ -165,7 +166,14 @@ function Publisher({ addr }: { addr: string }) {
   const other = useOther(!pub.data && notFound(pub) ? [{ route: `/v1/publishers/${encodeURIComponent(addr)}?window=all` }] : null);
 
   const { data, error, loading } = pub;
-  if (!data && other.href) return <p className="elsewhere"><OnOther href={other.href} /></p>;
+  if (!data && other.href) {
+    return (
+      <>
+        <div className="head"><div><p className="crumb"><Link href="/publishers/">Publishers</Link> › …</p><h1>Publisher not found</h1></div></div>
+        <p className="elsewhere"><OnOther href={other.href} /></p>
+      </>
+    );
+  }
   if (!data && other.asking) return <p className="muted">Loading…</p>;
   if (!data && error) return <p className="notice">{
     notFound(pub) ? <>No publisher with this address is on record.</>
