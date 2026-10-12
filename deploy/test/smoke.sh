@@ -29,6 +29,12 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 echo "== units parse and their sandboxing is well-formed"
 for u in "$UNITS"/fibre-*@.service "$UNITS"/fibre-*@.timer; do
   [ -e "$u" ] || continue
+  # litestream is optional (section 7): its unit is copied with the others,
+  # and on a host without the binary it has nothing to verify
+  if [ "$(basename "$u")" = fibre-litestream@.service ] && [ ! -x /usr/local/bin/litestream ]; then
+    echo "  skipped $(basename "$u") (litestream is not installed; it is optional)"
+    continue
+  fi
   # a template is verified as one instance
   out=$(systemd-analyze verify "${u/@./@$INSTANCE.}" 2>&1) || fail "systemd-analyze verify $u: $out"
   [ -z "$out" ] || fail "systemd-analyze verify $u: $out"
@@ -50,7 +56,9 @@ echo "== each unit starts, reaches the chain, and writes as its service user"
 for unit in fibre-scan fibre-heartbeat fibre-collector; do
   log=$(mktemp)
   timeout 25 python3 "$RUN" "$UNITS/$unit@.service" "$INSTANCE" >"$log" 2>&1 || true
-  grep -qiE "connected|up:|round done|done \(" "$log" || fail "$unit produced no sign of life: $(tail -3 "$log")"
+  # before the v10 upgrade the heartbeat has no registry to dial and says so
+  # once, having reached the chain: that is its sign of life then
+  grep -qiE "connected|up:|round done|done \(|nothing to dial until the v10 upgrade" "$log" || fail "$unit produced no sign of life: $(tail -3 "$log")"
   grep -qiE "permission denied|no such file" "$log" && fail "$unit: $(grep -iE 'permission denied|no such file' "$log" | head -1)"
   echo "  ok $unit"
   rm -f "$log"

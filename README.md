@@ -120,6 +120,18 @@ cd fibre-sentinel && go run ./cmd/sentinel-recompute -data-dir <dir> -window 7d 
 - [`deploy/README.md`](deploy/README.md): running an observer: configuration,
   systemd and Caddy or docker compose, backups and checks after deploy.
 
+## Export signing keys
+
+Each network's daily exports are signed with its own key. The API serves the
+public keys; check them against these fingerprints, which are kept here so a
+reader has a copy that does not come from the API
+([`docs/exports-signing.md`](docs/exports-signing.md)).
+
+| Network | Key fingerprint |
+|---|---|
+| Mainnet | `sha256:59fc7c28a1df95f8ec512a09404c670318241c9ce16a767132a002b7e6a72e1f` |
+| Mocha | `sha256:8eb4c98fd59e067ce8651f0edec06bcccc6d92b49b2ddd8161929ec3826a5412` |
+
 ## Contributing
 
 Report bugs and suggest changes in
