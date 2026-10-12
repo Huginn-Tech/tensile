@@ -384,6 +384,10 @@ function Body({ ep }: { ep: Endpoint }) {
         <h4 className="api-h4">{ep.whole ? "Example response" : "Example response, trimmed"}</h4>
         <Code text={ep.example} format={ep.format} label={`Example response of ${ep.path}`} />
       </>}
+      {ep.also && <>
+        <h4 className="api-h4">{`Example response for ${ep.also.what}${ep.also.whole ? "" : ", trimmed"}`}</h4>
+        <Code text={ep.also.example} format={ep.format} label={`Example response of ${ep.path} for ${ep.also.what}`} />
+      </>}
     </>
   );
 }

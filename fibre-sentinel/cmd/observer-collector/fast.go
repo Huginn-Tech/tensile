@@ -19,8 +19,8 @@ import (
 // one, so the overview's newest blob reached the store up to ten seconds after
 // its block, on top of the scanner's second. Between passes this reads, every
 // -fast-every (a second) and within a tenth of a second of a change to one of
-// them (-fast-watch, watch.go), the three files a just-settled blob's row is
-// made of, in the order the pass reads them:
+// them (-fast-watch, watch.go), the four files a just-settled blob's answers
+// are made of, in the order the pass reads them:
 //
 //   - state.json, the scanner's checkpoint, first. The scanner syncs
 //     publications.jsonl before it rewrites state.json, so a checkpoint read
@@ -30,13 +30,17 @@ import (
 //     store. Read here too so the checkpoint the snapshots name
 //     (record_through) does not fall a pass behind the publications this
 //     stores.
+//   - tx_costs.jsonl: what the settlement transaction cost (the blob's
+//     tx_cost, the transaction page's cost), before the row, so the blob is
+//     never in the store without it. Without it here a new blob was served
+//     without its cost until the next pass.
 //   - publications.jsonl: the row, and its assignments.
 //   - payments.jsonl: its charge, and the account that paid, which the row
 //     names as its publisher where a payment is on record. Without it a new
 //     row would read "no payment recorded" until the next pass.
 //
 // Ordering. Everything this leaves in the store is what a full pass that
-// stopped after these three files would leave, which the pass has always had
+// stopped after these four files would leave, which the pass has always had
 // to survive (a crash, a restart), and the invariants the pass's comments set
 // out hold across it:
 //
@@ -52,7 +56,7 @@ import (
 //     and corrections in before the measurements and syncs the holds after
 //     both, as it always has.
 //   - A payment is an insert on its own dedupe key, from which nothing is
-//     derived at insert time.
+//     derived at insert time; so is a cost line, which no ingest reads.
 //
 // Cost. It runs on the collector's one goroutine, between passes, so it never
 // writes beside a pass. When nothing is new it costs a stat of each file:
@@ -64,13 +68,14 @@ import (
 // (the WAL checkpoint, the holds, the corrections, the rollups, the exports,
 // the chain polls) stays in the pass.
 //
-// Health. A failure to read publications or payments is logged and reported on
-// the status file as a pass reports one ("ingest: ..."), so /v1/health sees
-// it; this never reports the collector healthy, which only a full pass whose
-// chain poll succeeded does. A failure that persists is logged when it first
-// appears and when it changes, not every second (the pass logs it every ten
-// seconds regardless), and the status file is told every time. A failure to
-// read state.json is logged only, as the pass logs it.
+// Health. A failure to read cost lines, publications or payments is logged
+// and reported on the status file as a pass reports one ("ingest: ..."), so
+// /v1/health sees it; this never reports the collector healthy, which only a
+// full pass whose chain poll succeeded does. A failure that persists is
+// logged when it first appears and when it changes, not every second (the
+// pass logs it every ten seconds regardless), and the status file is told
+// every time. A failure to read state.json is logged only, as the pass logs
+// it.
 type fastTick struct {
 	st    *store.Store
 	logf  func(string, ...any)
@@ -90,13 +95,14 @@ type fastFile struct {
 	seen os.FileInfo
 }
 
-func newFastTick(st *store.Store, statePath, pubsPath, payPath string, logf func(string, ...any), fail func(string)) *fastTick {
+func newFastTick(st *store.Store, statePath, costPath, pubsPath, payPath string, logf func(string, ...any), fail func(string)) *fastTick {
 	return &fastTick{
 		st:    st,
 		logf:  logf,
 		fail:  fail,
 		state: fastFile{what: "state", path: statePath},
 		files: []fastFile{
+			{what: "tx costs", path: costPath, tail: ingest.TxCosts},
 			{what: "publications", path: pubsPath, tail: ingest.Publications},
 			{what: "payments", path: payPath, tail: ingest.Payments},
 		},

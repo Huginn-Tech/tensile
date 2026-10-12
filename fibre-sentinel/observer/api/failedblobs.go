@@ -29,6 +29,13 @@ import (
 // and whether the failure is final. Nothing it would have moved: no blob,
 // size, fee, endorsement or reading.
 //
+// A success wins over a failure of the same hash, as on /v1/txs/{hash}: a
+// failure that is not final could land in a later block under the same
+// hash, and once it has, the list has its blob and neither lists the
+// failure nor counts it in total or failed_total. Only a failure that is
+// not final is looked up (landedSQL), on each reading of the list until it
+// has landed; a final one cannot land.
+//
 // failed_txs has no index by height, and its rows are few beside the
 // blobs, so the API keeps the failed payments in memory (failedPays): read
 // once, then only the rows stored since, by rowid. The collector is the one
@@ -102,6 +109,10 @@ type failedPays struct {
 	// and each is noted as met whenever the list is read with them
 	// (failedPaysFor), as a lookup of its hash notes it.
 	faults []*errRowFault
+	// landed are the hashes of the failures that were not final and have
+	// since landed: never listed again, and never looked up again, since
+	// the record never loses a success.
+	landed map[string]bool
 }
 
 // The statements failedPays reads failed_txs with: its highest rowid, and
@@ -110,6 +121,13 @@ type failedPays struct {
 const (
 	failedTxsTopSQL   = `SELECT COALESCE(MAX(rowid), 0) FROM failed_txs`
 	failedTxsSinceSQL = `SELECT tx_hash, height, tx_index, time, raw_json FROM failed_txs WHERE rowid > ? AND rowid <= ? ORDER BY rowid`
+	// landedSQL is whether a hash is a success on record, as /v1/txs/{hash}
+	// finds one: a cost line, a publication (the hash in lower and in upper
+	// case, as blobByTxSQL asks it) or an escrow movement, each a seek of
+	// its index. Its arguments: the hash four times, the third in upper case.
+	landedSQL = `SELECT EXISTS (SELECT 1 FROM tx_costs WHERE tx_hash = ?)
+		OR EXISTS (SELECT 1 FROM publications WHERE settlement_tx_hash IN (?, ?))
+		OR EXISTS (SELECT 1 FROM payments WHERE tx_hash = ?)`
 )
 
 // refresh reads the rows stored since the last refresh. A table whose
@@ -121,7 +139,7 @@ func (f *failedPays) refresh(ctx context.Context, db *sql.DB) error {
 		return err
 	}
 	if hi < f.upTo {
-		f.upTo, f.rows, f.faults = 0, nil, nil
+		f.upTo, f.rows, f.faults, f.landed = 0, nil, nil, nil
 	}
 	if hi == f.upTo {
 		return nil
@@ -193,9 +211,38 @@ type blobsAsk struct {
 	before *[2]int64
 }
 
+// hashLanded reports whether the transaction hash h (lower-case hex) is a
+// success on record (landedSQL).
+func hashLanded(ctx context.Context, db *sql.DB, h string) (bool, error) {
+	var landed bool
+	err := db.QueryRowContext(ctx, landedSQL, h, h, strings.ToUpper(h), h).Scan(&landed)
+	return landed, err
+}
+
+// hasLanded reports whether r, a failure that was not final, has since
+// landed under its hash. The caller holds f.mu.
+func (f *failedPays) hasLanded(ctx context.Context, db *sql.DB, r failedPayRow) (bool, error) {
+	h := r.SettlementTxHash
+	if f.landed[h] {
+		return true, nil
+	}
+	landed, err := hashLanded(ctx, db, h)
+	if err != nil {
+		return false, err
+	}
+	if landed {
+		if f.landed == nil {
+			f.landed = map[string]bool{}
+		}
+		f.landed[h] = true
+	}
+	return landed, nil
+}
+
 // failedPaysFor is the failed blob payments the list's filters select,
 // newest first: in the namespace and paid for by the publisher when they
-// are set, and before the cursor when it is.
+// are set, and before the cursor when it is; a failure that was not final
+// only while its hash has not landed.
 func (s *Server) failedPaysFor(ctx context.Context, a blobsAsk) ([]failedPayRow, error) {
 	f := &s.failedPays
 	f.mu.Lock()
@@ -216,6 +263,15 @@ func (s *Server) failedPaysFor(ctx context.Context, a blobsAsk) ([]failedPayRow,
 		}
 		if a.before != nil && !standsBefore(a.before[0], int(a.before[1]), r.SettlementHeight, r.SettlementTxIndex) {
 			continue
+		}
+		if !r.Final {
+			landed, err := f.hasLanded(ctx, s.st.DB(), r)
+			if err != nil {
+				return nil, err
+			}
+			if landed {
+				continue
+			}
 		}
 		out = append(out, r)
 	}

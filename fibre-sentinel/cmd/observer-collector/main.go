@@ -44,7 +44,7 @@ func main() {
 		dbPath    = flag.String("db", "", "SQLite database path (default <data-dir>/observer.db)")
 		vantage   = flag.String("vantage", "local", "vantage name recorded on this run")
 		interval  = flag.Duration("interval", 10*time.Second, "how often to tail the files")
-		fastEvery = flag.Duration("fast-every", time.Second, "how often, between those passes, to read only state.json, publications.jsonl and payments.jsonl, so a new blob is served within about this long of the scanner writing it; nothing is opened while they have not changed (0 = only in the full pass)")
+		fastEvery = flag.Duration("fast-every", time.Second, "how often, between those passes, to read only state.json, tx_costs.jsonl, publications.jsonl and payments.jsonl, so a new blob is served, with its cost, within about this long of the scanner writing it; nothing is opened while they have not changed (0 = only in the full pass)")
 		fastWatch = flag.Bool("fast-watch", true, "also run that read as soon as one of those files changes, from the kernel's file events on their directory (a burst of writes is one read, at most 100 ms after its first); the -fast-every timer stays as the fallback")
 		epEvery   = flag.Duration("endpoints-every", 60*time.Second, "how often to poll AllBondedFibreProviders (0 = never)")
 		escEvery  = flag.Duration("escrow-every", 5*time.Minute, "how often to read every known publisher's escrow balance (one state query each; 0 = never)")
@@ -369,14 +369,15 @@ func main() {
 	// timer costs.
 	var fastC <-chan time.Time
 	var wakeC <-chan struct{}
-	fast := newFastTick(st, *statePath, *pubsPath, *payPath, log.Printf, live.Error)
+	costPath := coll.Paths.TxCosts
+	fast := newFastTick(st, *statePath, costPath, *pubsPath, *payPath, log.Printf, live.Error)
 	if *fastEvery > 0 {
 		ft := time.NewTicker(*fastEvery)
 		defer ft.Stop()
 		fastC = ft.C
 		watching := ""
 		if *fastWatch {
-			fw, err := watchFiles([]string{*statePath, *pubsPath, *payPath}, watchQuiet, watchMaxWait, log.Printf)
+			fw, err := watchFiles([]string{*statePath, costPath, *pubsPath, *payPath}, watchQuiet, watchMaxWait, log.Printf)
 			if err != nil {
 				log.Printf("WARNING: fast tick: cannot watch the files (%v): reading them on the timer alone", err)
 			} else {
@@ -385,7 +386,7 @@ func main() {
 				watching = fmt.Sprintf(", and within %s of a change to one of them (watching %s)", watchMaxWait, strings.Join(fw.Dirs(), ", "))
 			}
 		}
-		log.Printf("fast tick: state.json, publications and payments every %s between passes%s", *fastEvery, watching)
+		log.Printf("fast tick: state.json, tx costs, publications and payments every %s between passes%s", *fastEvery, watching)
 	}
 	// The slim backfill (backfill.go), after a pass that ingested every
 	// file, while no ingest is due: not the next pass, nor the fast tick for

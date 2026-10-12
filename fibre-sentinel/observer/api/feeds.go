@@ -42,6 +42,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/plsgiveup/fibre/fibre-sentinel/internal/probe"
@@ -81,8 +82,9 @@ type cachedFeed struct {
 
 // feedCache holds rendered feeds per server, per feed and per public host
 // (the host is in every entry ID). Package-level rather than a Server
-// field so this feature adds nothing to the Server struct; keyed by the
-// server's address so two servers in one process (tests) never share.
+// field; keyed by the server's address and its feedID so two servers in one
+// process (tests) never share, not even one given the address of another
+// the garbage collector freed.
 //
 // A feed is keyed by what it is of (feedKey): the network, or one validator
 // by the consensus address its path resolved to. Keyed by the path as it was
@@ -105,9 +107,16 @@ const feedCacheMax = 2048
 // is "v:" and its consensus address.
 const networkFeedName = "network"
 
-// feedKey is the cache key of the feed name of s at authority.
+// feedServers numbers the servers newServer makes (feedID), from 1.
+var feedServers atomic.Uint64
+
+// feedKey is the cache key of the feed name of s at authority. The address
+// alone is not enough: once a server is closed and collected, a server made
+// after it can be given its address, and found the feeds of the old one's
+// store under it, built a test earlier; its feedID is its own. A server
+// made by hand (tests) has feedID 0 and owns its address's feeds itself.
 func feedKey(s *Server, authority, name string) string {
-	return fmt.Sprintf("%p|%s|%s", s, authority, name)
+	return fmt.Sprintf("%p|%d|%s|%s", s, s.feedID, authority, name)
 }
 
 // firstFeed is one first build of a feed: what it came to, once done is

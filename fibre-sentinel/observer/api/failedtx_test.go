@@ -303,7 +303,7 @@ func TestAFailedTransactionAnswersWhatTheChainReturned(t *testing.T) {
 		t.Fatalf("failed_tx keys %s, want %s", got, want)
 	}
 	wantLog := "failed to execute message; message index: 1: failed to transfer funds to escrow: spendable balance 10utia is smaller than 1000000utia: insufficient funds"
-	if f.Height != 120 || f.Time != rec.Time.Format(time.RFC3339Nano) || f.Code != 5 || f.Codespace != "sdk" ||
+	if f.Height != 120 || f.Time != store.TS(rec.Time) || f.Code != 5 || f.Codespace != "sdk" ||
 		f.Reason == nil || *f.Reason != "Insufficient funds" || f.FailedMsgIndex == nil || *f.FailedMsgIndex != 1 ||
 		f.GasWanted != 200000 || f.GasUsed != 91234 || !f.AntePassed || f.Fee == nil || *f.Fee != "2000utia" || f.Log != wantLog || f.LogCut != nil {
 		t.Fatalf("failed_tx: %s", a.keys["failed_tx"])

@@ -9,6 +9,7 @@ import (
 
 	"github.com/plsgiveup/fibre/fibre-sentinel/internal/failedtx"
 	"github.com/plsgiveup/fibre/fibre-sentinel/internal/scan"
+	"github.com/plsgiveup/fibre/fibre-sentinel/observer/store"
 )
 
 // A validator's Fibre endpoint registrations on chain, newest first, as
@@ -40,16 +41,18 @@ const endpointHistoryMax = 50
 
 // endpointEvent is one endpoint_history row.
 type endpointEvent struct {
-	Outcome      string     `json:"outcome"` // registered | changed | same | failed | before_record | after_gap
-	Height       int64      `json:"height,omitempty"`
-	TxIndex      *int       `json:"tx_index,omitempty"`
-	Time         *time.Time `json:"time,omitempty"`
-	TxHash       string     `json:"tx_hash,omitempty"`
-	Host         string     `json:"host"`
-	PreviousHost string     `json:"previous_host,omitempty"`
-	First        bool       `json:"first,omitempty"`     // after_gap only: the validator had no endpoint before the gap
-	Attempted    string     `json:"attempted,omitempty"` // failed only: change | registration
-	Reason       string     `json:"reason,omitempty"`    // failed only: failedtx.Explain
+	Outcome string `json:"outcome"` // registered | changed | same | failed | before_record | after_gap
+	Height  int64  `json:"height,omitempty"`
+	TxIndex *int   `json:"tx_index,omitempty"`
+	// Time is the block's time as the store writes it (store.TS), the same
+	// string /v1/txs/{hash} gives the transaction.
+	Time         string `json:"time,omitempty"`
+	TxHash       string `json:"tx_hash,omitempty"`
+	Host         string `json:"host"`
+	PreviousHost string `json:"previous_host,omitempty"`
+	First        bool   `json:"first,omitempty"`     // after_gap only: the validator had no endpoint before the gap
+	Attempted    string `json:"attempted,omitempty"` // failed only: change | registration
+	Reason       string `json:"reason,omitempty"`    // failed only: failedtx.Explain
 }
 
 // hostStep is one host_events row of a validator, oldest first, with the
@@ -258,8 +261,8 @@ func endpointRows(steps []hostStep, fails []failedSetHost) ([]endpointEvent, boo
 	for i, st := range steps {
 		switch {
 		case st.Source == scan.HostFromEvent:
-			ti, t := st.FromTxIndex-1, st.Time
-			e := endpointEvent{Outcome: eventOutcome(prevSet, prev, st.Host), Height: st.FromHeight, TxIndex: &ti, Time: &t,
+			ti := st.FromTxIndex - 1
+			e := endpointEvent{Outcome: eventOutcome(prevSet, prev, st.Host), Height: st.FromHeight, TxIndex: &ti, Time: store.TS(st.Time),
 				TxHash: st.TxHash, Host: st.Host}
 			if e.Outcome == endpointChanged {
 				e.PreviousHost = prev
@@ -279,8 +282,8 @@ func endpointRows(steps []hostStep, fails []failedSetHost) ([]endpointEvent, boo
 		prev, prevSet = st.Host, true
 	}
 	for _, f := range fails {
-		ti, t := f.TxIndex, f.Time
-		rows = append(rows, endpointEvent{Outcome: endpointFailed, Height: f.Height, TxIndex: &ti, Time: &t, TxHash: f.TxHash,
+		ti := f.TxIndex
+		rows = append(rows, endpointEvent{Outcome: endpointFailed, Height: f.Height, TxIndex: &ti, Time: store.TS(f.Time), TxHash: f.TxHash,
 			Host: f.Host, Attempted: attemptedOf(hostAt(steps, f.Height, f.TxIndex)), Reason: f.Reason})
 	}
 	at := func(e endpointEvent) (int64, int) {

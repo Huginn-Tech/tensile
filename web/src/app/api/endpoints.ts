@@ -5,12 +5,11 @@
  *
  * Each parameter's type, allowed values, range and default are the ones
  * observer-api enforces (fibre-sentinel/observer/api). The example
- * responses are real answers of the Mocha API (mocha-5), taken on 4
- * October 2026 with the Try it values below; all but the ones marked
+ * responses are real answers of the Mocha API (mocha-5), taken between 4
+ * and 12 October 2026 with the Try it values below; all but the ones marked
  * `whole` are trimmed to a few fields. Nothing is added and no value is
- * changed. /v1/txs/{hash} and /v1/publishers/{addr}/txs have none yet:
- * their examples are taken from real answers once the routes are deployed,
- * as the others were.
+ * changed. /v1/publishers/{addr}/txs has none yet: its example is taken
+ * from a real answer once the route is deployed, as the others were.
  *
  * In descriptions and error lines, `backticks` mark a field or parameter.
  */
@@ -46,6 +45,8 @@ export type Endpoint = {
   example?: string;
   /** the example is the whole answer, not a trimmed one */
   whole?: boolean;
+  /** a second real answer, of another kind the route answers with: what it is ("a failure"), and whether it is whole */
+  also?: { what: string; example: string; whole?: boolean };
   /** what the route answers with, when it is not JSON */
   format?: "atom" | "text";
 };
@@ -112,20 +113,61 @@ const EX_VALIDATOR = `{
     "operator_address": "celestiavaloper1d2ktc37cme7ydk30ylzhamutcynhdvyet7nt3x",
     "endpoint_state": "reachable",
     "obligations": {
-      "served": 1855,
+      "served": 279,
       "broken": 0,
-      "not_counted": 5945,
-      "rate": {"num": 1855, "den": 1855, "value": 1}
+      "not_counted": 0,
+      "rate": {"num": 279, "den": 279, "value": 1}
     },
-    "signing": {"assigned": 8524, "signed": 7815},
-    "load": {"bytes": 4770127616, "stored_bytes": 9178368, "rows_per_blob": 148}
+    "signing": {"assigned": 288, "signed": 279},
+    "load": {"bytes": 350634496, "rows_per_blob": 148}
   },
   "windows": [
-    {"window": {"name": "24h"}, "obligations": {"served": 31, "broken": 0}},
-    {"window": {"name": "7d"}, "obligations": {"served": 1855, "broken": 0}}
+    {"window": {"name": "7d"}, "obligations": {"served": 279, "broken": 0}},
+    {"window": {"name": "30d"}, "obligations": {"served": 2277, "broken": 0}}
   ],
-  "network_reference": {"median_rate": 1, "validators": 77},
-  "recent_probes_truncated": true
+  "network_reference": {"median_rate": 1, "validators": 79},
+  "recent_probes": [
+    {
+      "promise_hash": "3a067a16beea3c589d9a6e7cad24d823d6663345155fadf63e2c373a02564651",
+      "started_at": "2026-10-11T04:05:25.646767908Z",
+      "outcome": "SERVED_OK",
+      "classification": "HEALTHY",
+      "rows_returned": 148,
+      "service": "served",
+      "settled_at": "2026-10-11T00:15:27.630572508Z",
+      "settlement_tx_hash": "bac83a65ac59b85e4b7b5d3d9c3be6fbd528462d1a69b7f168049691b39077ec"
+    }
+  ],
+  "recent_probes_truncated": true,
+  "endpoint_history": [
+    {
+      "outcome": "changed",
+      "height": 1498207,
+      "tx_index": 0,
+      "time": "2026-10-08T14:16:39.471280795Z",
+      "tx_hash": "4f4b53a6c2bb9f1fd634b7d63f66c68a4e68ea9198573331ffb7c2796adc27b6",
+      "host": "67.217.56.190:7980",
+      "previous_host": "174.138.180.150:7980"
+    },
+    {
+      "outcome": "failed",
+      "height": 1498161,
+      "tx_index": 0,
+      "time": "2026-10-08T14:14:28.390034287Z",
+      "tx_hash": "dc4d2bb8d076dc10ff10185b519bef91609c12904f5e63581d0a232310f1c8e4",
+      "host": "67.217.56.190:7980",
+      "attempted": "change",
+      "reason": "Out of gas"
+    },
+    {
+      "outcome": "registered",
+      "height": 1095061,
+      "tx_index": 0,
+      "time": "2026-09-25T06:30:25.876417365Z",
+      "tx_hash": "6f0377b258c0d6288e66fc08ab4a6d45382c9a8fe44f2049d75879aa62ec242f",
+      "host": "174.138.180.150:7980"
+    }
+  ]
 }`;
 
 const EX_STATUS = `{
@@ -235,7 +277,94 @@ const EX_BLOB = `{
       "total_duration_ms": 1849
     }
   ],
-  "probes_truncated": false
+  "probes_truncated": false,
+  "tx_cost": {
+    "gas_wanted": 226943,
+    "gas_used": 206399,
+    "fee": "908utia",
+    "fee_payer": "celestia1las83d0dt9gew3faq2mxp2gtupq5drclee9snr",
+    "messages": 1
+  }
+}`;
+
+const EX_TX = `{
+  "tx_hash": "e1ee077529fac8d580b8359758734af3b8f3e16bb28a634e8e9a58dfd41d8370",
+  "status": "success",
+  "height": 1204085,
+  "tx_index": 2,
+  "time": "2026-09-28T20:48:38.760812205Z",
+  "kind": "settlement",
+  "messages": [
+    {
+      "index": 0,
+      "type_url": "/celestia.fibre.v1.MsgPayForFibre",
+      "fibre": true,
+      "signer": "celestia1las83d0dt9gew3faq2mxp2gtupq5drclee9snr"
+    }
+  ],
+  "cost": {
+    "gas_wanted": 226943,
+    "gas_used": 206399,
+    "fee": "908utia",
+    "fee_payer": "celestia1las83d0dt9gew3faq2mxp2gtupq5drclee9snr"
+  },
+  "effect": {
+    "blob_size": 16777216,
+    "blob_version": 0,
+    "commitment": "3c6ead4767ad64b8ceaf869bb0a62e0ec4e0197729039681c2e48413c3be4766",
+    "fee_paid_utia": 3530000,
+    "namespace": "00000000000000000000000000000000000000736f762d6e696b6f2d61",
+    "promise_hash": "36f68ba9a781754e80037357ebf485d25e471332f436596904467099cfda2417",
+    "settled": true,
+    "timed_out": false
+  },
+  "related": {
+    "publisher": "celestia1las83d0dt9gew3faq2mxp2gtupq5drclee9snr",
+    "blob": {
+      "promise_hash": "36f68ba9a781754e80037357ebf485d25e471332f436596904467099cfda2417",
+      "commitment": "3c6ead4767ad64b8ceaf869bb0a62e0ec4e0197729039681c2e48413c3be4766",
+      "blob_version": 0,
+      "must_serve_until": "2026-09-29T00:48:35.807567083Z",
+      "reconstructable": {
+        "status": "yes",
+        "served_distinct_rows": 8051,
+        "needed_rows": 4096
+      }
+    }
+  }
+}`;
+
+const EX_TX_FAILED = `{
+  "tx_hash": "2f9bb8f9f45408918797f115ba51fc7cedb27bc6531ec371c08dec143e78f5de",
+  "status": "failed",
+  "final": true,
+  "height": 1083951,
+  "tx_index": 0,
+  "time": "2026-09-24T21:28:44.700721344Z",
+  "kind": "set_host",
+  "messages": [
+    {
+      "index": 0,
+      "type_url": "/celestia.valaddr.v1.MsgSetFibreProviderInfo",
+      "fibre": true,
+      "signer": "celestiavaloper1nps4re4zt7klwajk0t958w6g0z763kgfnfwx97"
+    }
+  ],
+  "cost": {"gas_wanted": 49054, "gas_used": 49712, "fee": "99utia"},
+  "failure": {
+    "code": 11,
+    "codespace": "sdk",
+    "reason": "Out of gas",
+    "log": "out of gas in location: ReadFlat; gasWanted: 49054, gasUsed: 49712: out of gas"
+  },
+  "effect": {"attempted": "registration", "requested_host": "195.154.153.32:7980"},
+  "related": {
+    "validator": {
+      "address": "61c7225d947271edd34f5f17f309ef77393492ab",
+      "operator_address": "celestiavaloper1nps4re4zt7klwajk0t958w6g0z763kgfnfwx97",
+      "moniker": "ChainSafe"
+    }
+  }
 }`;
 
 const EX_NAMESPACES = `{
@@ -529,7 +658,7 @@ export const GROUPS: Group[] = [
         id: "validator",
         path: "/v1/validators/{addr}",
         summary: "One validator's service, endorsements, load and newest readings.",
-        desc: "`windows` repeats the service counts for 24h, 7d, 30d and all. `recent_probes` holds the newest 50 requests, not-probed ones left out; `attempt` 1 or 2 is a request made again after an answer that did not serve. `endpoint_history` lists its Fibre endpoint registrations on chain, newest first, the newest 50 at most, then the endpoint it had when Tensile's record began; a `failed` one was signed by its operator address and changed nothing.",
+        desc: "`windows` repeats the service counts for 24h, 7d, 30d and all. `recent_probes` holds the newest 50 requests, not-probed ones left out, each with its blob's `settled_at` and `settlement_tx_hash`; `attempt` 1 or 2 is a request made again after an answer that did not serve. `endpoint_history` lists its Fibre endpoint registrations on chain, newest first, the newest 50 at most (`endpoint_history_truncated` when more were left out), then the endpoint it had when Tensile's record began; it is absent with `as_of` and for a validator with none. A row's `outcome` is registered, changed (from `previous_host`), same, failed (signed by its operator address, it changed nothing: `attempted` change or registration, and `reason`), before_record (the endpoint the record began with) or after_gap (registered while Tensile's record had a gap; `first` when it had none before); `tx_hash` is the transaction's, when Tensile recorded it.",
         params: [validatorAddr, windowParam, asOf],
         errors: "404 when no validator is on record at the address.",
         example: EX_VALIDATOR,
@@ -590,15 +719,16 @@ export const GROUPS: Group[] = [
           { name: "before_height", in: "query", type: "integer", desc: "Blobs settled before this height: pass `next_before_height`." },
           { name: "before_tx_index", in: "query", type: "integer", range: "0 or more", default: "0", desc: "With `before_height`: pass `next_before_tx_index`." },
           { name: "offset", in: "query", type: "integer", range: "0–100000", default: "0", desc: "Blobs to skip, for numbered pages." },
-          { name: "include_failed", in: "query", type: "string", values: ["0", "1"], default: "0", desc: "1 lists the blob payments that failed in a block among the blobs, in the same order and pages, each with `status` failed: its place in the blobs' fields, the promise's `namespace`, `publisher` and `promise_hash`, the chain's `code`, `codespace` and `reason`, and `final`. Blobs then carry `status` success; `total` counts both, `failed_total` the failed ones. Ignored with `commitment` or `tx`; a page holding a failure that is not `final` is not cached." },
+          { name: "include_failed", in: "query", type: "string", values: ["0", "1"], default: "0", desc: "1 lists the blob payments that failed in a block among the blobs, in the same order and pages, each with `status` failed: the failed transaction's `settlement_height`, `settlement_tx_index`, `settlement_tx_hash` and `settlement_time`, its promise's `promise_hash`, `namespace` and `publisher`, the chain's `code`, `codespace` and `reason`, and `final`. Blobs then carry `status` success; `total` counts both and `failed_total` the failed ones. A failure that was not `final` and has since landed is left out: its blob is listed. Ignored with `commitment` or `tx`; a page holding a failure that is not `final` is not cached." },
         ],
+        errors: "400 when `include_failed` is not 0 or 1.",
         example: EX_BLOBS,
       },
       {
         id: "blob",
         path: "/v1/blobs/{hash}",
         summary: "One blob: availability, charge, validators with rows, and readings.",
-        desc: "The blob carries `settlement_tx_hash` and `blob_version`, as on /v1/blobs. `reconstructable.status` is yes (Available), no (Unavailable), pending, not_read or unknown. Each assignment's `service` is served, not_served, in_retention_window (until the window closes; `probes` carry the reading's result once it is in) or deadline_unverified. `tx_cost` is the settlement transaction's own gas and fee, when Tensile recorded them.",
+        desc: "The blob carries `settlement_tx_hash` and `blob_version`, as on /v1/blobs. `reconstructable.status` is yes (Available), no (Unavailable), pending, not_read or unknown. Each assignment's `service` is served, not_served, in_retention_window (until the window closes; `probes` carry the reading's result once it is in) or deadline_unverified. `tx_cost` is the settlement transaction's own `gas_wanted`, `gas_used`, `fee` and `fee_payer`, and `messages`, how many messages the fee paid for, when Tensile recorded them.",
         params: [
           { name: "hash", in: "path", type: "string", required: true, desc: "The blob's promise hash, 64 hex characters.", example: BLOB },
           rows,
@@ -610,11 +740,13 @@ export const GROUPS: Group[] = [
         id: "tx",
         path: "/v1/txs/{hash}",
         summary: "One Fibre transaction by its hash, successful or failed.",
-        desc: "Its `status` (success, or failed with `final` and `failure`, the code, reason and error), block, `kind`, `messages`, `cost` (gas and fee, absent before Tensile recorded them), `effect` (what it did, or for a failure asked for) and `related` (the publisher, blob or validators it touches). A success wins over a failure of the same hash; a failure that is not `final` could still land in a later block, so its answer is not cached.",
+        desc: "`status` is success or failed; `kind` is settlement, deposit, withdrawal_request, timeout, set_host, or several when its Fibre messages are of more than one kind. `messages` lists every message in order, or with `messages_partial` only its Fibre messages, for a success Tensile found by its escrow movements before it recorded costs. `cost` is its gas and fee, with `fee_payer` on a success only, and is absent for a success from before Tensile recorded costs. A failure carries `final`, true when its fee and sequence were taken so it can never land, and `failure`: `code`, `codespace`, `reason`, `failed_msg_index`, `log`, and `log_cut` when the log was cut. `effect` is what it did: a settlement's `promise_hash`, `commitment`, `blob_version`, `namespace`, `blob_size`, `fee_paid_utia`, `settled` and `timed_out`; a deposit's, withdrawal request's or timeout's `amount_utia`, a timeout's `promise_hash`, and a request's `withdrawal` (`available_at`, `outcome` pending, paid or consumed, `paid_height`, `paid_at`, `payout_delay_s`, `reduced_utia`); an endpoint registration's `action` (registered, changed or same), `host` and `previous_host`. A failure's is what it asked for: a settlement's or timeout's `promise_hash` (and a settlement's `namespace` and `blob_size`), a deposit's or request's `requested` and `requested_utia`, a registration's `requested_host` with `attempted` and `host_at_block`, or `not_a_validator`; and `publisher`, as plain text, where `related` does not link one. `related` links the `publisher`, `blob`, `validator` or `validators` it touches. A success wins over a failure of the same hash; a failure that is not `final` could still land in a later block, so its answer is not cached, nor is a success whose `effect` and `related` are still empty, read before the rest of its block.",
         params: [
           { name: "hash", in: "path", type: "string", required: true, desc: "The transaction hash: 64 hex characters, either case, with or without 0x.", example: TX },
         ],
         errors: "400 when `hash` is not 64 hex characters; 404 when no Fibre transaction with this hash is on record, not cached: asked again, a transaction is found once its block is read.",
+        example: EX_TX,
+        also: { what: "a failure", example: EX_TX_FAILED, whole: true },
       },
       {
         id: "namespaces",

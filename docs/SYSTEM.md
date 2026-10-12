@@ -92,10 +92,10 @@ chain block
        └─→ reachability.jsonl
 
   collector: tails all of it into SQLite with byte-offset cursors, every 10 s
-       ├─ between those passes: state.json, publications and payments only,
-       │  within a tenth of a second of the scanner writing one of them (their
-       │  directory's file events, -fast-watch) and every second besides
-       │  (-fast-every; nothing opened while they stand still)
+       ├─ between those passes: state.json, tx costs, publications and
+       │  payments only, within a tenth of a second of the scanner writing one
+       │  of them (their directory's file events, -fast-watch) and every
+       │  second besides (-fast-every; nothing opened while they stand still)
        ├─ endpoint history from AllBondedFibreProviders
        ├─ escrow balances, validator identities, Keybase avatars
        ├─ deferred shadow verdicts (amendments) once the scan frontier passes
@@ -714,7 +714,8 @@ GET /v1/blobs                 publication list (?limit=, ?offset=, ?before_heigh
                               other filter, and no publication carrying it): its newest failed
                               inclusion, with the reason and failing message where the app
                               version is pinned; ?include_failed=1 lists the failed blob payments
-                              (status failed, failed_total) among the blobs (status success)
+                              (status failed, failed_total) among the blobs (status success), but
+                              for one not final whose hash has since landed
 GET /v1/blobs/{hash}          one blob: its reading, each assigned validator's service word, the rows
                               (?rows=1 adds each reading's row_indices and rows_sha256); tx_cost,
                               the settlement transaction's gas and fee when recorded
@@ -760,9 +761,11 @@ the default: the fee and every signer's sequence were taken, so the same
 transaction can never be in a block again and the answer cannot change.
 Any other failed answer is `no-store`. `/v1/txs/{hash}` keeps the default
 for a success and a final failure, and is `no-store` for a failure that was
-not final (its bytes could still take effect in a later block) and for a
-404; `/v1/blobs?include_failed=1` and `/v1/publishers/{addr}/txs` are
-`no-store` for a page holding such a failure.
+not final (its bytes could still take effect in a later block), for a
+success that says nothing of what it did (its cost line is stored before the
+rest of its block) and for a 404; `/v1/blobs?include_failed=1` and
+`/v1/publishers/{addr}/txs` are `no-store` for a page holding a failure that
+was not final.
 
 **A publisher's transactions.** `/v1/publishers/{addr}/txs` lists an
 account's successes from `payments` (its blob payments, deposits,
@@ -815,9 +818,8 @@ with, so a feed reader never sees an entry twice.
 
 The public documentation is the site's API page (`web/src/app/api`, served at `/api/`):
 every documented route in order, with its parameters, a Try it and an
-example answer (`endpoints.ts`; `/v1/txs/{hash}`'s and
-`/v1/publishers/{addr}/txs`'s are taken from real answers once the routes
-are deployed), then what every route shares. `/v1/meta`
+example answer (`endpoints.ts`; `/v1/publishers/{addr}/txs`'s is taken from a
+real answer once the route is deployed), then what every route shares. `/v1/meta`
 and `/v1/avatars` are the site's own and are not on it. A
 response carries what some reader uses: a field nothing reads is dropped
 from the answer, never from the store (the snapshot rows keep their

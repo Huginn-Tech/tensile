@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/plsgiveup/fibre/fibre-sentinel/internal/scan"
+	"github.com/plsgiveup/fibre/fibre-sentinel/internal/txcost"
 	"github.com/plsgiveup/fibre/fibre-sentinel/observer/ingest"
 	"github.com/plsgiveup/fibre/fibre-sentinel/observer/store"
 )
@@ -67,12 +68,13 @@ func TestFastTickReadsANewBlobAndNothingElse(t *testing.T) {
 	st := openStore(t)
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
+	costPath := filepath.Join(dir, txcost.FileName)
 	pubsPath := filepath.Join(dir, "publications.jsonl")
 	payPath := filepath.Join(dir, "payments.jsonl")
 
 	var logs, failed []string
 	logf := func(f string, a ...any) { logs = append(logs, fmt.Sprintf(f, a...)) }
-	ft := newFastTick(st, statePath, pubsPath, payPath, logf, func(m string) { failed = append(failed, m) })
+	ft := newFastTick(st, statePath, costPath, pubsPath, payPath, logf, func(m string) { failed = append(failed, m) })
 	tails := map[string]int{}
 	for i := range ft.files {
 		what, tail := ft.files[i].what, ft.files[i].tail
@@ -148,8 +150,9 @@ func TestFastTickReadsANewBlobAndNothingElse(t *testing.T) {
 
 	// a failure: told to the status file at every tick, logged once, and
 	// its end logged too
-	tail := ft.files[1].tail
-	ft.files[1].tail = func(*store.Store, string, time.Time) (ingest.Result, error) {
+	payments := fileOf(t, ft, "payments")
+	tail := payments.tail
+	payments.tail = func(*store.Store, string, time.Time) (ingest.Result, error) {
 		return ingest.Result{}, errors.New("disk on fire")
 	}
 	appendLine(t, payPath, jsonLine(t, scan.Payment{SchemaVersion: 1, DedupeKey: "settle-2", Kind: "settlement", Height: 101, Time: at,
@@ -163,7 +166,7 @@ func TestFastTickReadsANewBlobAndNothingElse(t *testing.T) {
 	if n := strings.Count(strings.Join(logs, "\n"), "payments: disk on fire"); n != 1 {
 		t.Fatalf("a failure that persists is logged %d times: %q", n, logs)
 	}
-	ft.files[1].tail = tail
+	payments.tail = tail
 	tick()
 	if len(failed) != 2 {
 		t.Fatalf("a tick that read cleanly told the status file %q", failed)
@@ -173,5 +176,71 @@ func TestFastTickReadsANewBlobAndNothingElse(t *testing.T) {
 	}
 	if n := count(t, st, `SELECT COUNT(*) FROM payments WHERE promise_hash = ?`, second); n != 1 {
 		t.Fatalf("the payment the failure held back is not stored once it clears (%d)", n)
+	}
+}
+
+// fileOf is the fast tick's file named what.
+func fileOf(t *testing.T, ft *fastTick, what string) *fastFile {
+	t.Helper()
+	for i := range ft.files {
+		if ft.files[i].what == what {
+			return &ft.files[i]
+		}
+	}
+	t.Fatalf("the fast tick reads no %s", what)
+	return nil
+}
+
+// The fast tick reads a block's cost lines before its publications and
+// payments: a new blob is in the store with what its settlement cost from
+// the moment it is in the store, and both are there after the one tick.
+func TestFastTickStoresABlobWithItsCost(t *testing.T) {
+	st := openStore(t)
+	dir := t.TempDir()
+	costPath := filepath.Join(dir, txcost.FileName)
+	pubsPath := filepath.Join(dir, "publications.jsonl")
+	payPath := filepath.Join(dir, "payments.jsonl")
+	ft := newFastTick(st, filepath.Join(dir, "state.json"), costPath, pubsPath, payPath, func(string, ...any) {}, func(string) {})
+	var order []string
+	for i := range ft.files {
+		what, tail := ft.files[i].what, ft.files[i].tail
+		ft.files[i].tail = func(st *store.Store, path string, now time.Time) (ingest.Result, error) {
+			order = append(order, what)
+			return tail(st, path, now)
+		}
+	}
+	// what the store held of the settlement's cost as the blob went in
+	for _, q := range []string{
+		`CREATE TABLE cost_at_insert (n INTEGER)`,
+		`CREATE TRIGGER publication_cost AFTER INSERT ON publications BEGIN
+			INSERT INTO cost_at_insert SELECT COUNT(*) FROM tx_costs WHERE height = NEW.settlement_height AND tx_index = NEW.settlement_tx_index;
+		END`,
+	} {
+		if _, err := st.DB().Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	at := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
+	hash, tx := strings.Repeat("ab", 32), strings.Repeat("0c", 32)
+	appendLine(t, pubsPath, jsonLine(t, scan.Publication{SchemaVersion: 1, PromiseHash: hash, SettlementHeight: 100, SettlementTxIndex: 2,
+		SettlementTxHash: tx, SettlementTime: at}))
+	appendLine(t, payPath, jsonLine(t, scan.Payment{SchemaVersion: 1, DedupeKey: tx + ":0", Kind: "settlement", Height: 100, Time: at, TxHash: tx,
+		TxIndex: 2, Publisher: "celestia1payer", PromiseHash: hash, Denom: "utia", AmountUtia: 1234}))
+	appendLine(t, costPath, jsonLine(t, txcost.Record{SchemaVersion: txcost.SchemaVersion, DedupeKey: txcost.Key(100, 2), Height: 100, TxIndex: 2,
+		Time: at, TxHash: tx, GasWanted: 200000, GasUsed: 150000, Fee: "2000utia", FeePayer: "celestia1payer", RecordedAt: at}))
+	ft.run(at.Add(time.Second))
+
+	if got := strings.Join(order, ","); got != "tx costs,publications,payments" {
+		t.Fatalf("read in the order %s", got)
+	}
+	if n := count(t, st, `SELECT COUNT(*) FROM publications WHERE promise_hash = ?`, hash); n != 1 {
+		t.Fatalf("the blob is not stored (%d)", n)
+	}
+	if n := count(t, st, `SELECT COUNT(*) FROM tx_costs WHERE tx_hash = ?`, tx); n != 1 {
+		t.Fatalf("its cost is not stored (%d)", n)
+	}
+	if n := count(t, st, `SELECT COUNT(*) FROM cost_at_insert WHERE n = 1`); n != 1 {
+		t.Fatalf("the blob went into the store before its cost")
 	}
 }

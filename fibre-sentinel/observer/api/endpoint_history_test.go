@@ -200,8 +200,8 @@ func TestEndpointHistoryOnTheValidatorAnswer(t *testing.T) {
 				continue
 			}
 			rec := tqRecord(t, r.TxHash)
-			if r.Reason != failedtx.Explain(rec).Reason || r.Time == nil || !r.Time.Equal(rec.Time) {
-				t.Errorf("%s: the failed row %s: reason %q at %v, want %q at %s", c.name, r.TxHash, r.Reason, r.Time, failedtx.Explain(rec).Reason, rec.Time)
+			if r.Reason != failedtx.Explain(rec).Reason || r.Time != store.TS(rec.Time) {
+				t.Errorf("%s: the failed row %s: reason %q at %q, want %q at %q", c.name, r.TxHash, r.Reason, r.Time, failedtx.Explain(rec).Reason, store.TS(rec.Time))
 			}
 		}
 	}

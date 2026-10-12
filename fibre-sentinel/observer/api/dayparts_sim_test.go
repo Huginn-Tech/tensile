@@ -870,15 +870,19 @@ func (s *sim) pass() {
 
 // fastTick is what observer-collector's fast tick (cmd/observer-collector,
 // fast.go) writes between passes, at the clock: state.json, then
-// publications.jsonl, then payments.jsonl, each tailed into the store from
-// its cursor as the pass tails it, and nothing else. A publication stored
-// here reaches the store before the measurements, ranges, corrections and
-// hold sync of the pass that follows, and the API may compute in between.
+// tx_costs.jsonl, publications.jsonl and payments.jsonl, each tailed into
+// the store from its cursor as the pass tails it, and nothing else. A
+// publication stored here reaches the store before the measurements, ranges,
+// corrections and hold sync of the pass that follows, and the API may
+// compute in between.
 func (s *sim) fastTick() {
 	s.t.Helper()
 	paths := collect.DefaultPaths(s.dir)
 	if err := ingest.State(s.st, paths.State, s.now); err != nil {
 		s.t.Logf("fast tick at %s: state: %v", s.now.Format(time.RFC3339), err)
+	}
+	if _, err := ingest.TxCosts(s.st, paths.TxCosts, s.now); err != nil {
+		s.t.Fatalf("fast tick at %s: tx costs: %v", s.now.Format(time.RFC3339), err)
 	}
 	r, err := ingest.Publications(s.st, paths.Publications, s.now)
 	if err != nil {
