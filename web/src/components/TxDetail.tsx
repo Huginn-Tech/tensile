@@ -55,19 +55,15 @@ export function GasValue({ c }: { c?: { gas_used: number; gas_wanted: number } |
 
 /**
  * The transaction fee, the same on a success and a failure: in TIA down to the utia, the figure bold and its unit light,
- * the chain's own figure on hover; then where it came from: the bank balance, or the account that paid it when that is
- * not the page's own (owner). One fee covers every message of the transaction, which it says when there was more than one.
+ * and nothing after it. The hover holds the chain's own figure, the account that paid it when that is not the page's own
+ * (owner), and that one fee covers every message when the transaction had more than one.
  */
 export function FeeValue({ fee, payer, owner, messages = 1 }: { fee?: string; payer?: string; owner?: string; messages?: number }) {
   if (!fee) return <b>None</b>;
   const other = !!payer && !!owner && !sameAcct(payer, owner);
   const text = feeTia(fee);
-  return (
-    <>
-      <b title={coins(fee)}>{text.includes(",") ? text : unit(text)}</b>
-      <em>{other ? <span title={payer}>paid by {shortAcct(payer!)}</span> : "from the bank balance"}{messages > 1 && " · whole transaction"}</em>
-    </>
-  );
+  const hover = [coins(fee), other && `paid by ${payer}`, messages > 1 && "covers the whole transaction"].filter(Boolean).join(" · ");
+  return <b title={hover}>{text.includes(",") ? text : unit(text)}</b>;
 }
 
 /**
