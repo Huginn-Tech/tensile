@@ -103,7 +103,10 @@
 #                   observer's state; an alert every destination refused is
 #                   not recorded, fails the run and is sent again by the
 #                   next; a state that cannot be written fails the run
-#                   after the alert went out, and the next alerts again; a
+#                   after the alert went out, and the next alerts again;
+#                   with ALERT_AFTER_RUNS=2 one bad run says nothing, two
+#                   alert, a recovery waits the same, and a pending file
+#                   that cannot be written alerts at once; a
 #                   backup copy older than 26 h (with BACKUP_REMOTE set),
 #                   none at all beside two-day-old exports, yesterday's
 #                   export missing after 04:00 UTC, a second vantage with
@@ -903,7 +906,7 @@ grep -qxF "$3" "$FAKE_FAILED_UNITS" 2>/dev/null
 SH
 chmod +x "$T/systemctl"; : > "$T/failed-units"
 hw() { # hw <api port>: one healthwatch run; its exit code says ok or not
-  API_LISTEN="127.0.0.1:$1" DATA_DIR="$T/hw" NETWORK=t ALERT_REPEAT_MIN=60 \
+  API_LISTEN="127.0.0.1:$1" DATA_DIR="$T/hw" NETWORK=t ALERT_REPEAT_MIN=60 ALERT_AFTER_RUNS=1 \
     SYSTEMCTL="$T/systemctl" FAKE_FAILED_UNITS="$T/failed-units" \
     ALERT_WEBHOOK="http://127.0.0.1:$hook/" bash "$HW" t >> "$T/check.log" 2>&1 || true
 }
@@ -944,7 +947,7 @@ check contains "$(lastpost)" recovered
 hwx() {
   local port=$1 st=0
   shift
-  env API_LISTEN="127.0.0.1:$port" DATA_DIR="$T/hw" NETWORK=t ALERT_REPEAT_MIN=60 \
+  env API_LISTEN="127.0.0.1:$port" DATA_DIR="$T/hw" NETWORK=t ALERT_REPEAT_MIN=60 ALERT_AFTER_RUNS=1 \
     SYSTEMCTL="$T/systemctl" FAKE_FAILED_UNITS="$T/failed-units" \
     ALERT_WEBHOOK="http://127.0.0.1:$hook/" "$@" bash "$HW" t >> "$T/check.log" 2>&1 || st=$?
   echo "$st"
@@ -975,6 +978,36 @@ check eq "$(hwx "$p503" DATA_DIR="$T/hw3")" 1
 check eq "$(posts)" $((n + 1))
 check eq "$(hwx "$p503" DATA_DIR="$T/hw3")" 1
 check eq "$(posts)" $((n + 2))
+# with ALERT_AFTER_RUNS=2 a change is said once two runs in a row saw it:
+# one bad run (a restart a run happened to catch) says nothing, and the
+# next run seeing what was said already forgets it; two bad runs alert,
+# the recovery waits the same, and the repeat waits for nothing
+hwpending="$T/hw/status/healthwatch.pending"
+hwreset
+n=$(posts)
+check eq "$(hwx "$p503" ALERT_AFTER_RUNS=2)" 0
+check eq "$(posts)" "$n"
+check eq "$(sed -n 1p "$hwstate")" ok
+check eq "$(sed -n 3p "$hwpending")" 1
+hwx "$p200" ALERT_AFTER_RUNS=2 >/dev/null
+check eq "$(posts)" "$n"
+check not test -e "$hwpending"
+hwx "$p503" ALERT_AFTER_RUNS=2 >/dev/null
+check eq "$(posts)" "$n"
+hwx "$p503" ALERT_AFTER_RUNS=2 >/dev/null
+check eq "$(posts)" $((n + 1))
+check eq "$(sed -n 1p "$hwstate")" degraded
+check not test -e "$hwpending"
+hwx "$p503" ALERT_AFTER_RUNS=2 HEALTHWATCH_NOW="$(($(date +%s) + 3600))" >/dev/null
+check eq "$(posts)" $((n + 2))
+hwx "$p200" ALERT_AFTER_RUNS=2 >/dev/null
+check eq "$(posts)" $((n + 2))
+hwx "$p200" ALERT_AFTER_RUNS=2 >/dev/null
+check eq "$(posts)" $((n + 3))
+check contains "$(lastpost)" recovered
+# a pending file that cannot be written alerts at once, never not at all
+check eq "$(hwx "$p503" ALERT_AFTER_RUNS=2 DATA_DIR="$T/hw3")" 1
+check eq "$(posts)" $((n + 4))
 # Outcomes, at a fixed clock: noon UTC on 2026-10-07, with yesterday's
 # export in place and proven on the remote.
 noon=$(date -u -d 2026-10-07T12:00:00Z +%s)

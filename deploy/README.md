@@ -375,7 +375,10 @@ the health watch below instead.
 `fibre-healthwatch@<network>.timer` asks `/v1/health` every five minutes as
 the service user and posts when the verdict or the set of failing checks
 changes, again every `ALERT_REPEAT_MIN` while it stays bad, and once on
-recovery, with every failing check and its detail. It posts first and
+recovery, with every failing check and its detail. A change is posted only
+once `ALERT_AFTER_RUNS` runs in a row (2 by default, ten minutes) have seen
+it, so a restart one run happens to catch says nothing; while it waits,
+`status/healthwatch.pending` holds what it saw. It posts first and
 records what it sent only once a destination took it, so a post that was
 refused is sent again on the next run, and a full disk does not silence
 the alerts after it. It also checks the jobs `/v1/health` cannot see, by

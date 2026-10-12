@@ -13,7 +13,10 @@
 # set, once when the state or the set of failing checks changes, and again
 # every ALERT_REPEAT_MIN minutes while it stays bad, so a broken observer
 # nags, a second fault is heard even while the first persists, and a fixed
-# one says so once.
+# one says so once. A change is said only once ALERT_AFTER_RUNS runs in a
+# row (2 by default, ten minutes) have seen it, so a restart that one run
+# happens to catch (a deploy, an upgrade) says nothing, and a fault that
+# comes and goes between runs nags at the repeat rather than at every run.
 #
 # The site shows no check, only an API that does not answer: a failing
 # check reaches the operator here alone. So do the jobs /v1/health cannot
@@ -47,8 +50,11 @@ tg_chat="${TELEGRAM_CHAT_ID:-}"
 tg_api="${TELEGRAM_API:-https://api.telegram.org}" # the selftest points it at a fake
 tg=0; if [ -n "$tg_token" ] && [ -n "$tg_chat" ]; then tg=1; fi
 repeat="${ALERT_REPEAT_MIN:-60}"
+after="${ALERT_AFTER_RUNS:-2}"
+case "$after" in ''|*[!0-9]*|0) after=1 ;; esac
 data="${DATA_DIR:-/var/lib/fibre-observer/$instance}"
 state="$data/status/healthwatch.state"
+pending="$data/status/healthwatch.pending"
 name="${NETWORK:-$instance}"
 backup_remote="${BACKUP_REMOTE:-}"
 pull_names="${VANTAGE_PULL_NAMES:-}"
@@ -336,20 +342,50 @@ echo "healthwatch[$name]: $now ($summary)"
 # it, a disk filling up an hour after a stuck scan would be the same state,
 # already alerted, and nobody would hear about the second fault until the
 # repeat — or ever, if the first one was the kind that lingers.
-notify=0; changed=0
-if [ "$now" != "$prev_state" ]; then notify=1
-elif [ "$have_prev_failing" = 1 ] && [ "$failing" != "$prev_failing" ]; then notify=1; changed=1
+notify=0; changed=0; change=0
+if [ "$now" != "$prev_state" ]; then notify=1; change=1
+elif [ "$have_prev_failing" = 1 ] && [ "$failing" != "$prev_failing" ]; then notify=1; changed=1; change=1
 elif [ "$now" != "ok" ] && [ $((epoch - prev_at)) -ge $((repeat * 60)) ]; then notify=1
 fi
 
-# write_state records the alert just made. One that cannot be written is
-# said, and fails the run, but stops nothing: the alert went out first, and
-# the next run, finding the old state, alerts again.
+# A change waits for ALERT_AFTER_RUNS runs in a row to see it. The pending
+# file holds what the last runs saw that no alert has said yet: line 1 the
+# state, line 2 the failing check names, line 3 how many runs in a row saw
+# them. A run that sees something else starts the count again; one that
+# sees what was last said removes it. The repeat waits for nothing: what it
+# repeats was said already. A pending file that cannot be written alerts
+# now, so a full disk costs an early alert, never a lost one.
+if [ "$change" = 1 ] && [ "$after" -gt 1 ]; then
+  seen=1
+  if [ -r "$pending" ] && [ "$(sed -n 1p "$pending")" = "$now" ] && [ "$(sed -n 2p "$pending")" = "$failing" ]; then
+    seen=$(sed -n 3p "$pending")
+    case "$seen" in ''|*[!0-9]*) seen=0 ;; esac
+    seen=$((seen + 1))
+  fi
+  if [ "$seen" -lt "$after" ]; then
+    if { mkdir -p "$(dirname "$pending")" && printf '%s\n%s\n%s\n' "$now" "$failing" "$seen" > "$pending"; } 2>/dev/null; then
+      notify=0
+      echo "healthwatch[$name]: $now seen on $seen of $after runs in a row; the alert waits for the rest"
+    else
+      echo "healthwatch[$name]: could not write $pending; alerting without waiting" >&2
+      rc=1
+    fi
+  fi
+elif [ "$change" = 0 ]; then
+  rm -f "$pending" 2>/dev/null || true
+fi
+
+# write_state records the alert just made, and with it ends any wait. One
+# that cannot be written is said, and fails the run, but stops nothing: the
+# alert went out first, and the next run, finding the old state, alerts
+# again.
 write_state() {
   if ! { mkdir -p "$(dirname "$state")" && printf '%s\n%s\n%s\n' "$now" "$epoch" "$failing" > "$state"; } 2>/dev/null; then
     echo "healthwatch[$name]: could not write $state; the next run alerts again" >&2
     rc=1
+    return
   fi
+  rm -f "$pending" 2>/dev/null || true
 }
 
 if [ "$notify" = 1 ]; then
