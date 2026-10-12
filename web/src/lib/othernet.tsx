@@ -37,7 +37,10 @@ export function useOther(looks: Look[] | null): { asking: boolean; href: string 
   return st?.sig === sig ? { asking: false, href: st.href } : { asking: true, href: null };
 }
 
-/** the line for a record the other network's site has: "This is on Mocha. Open it there →" */
+/**
+ * the line for a record the other network's site has: "This is on Mocha. Open it there →", in the site's sans wherever
+ * it stands (the Blobs list's table face has no arrow)
+ */
 export function OnOther({ href }: { href: string }) {
-  return <>This is on {OTHER_SITE?.label}. <a className="go-other" href={href}>Open it there →</a></>;
+  return <span className="go-line">This is on {OTHER_SITE?.label}. <a className="go-other" href={href}>Open it there →</a></span>;
 }
