@@ -372,6 +372,13 @@ function Body({ ep }: { ep: Endpoint }) {
   return (
     <>
       {ep.desc && <p className="api-desc">{ticks(ep.desc)}</p>}
+      {ep.notes && (
+        <dl className="api-notes">
+          {ep.notes.map((n) => (
+            <div key={n.title}><dt>{n.title}</dt><dd>{ticks(n.text)}</dd></div>
+          ))}
+        </dl>
+      )}
       {ep.params.length > 0 && (
         <>
           <h4 className="api-h4">Parameters</h4>

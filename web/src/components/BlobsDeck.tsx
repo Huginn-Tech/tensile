@@ -19,6 +19,8 @@ import Warn from "@/components/Warn";
  * last answer stays whole under its own period, a step back, and the top
  * changes in one step when the new one lands.
  *
+ * A filter or search narrows the list below, never these figures: while one is on, the top says it is network-wide.
+ *
  * A period with no settlement folds the top to one band: the 0, when the last
  * blob settled (from the newest rows of /v1/blobs, which the page passes in),
  * and the shortest longer period that holds it, one click away.
@@ -140,7 +142,9 @@ const METRICS: Record<Metric, {
   },
 };
 
-export default function BlobsDeck({ win, onWin, market, newest, skew }: {
+const WIDE = "The figures cover every namespace and publisher; the filter narrows only the list below.";
+
+export default function BlobsDeck({ win, onWin, market, newest, skew, narrowed = false }: {
   win: WindowName;
   onWin: (w: WindowName) => void;
   /** /v1/market for the period; the last answer stays while another period loads */
@@ -148,6 +152,8 @@ export default function BlobsDeck({ win, onWin, market, newest, skew }: {
   /** the chain's newest blobs, newest first, whatever the list below is filtered to */
   newest: Blob[] | null;
   skew: number;
+  /** a filter or search narrows the list below */
+  narrowed?: boolean;
 }) {
   const now = useNow(skew);
   const height = useChartHeight();
@@ -172,7 +178,7 @@ export default function BlobsDeck({ win, onWin, market, newest, skew }: {
     return (
       <section className={cls(" is-quiet")} aria-label="The period's settlements" aria-busy={pending || undefined}>
         <div className="tp-lead">
-          <Lbl name="Settlements" per={per} />
+          <Lbl name="Settlements" per={narrowed ? `${per} · network-wide` : per} />
           <p className="tp-fig zero">0</p>
         </div>
         <div className="tp-plot">
@@ -225,7 +231,7 @@ export default function BlobsDeck({ win, onWin, market, newest, skew }: {
         </div>
       </div>
       <div className="tp-plot" role="tabpanel" id={`${uid}-plot`} aria-labelledby={`${uid}-${metric}`}>
-        <h3 className="tp-ct">{M.chart} per {unitWord}<span className="tz">UTC</span></h3>
+        <h3 className="tp-ct">{M.chart} per {unitWord}<span className="tz">UTC</span>{narrowed && <span className="tp-wide" title={WIDE}>Network-wide</span>}</h3>
         <Chart key={metric} bare padTop={22} height={height} title={`${M.chart} per ${unitWord}`}
           series={[{ key: "v", label: M.unit, color: "var(--accent)" }]}
           rows={series.map((c) => ({ x: c.title, label: c.label, short: c.short, values: { v: M.of(c) }, note: M.note(c), partial: c.partial }))}

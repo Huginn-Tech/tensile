@@ -37,6 +37,8 @@ export type Endpoint = {
   summary: string;
   /** two short sentences at most, only where the summary is not enough */
   desc?: string;
+  /** the answer's fields in small titled groups, where one paragraph would run long */
+  notes?: { title: string; text: string }[];
   params: Param[];
   /** the route's own error answers, beyond the ones every route shares */
   errors?: string;
@@ -778,7 +780,15 @@ export const GROUPS: Group[] = [
         id: "tx",
         path: "/v1/txs/{hash}",
         summary: "One Fibre transaction by its hash, successful or failed.",
-        desc: "`status` is success or failed; `kind` is settlement, deposit, withdrawal_request, timeout, set_host, or several when its Fibre messages are of more than one kind. `messages` lists every message in order, or with `messages_partial` only its Fibre messages, for a success Tensile found by its escrow movements before it recorded costs. `cost` is its gas and fee, with `fee_payer` on a success only, and is absent for a success from before Tensile recorded costs. A failure carries `final`, true when its fee and sequence were taken so it can never land, and `failure`: `code`, `codespace`, `reason`, `failed_msg_index`, `log`, and `log_cut` when the log was cut. `effect` is what it did: a settlement's `promise_hash`, `commitment`, `blob_version`, `namespace`, `blob_size`, `fee_paid_utia`, `settled` and `timed_out`; a deposit's, withdrawal request's or timeout's `amount_utia`, a timeout's `promise_hash`, and a request's `withdrawal` (`available_at`, `outcome` pending, paid or consumed, `paid_height`, `paid_at`, `payout_delay_s`, `reduced_utia`); an endpoint registration's `action` (registered, changed or same), `host` and `previous_host`. A failure's is what it asked for: a settlement's or timeout's `promise_hash` (and a settlement's `namespace` and `blob_size`), a deposit's or request's `requested` and `requested_utia`, a registration's `requested_host` with `attempted` and `host_at_block`, or `not_a_validator`; and `publisher`, as plain text, where `related` does not link one. `related` links the `publisher`, `blob`, `validator` or `validators` it touches. A success wins over a failure of the same hash; a failure that is not `final` could still land in a later block, so its answer is not cached, nor is a success whose `effect` and `related` are still empty, read before the rest of its block.",
+        desc: "`status` is success or failed; `kind` is settlement, deposit, withdrawal_request, timeout, set_host, or several when its Fibre messages are of more than one kind. `messages` lists every message in order, or with `messages_partial` only its Fibre messages, for a success Tensile found by its escrow movements before it recorded costs.",
+        notes: [
+          { title: "Gas and fees", text: "`cost` is its gas and fee, with `fee_payer` on a success only, and is absent for a success from before Tensile recorded costs." },
+          { title: "Failure", text: "A failure carries `final`, true when its fee and sequence were taken so it can never land, and `failure`: `code`, `codespace`, `reason`, `failed_msg_index`, `log`, and `log_cut` when the log was cut." },
+          { title: "Effect", text: "`effect` is what it did: a settlement's `promise_hash`, `commitment`, `blob_version`, `namespace`, `blob_size`, `fee_paid_utia`, `settled` and `timed_out`; a deposit's, withdrawal request's or timeout's `amount_utia`, a timeout's `promise_hash`, and a request's `withdrawal` (`available_at`, `outcome` pending, paid or consumed, `paid_height`, `paid_at`, `payout_delay_s`, `reduced_utia`); an endpoint registration's `action` (registered, changed or same), `host` and `previous_host`." },
+          { title: "Effect of a failure", text: "A failure's is what it asked for: a settlement's or timeout's `promise_hash` (and a settlement's `namespace` and `blob_size`), a deposit's or request's `requested` and `requested_utia`, a registration's `requested_host` with `attempted` and `host_at_block`, or `not_a_validator`; and `publisher`, as plain text, where `related` does not link one." },
+          { title: "Related records", text: "`related` links the `publisher`, `blob`, `validator` or `validators` it touches." },
+          { title: "Caching", text: "A success wins over a failure of the same hash; a failure that is not `final` could still land in a later block, so its answer is not cached, nor is a success whose `effect` and `related` are still empty, read before the rest of its block." },
+        ],
         params: [
           { name: "hash", in: "path", type: "string", required: true, desc: "The transaction hash: 64 hex characters, either case, with or without 0x.", example: TX },
         ],
