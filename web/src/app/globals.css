@@ -915,6 +915,10 @@ body { background: var(--canvas); }
 .api-body { padding: 2px 16px 18px; border-top: 1px solid var(--border); }
 .api-desc { margin: 14px 0 0; max-width: 78ch; color: var(--text-2); line-height: 1.55; }
 .api-h4 { margin: 20px 0 8px; font-size: var(--t-tiny); font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); }
+/* a long answer's fields in small titled groups under the description */
+.api-notes { display: grid; gap: 10px; margin: 12px 0 0; max-width: 78ch; }
+.api-notes dt { font-size: var(--t-cell); font-weight: 600; color: var(--text); }
+.api-notes dd { margin: 2px 0 0; color: var(--text-2); line-height: 1.55; }
 .api-errors { margin: 12px 0 0; font-size: var(--t-cell); color: var(--text-2); line-height: 1.5; }
 .api-errors b { margin-right: 6px; font-weight: 600; color: var(--text); }
 
@@ -1595,6 +1599,8 @@ a.rb-c:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; z-
 /* the chart's own title: what a bar holds, in the bucket the period uses */
 .tp-ct { margin: 0 0 6px; font-size: var(--t-cell); line-height: 16px; font-weight: 500; letter-spacing: 0; color: var(--text-2); white-space: nowrap; }
 .tp-ct .tz { margin-left: 8px; font-size: var(--t-small); font-weight: 400; color: var(--text-3); }
+/* the figures are the whole network's while a filter or search narrows the list: said at the chart title's right */
+.tp-ct .tp-wide { float: right; font-size: var(--t-small); font-weight: 400; color: var(--text-3); }
 /* a tablet: the four still in a row, a little tighter */
 @media (max-width: 960px) {
   .tc-tab { padding: 16px 18px 14px; }
@@ -1896,6 +1902,8 @@ button.pp-params[aria-expanded="true"] .pp-i { color: var(--paper); background: 
 .lg-nss th.n-first, .lg-nss td.n-first { padding-left: 28px; }
 /* the namespaces list's scope, on the tabs line */
 .lg-scope { margin: 0 0 0 auto; font-size: var(--t-small); color: var(--text-3); }
+/* the blobs list's scope sits beside the tabs, the filters and the search keep the right */
+.lg-scope.lg-scope-l { margin: 0 auto 0 0; }
 .lg-nss td.n-nm .nsb { font-weight: 600; }
 .lg-nss td.n-nm .nsb .mono { font-weight: 500; }
 .lg-nss .hx { margin-left: 8px; font-family: var(--mono); font-size: 11.5px; color: var(--text-3); }

@@ -169,7 +169,7 @@ function Page() {
                   : <th className="c-t" title="Its newest escrow movement of any kind, whatever the period: a blob's fee, a deposit or a withdrawal"><SortHead k="last" sort={sort} onSort={onSort}>Last activity <span className="per">(UTC)</span></SortHead></th>}
                 <th className="c-n num" title="Settlements paid in the period: one per blob paid for"><SortHead k="settlements" sort={sort} onSort={onSort}>Settlements</SortHead></th>
                 <th className="c-sz num" title="The size of the blobs it paid for in the period"><SortHead k="bytes" sort={sort} onSort={onSort}>Blob size</SortHead></th>
-                <th className="c-sh num" title="Its part of all the blob size posted in the period">Share</th>
+                <th className="c-sh num" title="Its part of all the blob size posted in the period">Data share</th>
                 <th className="c-fee num" title="Fees its escrow paid in the period"><SortHead k="fees" sort={sort} onSort={onSort}>Fees paid</SortHead></th>
                 {timeouts && <th className="c-to num" title="Payment promises not settled in time in the period; each is charged as a blob">Timed out</th>}
                 <th className="gap" aria-hidden="true" />

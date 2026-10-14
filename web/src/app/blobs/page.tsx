@@ -318,7 +318,7 @@ function Page() {
       <PreLive meta={meta} />
       {/* the deck's figures only: the list under them is read on its own, and says so in its own rows */}
       {m.error && <div className="note hold"><span className="label">Observer</span><p>{failedWords(m)}: the period&rsquo;s figures could not be {m.data ? "refreshed" : "read"}.{m.data && m.fetchedAt ? ` They are the ones read at ${hhmm(m.fetchedAt)}.` : ""}</p></div>}
-      <BlobsDeck win={win} onWin={setWin} market={m.data} newest={newest} skew={skew} />
+      <BlobsDeck win={win} onWin={setWin} market={m.data} newest={newest} skew={skew} narrowed={!!(ns || pub || found)} />
 
       <section id="list" className="listing lg-list">
         <div className="list-head">
@@ -326,6 +326,8 @@ function Page() {
             <button type="button" aria-pressed={tab === "blobs"} onClick={() => setTab("blobs")}>Blobs</button>
             <button type="button" aria-pressed={tab === "namespaces"} onClick={() => setTab("namespaces")}>Namespaces{nsN ? <span className="n">{int(nsN)}{nss.data?.truncated ? "+" : ""}</span> : null}</button>
           </div>
+          {/* the list is the whole record, whatever the period above: said beside the tabs (a search shows what it found) */}
+          {tab === "blobs" && !found && <p className="lg-scope lg-scope-l" title="Every settlement on record, whatever the period above">All settlements</p>}
           {/* the namespaces are the whole record, whatever the period above: said on the tabs line */}
           {tab === "namespaces" && <p className="lg-scope">All namespaces · totals on record</p>}
           {/* on the tabs line: the publisher filter right beside the search (a namespace picked from a row shows its
