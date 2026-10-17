@@ -1020,8 +1020,8 @@ body { background: var(--canvas); }
    is a solid dot. Names only on hover, focus or tap. One floating bar
    straddles the map's foot: the
    newest event, then the three counts. Under it a row of three instruments:
-   the current Fibre providers' share of voting power over a strip of the
-   validators themselves, open on the panel; the recent blobs (newest first, a
+   the current Fibre providers' share of voting power in a ring of the
+   validators themselves, in a window; the recent blobs (newest first, a
    tape that moves once per read) in a window of their own; the latest blob's
    readout on a sheet of the accent.
 
@@ -1313,43 +1313,81 @@ body { background: var(--canvas); }
 .ov-links a:hover { text-decoration: none; }
 .ov-links a:hover span { transform: translateX(3px); }
 
-/* current Fibre providers: the share, then the bonded set as one strip (a segment per validator) with the ⅔ needle through it */
+/* current Fibre providers: a window of the recent blobs' material, as wide as the latest blob's sheet and mirrored on
+   it, level with both at the top and the foot. Its head on the heads' line; then a dial, the bonded stake once round
+   an open ring, a stretch per validator, the ⅔ needle across it and the share in its middle; under it the key, its
+   foot on the sheet's buttons' foot */
+.deck-row > .cp {
+  display: flex; flex-direction: column; align-items: center; align-self: stretch; margin: -17px 4px 0 22px; padding: 16px 22px 15px;
+  border-radius: 18px; border: 1px solid var(--rb-win-edge); background: var(--rb-win); box-shadow: var(--rb-win-shadow);
+}
 /* the three instruments' heads share one 24px line */
-.cp > .ov-eyebrow { min-height: 24px; }
-.cp-hero { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin: 14px 0 0; }
-.cp-help { font-size: var(--t-cell); color: var(--text-2); }
-.cp-help b { color: var(--text); font-weight: 600; }
-.cp-meter { position: relative; display: block; margin: 34px 0 0; }
-.cp-strip { position: relative; height: 16px; border-radius: 4px; overflow: hidden; }
-.cp-meter.wait .cp-strip { background: var(--wash); }
-.cp-strip svg { display: block; animation: cp-reveal .9s cubic-bezier(.2, .7, .2, 1) both; }
-.cp-strip rect { fill: var(--cp-rest); }
-.cp-strip rect.on { fill: var(--cp-on); }
-.cp-strip rect:hover { fill: var(--cp-on-hover); }
-.cp-strip rect:not(.on):hover { fill: var(--neutral); }
-.cp-strip rect.hold { fill: var(--hold); }
-.cp-strip rect.hold:hover { fill: color-mix(in srgb, var(--hold) 78%, #ffffff); }
-.cp-q { position: absolute; left: var(--q); top: -24px; bottom: -5px; width: 0; z-index: 1; pointer-events: none; }
-.cp-q::before { content: ""; position: absolute; left: -1px; top: 19px; bottom: 0; width: 2px; border-radius: 1px; background: var(--text); box-shadow: 0 0 0 2px var(--paper); }
-.cp-q > span { position: absolute; left: 0; top: -2px; transform: translateX(-50%); display: inline-flex; align-items: baseline; gap: 3px; font-size: var(--t-tiny); font-weight: 600; line-height: 18px; letter-spacing: .02em; color: var(--text); white-space: nowrap; }
-.cp-rest { display: grid; justify-items: start; gap: 6px; margin: 14px 0 0; padding: 0; list-style: none; font-size: var(--t-small); color: var(--text-3); }
-/* each part in a small frame: its name and share in the text's colour, its count in the help grey; the unreachable one
-   is a button that opens its validators' names */
-.cp-it { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 3px 9px 3px 8px; border: 1px solid var(--border); border-radius: 6px; background: transparent; font: inherit; line-height: 18px; color: var(--text-3); white-space: nowrap; }
-.cp-it .cp-sw { margin-right: 0; }
-.cp-it .cp-k { color: var(--text); }
+.cp > .ov-eyebrow { justify-content: center; min-height: 24px; }
+.cp-dial { position: relative; flex: none; margin: 16px 0 10px; }
+/* the ring sweeps in once, from its start, as the rows arrive */
+@property --cp-sweep { syntax: "<angle>"; inherits: false; initial-value: 360deg; }
+.cp-ring {
+  display: block; overflow: visible; touch-action: pan-y;
+  -webkit-mask: conic-gradient(from -122deg at 50% var(--cy), #000 var(--cp-sweep), transparent 0);
+  mask: conic-gradient(from -122deg at 50% var(--cy), #000 var(--cp-sweep), transparent 0);
+}
+.cp-ring.on { animation: cp-sweep .9s cubic-bezier(.2, .7, .2, 1); }
+@keyframes cp-sweep { from { --cp-sweep: 0deg; } to { --cp-sweep: 244deg; } }
+.cp-seg { fill: none; stroke: var(--cp-rest); transition: stroke var(--dur); }
+.cp-seg.on { stroke: var(--cp-on); }
+.cp-seg.hold { stroke: var(--hold); }
+.cp-seg.cp-load { stroke: var(--wash); }
+.cp-cap { fill: var(--cp-rest); transition: fill var(--dur); }
+.cp-cap.on { fill: var(--cp-on); }
+.cp-cap.hold { fill: var(--hold); }
+/* a validator pointed at: the ring falls back towards the window, its stretch lit over it, an end of the ring with it */
+.cp-dial.pick .cp-seg.on { stroke: color-mix(in srgb, var(--cp-on) 45%, var(--rb-win)); }
+.cp-dial.pick .cp-cap.on:not(.lit) { fill: color-mix(in srgb, var(--cp-on) 45%, var(--rb-win)); }
+.cp-dial.pick .cp-seg.hold { stroke: color-mix(in srgb, var(--hold) 45%, var(--rb-win)); }
+.cp-dial.pick .cp-cap.hold:not(.lit) { fill: color-mix(in srgb, var(--hold) 45%, var(--rb-win)); }
+.cp-cap.lit.on { fill: var(--cp-on-hover); }
+.cp-cap.lit.off { fill: var(--neutral); }
+.cp-pt { fill: none; stroke: var(--cp-on-hover); pointer-events: none; }
+.cp-pt.hold { stroke: var(--hold); }
+.cp-pt.off { stroke: var(--neutral); }
+.cp-hit { fill: none; stroke: transparent; pointer-events: stroke; }
+/* the needle haloed in the window's colour; "⅔ needed" inside the ring, its top right corner at the needle's inner tip */
+.cp-needle { stroke: var(--text); stroke-width: 2; stroke-linecap: round; }
+.cp-halo { stroke: var(--rb-win); stroke-width: 5; stroke-linecap: round; }
+.cp-q { position: absolute; transform: translate(-100%, -2px); display: inline-flex; align-items: baseline; gap: 3px; font-size: var(--t-tiny); font-weight: 600; line-height: 18px; letter-spacing: .02em; color: var(--text-2); white-space: nowrap; pointer-events: none; }
+.cp-q .ov-frac { color: var(--text); }
+/* the share in the middle and its two lines under it, the second in the ring's opening; a pointed validator's in their place */
+.cp-read { position: absolute; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; margin: 0; text-align: center; pointer-events: none; }
+.cp-read > span { display: block; max-width: 150px; min-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--t-cell); line-height: 18px; color: var(--text-2); }
+.cp-read > b + span { margin-top: 10px; }
+.cp-read > span b { color: var(--text); font-weight: 600; }
+/* the key: one line per part of the stake that is not a working provider, in columns (the swatch and name, the share,
+   how many validators) so the figures stand under each other, the block centred under the dial */
+.cp-rest {
+  display: grid; grid-template-columns: minmax(0, max-content) max-content max-content max-content; row-gap: 4px; max-width: 100%;
+  margin: auto 0 0; padding: 0; list-style: none; font-size: var(--t-small); color: var(--text-3); font-variant-numeric: tabular-nums lining-nums;
+}
+.cp-rest > li { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; }
+.cp-none { min-height: 18px; }
+/* a line keeps the small frame's box without its edge, drawn outside the line so nothing moves; the unreachable one
+   opens the names of its validators, and its frame comes back on hover or while open */
+.cp-it { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; margin: -4px -10px -4px -9px; padding: 3px 9px 3px 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; font: inherit; line-height: 18px; color: var(--text-3); text-align: left; white-space: nowrap; }
+.cp-k { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--text); white-space: normal; }
+.cp-v { padding-left: 10px; text-align: right; color: var(--text); }
+.cp-n { padding-left: 6px; }
+.cp-chev { width: 5px; height: 5px; margin: -3px 0 0 9px; border: solid var(--text-3); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); transition: transform var(--dur); }
 button.cp-it { appearance: none; cursor: pointer; transition: border-color var(--dur), background var(--dur); }
 button.cp-it:hover, button.cp-it[aria-expanded="true"] { border-color: color-mix(in srgb, var(--hold) 55%, var(--border)); background: var(--wash); }
+button.cp-it[aria-expanded="true"] .cp-chev { transform: translateY(2px) rotate(-135deg); }
 button.cp-it:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .info-pop ul.cp-names { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
 .cp-names li { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
 .cp-names a { color: var(--text); font-weight: 500; }
 .cp-names a:hover { color: var(--accent-ink); }
 .cp-names span { color: var(--text-3); font-variant-numeric: tabular-nums; }
-.cp-sw { display: inline-block; width: 9px; height: 9px; margin-right: 6px; border-radius: 2px; background: var(--cp-rest); box-shadow: inset 0 0 0 1px var(--line-soft); vertical-align: -1px; }
+.cp-sw { flex: none; display: inline-block; width: 9px; height: 9px; border-radius: 2px; background: var(--cp-rest); box-shadow: inset 0 0 0 1px var(--line-soft); }
 .cp-sw.hold { background: var(--hold); box-shadow: none; }
 .cp-sw.none { background: var(--pending); }
-@keyframes cp-reveal { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 
 /* recent blobs: one centred column. The eyebrow and the live word on the heads' line, the count on the links' line,
    the grid centred between them */
@@ -1513,6 +1551,11 @@ a.rb-c:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; z-
   .deck-row.no-cp { grid-template-columns: minmax(0, 1fr); grid-template-areas: "rb" "rd"; }
   /* the sheet takes the row under the other two */
   .deck-row > .rb-read { margin: 24px 26px 0 !important; }
+  /* the current providers' window nearer the deck's edge, its sides and the key's columns a little closer, so each
+     part of the key keeps to one line down to 721px and the window to the recent blobs' height */
+  .deck-row > .cp { margin: -17px 4px 0 16px; padding: 16px 14px 15px; }
+  .cp-v { padding-left: 8px; }
+  .cp-chev { margin-left: 6px; }
 }
 /* there, the figure and its line on the left, the endorsed share and its line on the right, the two lines level. The
    space between the two gives way first, then the gap (40px down to 16px, an item's own 14px included), so neither
@@ -1552,6 +1595,9 @@ a.rb-c:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; z-
   .deck-row.no-cp { grid-template-areas: "rb" "rd"; }
   .deck-row > * { padding: 0 16px; }
   .deck-row > .rb-read { margin: 18px 16px 0 !important; padding: 15px 16px 16px; }
+  /* the current providers open the row under the bar, in a window as wide as the others, as tall as it needs */
+  .deck-row > .cp { margin: 0 16px; padding: 16px 16px 17px; }
+  .cp-dial { margin-bottom: 18px; }
   .rb-read-h[data-fit="3"] { margin: 0 -6px; }
   .deck-row > .rb { justify-self: stretch; width: auto; margin: 22px 16px 0 !important; padding: 16px 12px 18px; }
   /* without the current providers the recent blobs open the row, under the bar */
@@ -1576,7 +1622,7 @@ a.rb-c:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; z-
   .cm-pop, .cm-ev, .cm-mat, .cm-live .rest { animation: none; }
   /* the newest event keeps only its ring at rest */
   .cm-live .go, .cm-ev-dot::after { display: none; }
-  .cp-strip svg, .rb-glow, .bt-dot.beat, .bt-ic.beat, .rn-roll .rn-in, .rn-roll .rn-out { animation: none; }
+  .cp-ring.on, .rb-glow, .bt-dot.beat, .bt-ic.beat, .rn-roll .rn-in, .rn-roll .rn-out { animation: none; }
   .rn-roll .rn-out { display: none; }
 }
 
