@@ -4,7 +4,7 @@ import Link from "next/link";
 import { type Validator, API_BASE, ago, utcWord, int } from "@/lib/api";
 import { validatorHref } from "@/lib/addr";
 import type { Hosting } from "@/lib/hosting";
-import { FRAME, COUNTRIES, TINY, project, countryPoint } from "@/lib/map/project";
+import { FRAME, COUNTRIES, project, countryPoint } from "@/lib/map/project";
 import { countryName } from "@/components/Flag";
 import { Eye } from "@/components/Metrics";
 import { type EndpointState, endpointState, readiness } from "@/components/Readiness";
@@ -13,14 +13,15 @@ import { type EndpointState, endpointState, readiness } from "@/components/Readi
  * The overview's host map: every registered Fibre host of the bonded set,
  * placed by the city its address geolocates to (hosting.lat/lon) or, without
  * one, by its country's label point, over Natural Earth country outlines
- * (Equal Earth) drawn as calm solid land. A country with a host is a shade
- * warmer; one too small to show around its badge is drawn larger, in its own
- * shape; the open place's countries are lit.
+ * (Equal Earth) drawn as land of one neutral shade: no grid, no outline of the
+ * world, and no country coloured, so the only colour on the map is at its
+ * places. While the map is at rest the land carries its material: a fine
+ * grain, a coastline hairline and a short shadow.
  *
- * Every place is a rounded square in the accent carrying its count; a lone
- * host is a small square with no figure. Hosts close together on screen share
- * one badge (badges never touch). A badge with an unreachable host carries an
- * amber pip, and one whose hosts all stopped answering turns amber; the map
+ * Every place is a disc ringed in its state's colour carrying its count; a
+ * lone host is a solid dot. Hosts close together on screen share one badge
+ * (badges never touch). A badge with an unreachable host carries an amber pip
+ * on its rim, and one whose hosts all stopped answering turns amber; the map
  * shows reachability only, what was served is on each validator's page. Names
  * appear only on hover, focus or tap, in the place's popover (its unreachable
  * hosts first), and the other badges step back
@@ -29,7 +30,8 @@ import { type EndpointState, endpointState, readiness } from "@/components/Readi
  * zoomed) move the view, each in one eased flight.
  *
  * Across the map's foot, two small pills: the newest event at the left, the
- * three counts in the centre. The map has no heading of its own: the counts say what
+ * three counts in the centre; the newest event's place carries a thin ring on
+ * the map. The map has no heading of its own: the counts say what
  * it shows, and the panel's one heading on the subject is "Current Fibre
  * providers" under it. The box (its shape set in the stylesheet) and the bar
  * are in the prerendered page and the land is drawn as soon as the box is
@@ -123,8 +125,8 @@ const valLink = (v: Validator) => validatorHref(v.operator_address, v.cons_addre
 const name = (v: Validator) => v.moniker || v.operator_address || v.address;
 const fmtShare = (s: number) => { const p = s * 100; return p >= 0.1 ? `${p.toFixed(1)}%` : p > 0 ? "<0.1%" : "0%"; };
 
-/** a badge's height in px: a little taller for more hosts, so a crowd reads as one; a lone host is a small square */
-const badgeH = (n: number, narrow: boolean) => (n === 1 ? (narrow ? 8 : 10) : narrow ? Math.round(17 + Math.min(6, 1.9 * Math.sqrt(n - 1))) : Math.round(21 + Math.min(8, 2.3 * Math.sqrt(n - 1))));
+/** a badge's height in px: a little taller for more hosts, so a crowd reads as one; a lone host is a small dot */
+const badgeH = (n: number, narrow: boolean) => (n === 1 ? (narrow ? 9 : 11) : narrow ? Math.round(17 + Math.min(6, 1.9 * Math.sqrt(n - 1))) : Math.round(21 + Math.min(8, 2.3 * Math.sqrt(n - 1))));
 /** its width: square, or wider for a figure of three digits */
 const badgeW = (n: number, narrow: boolean) => (n === 1 ? badgeH(1, narrow) : Math.max(badgeH(n, narrow), Math.round(String(n).length * (narrow ? 6.3 : 7.2) + (narrow ? 9 : 12))));
 /** the room a badge takes, for the merging and for keeping clear of the bar */
@@ -160,65 +162,42 @@ function cluster(hosts: Host[], pxPerUnit: number, narrow: boolean): Cluster[] {
   }).sort((x, y) => x.ux - y.ux);
 }
 
+/** every country once, all in the land's one shade: the land draws these, and at rest its material draws them again */
+const LAND = COUNTRIES.map(([cc, d], i) => <path key={cc || i} d={d} />);
+
+/** px: the side of the land's grain tile, which repeats without a seam */
+const GRAIN = 96;
 /**
- * A hosted country too small to show around its badge would vanish under it, so it is drawn larger: a
- * copy of its own outline about its middle, flat in the hosted tint as every other hosted country, on
- * top of the land and under the badges. Where a larger hosted country beside it already
- * shows the place blue (Slovenia, the Baltics, South Korea beside Japan), it is left as it is. Which
- * countries are small is decided at the home view, so the set holds through a zoom; each copy keeps its
- * size until its own outline, zoomed in, is as large.
+ * The land's grain: one tile of soft white noise (each speck averaged a little with its four neighbours, wrapping so
+ * the tile repeats without a seam), split into its light specks and its dark ones, so the stylesheet lays each on the
+ * land's shade at its own strength in either theme. It is made at the screen's resolution, a speck to a device pixel;
+ * on a 1x screen, where a speck is a whole CSS pixel, at a little over half.
  */
-/** px: the larger side a small hosted country is drawn at: about 2.4 times a two-host badge (23 px, 19 px narrow), so 13-16 px of its land shows past it on its long side */
-const TINY_L = 56, TINY_L_NARROW = 44;
-/** px at the home view: a country at least this wide shows around its badge; a smaller one is hidden by it */
-const SHOWN = 30, SHOWN_NARROW = 24;
-/** px: a shown hosted country whose land comes this close to a small one's middle already makes that place read blue */
-const NEAR = 16, NEAR_NARROW = 12;
-/** px: a neighbour's piece smaller than this does not count as beside (India's Andaman and Nicobar Islands beside Singapore) */
-const RING = 8;
-/**
- * the shape a small country is drawn larger in: its middle and larger side in map units, and its path,
- * on TINY's grid where e is 100 (unit) or in map units
- */
-type Own = { x: number; y: number; e: number; d: string; unit: boolean };
-/**
- * each country's size and its rings (each one's size and points) in map units, from its outline (absolute
- * M, relative m and l, z), and its own shape: its 1:10m outline from TINY, else its largest ring, so far
- * islands (the Azores, Marion Island) neither move its middle nor grow with it
- */
-type Shape = { e: number; rings: { e: number; pts: number[] }[]; own: Own };
-const SHAPES: Map<string, Shape> = (() => {
-  const out = new Map<string, Shape>();
-  const extent = (p: number[]) => {
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (let i = 0; i < p.length; i += 2) { x0 = Math.min(x0, p[i]); y0 = Math.min(y0, p[i + 1]); x1 = Math.max(x1, p[i]); y1 = Math.max(y1, p[i + 1]); }
-    return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, e: Math.max(x1 - x0, y1 - y0) };
-  };
-  for (const [cc, d] of COUNTRIES) {
-    if (!cc) continue;
-    let x = 0, y = 0, sx = 0, sy = 0, cmd = "M";
-    const rings: number[][] = [];
-    const t = d.match(/[MmLlZz]|-?\d+(?:\.\d+)?/g) ?? [];
-    for (let i = 0; i < t.length; i++) {
-      const k = t[i];
-      if (/[MmLlZz]/.test(k)) { cmd = k; if (k === "z" || k === "Z") { x = sx; y = sy; } continue; }
-      const a = +k, b = +t[++i];
-      if (cmd === "M") { x = a; y = b; sx = x; sy = y; cmd = "L"; rings.push([]); }
-      else if (cmd === "m") { x += a; y += b; sx = x; sy = y; cmd = "l"; rings.push([]); }
-      else if (cmd === "L") { x = a; y = b; }
-      else { x += a; y += b; }
-      rings[rings.length - 1].push(x, y);
-    }
-    if (!rings.length) continue;
-    const rs = rings.map((pts) => ({ ...extent(pts), pts }));
-    const big = rs.reduce((p, q) => (q.e > p.e ? q : p)), tiny = TINY[cc];
-    const own: Own = tiny
-      ? { x: tiny[0], y: tiny[1], e: tiny[2], d: tiny[3], unit: true }
-      : { x: big.x, y: big.y, e: big.e, d: `M${big.pts.slice(0, 2).join(" ")}L${big.pts.slice(2).join(" ")}Z`, unit: false };
-    out.set(cc, { e: extent(rings.flat()).e, rings: rs.map(({ e, pts }) => ({ e, pts })), own });
+function grainTiles(dpr: number): { hi: string; lo: string } | null {
+  const n = Math.round(GRAIN * dpr), k = dpr >= 1.5 ? 1 : 0.55;
+  let s = 11;
+  const w = new Float32Array(n * n);
+  for (let i = 0; i < w.length; i++) w[i] = (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296;
+  const at = (i: number, j: number) => w[((j + n) % n) * n + ((i + n) % n)];
+  const hi = document.createElement("canvas"), lo = document.createElement("canvas");
+  hi.width = hi.height = lo.width = lo.height = n;
+  const hx = hi.getContext("2d"), lx = lo.getContext("2d");
+  if (!hx || !lx) return null;
+  const hd = hx.createImageData(n, n), ld = lx.createImageData(n, n);
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    // -0.5 to 0.5: above the middle a light speck, below it a dark one
+    const g = 0.7 * at(i, j) + 0.075 * (at(i - 1, j) + at(i + 1, j) + at(i, j - 1) + at(i, j + 1)) - 0.5;
+    const o = (j * n + i) * 4, a = Math.min(255, Math.round(Math.abs(g) * 510 * k));
+    hd.data[o] = hd.data[o + 1] = hd.data[o + 2] = 255;
+    if (g > 0) hd.data[o + 3] = a; else ld.data[o + 3] = a;
   }
-  return out;
-})();
+  hx.putImageData(hd, 0, 0);
+  lx.putImageData(ld, 0, 0);
+  return { hi: hi.toDataURL("image/png"), lo: lo.toDataURL("image/png") };
+}
+
+/** px: about how tall a place's popover is, to choose its side: its header, its list (it scrolls past 196 px) and its zoom button */
+const popHeight = (n: number, split: boolean) => 58 + Math.min(196, n * 49) + (split ? 38 : 0);
 
 /** what a badge is called: its city, its country, or its countries */
 function placeLabel(c: Cluster): string {
@@ -501,46 +480,35 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
   const cur = live.length ? live[li % live.length] : null;
   const liveCluster = cur?.host ? clusters.find((c) => c.hosts.includes(cur.host!))?.id : undefined;
 
-  // ---- the land: every country once; hosted ones a shade warmer, the open place's lit ----
+  // ---- the countries hosting someone, for the counts; and whether any host is still to be checked, for the key ----
   const hosted = useMemo(() => new Set(hosts.map((h) => h.cc)), [hosts]);
   const unchecked = hosts.some((h) => h.state === "none");
-  const openCcs = useMemo(() => new Set(clusters.find((c) => c.id === open)?.ccs ?? []), [clusters, open]);
-  const land = useMemo(() => (
-    <>
-      {COUNTRIES.map(([cc, d], i) => (
-        <path key={cc || i} d={d} className={openCcs.has(cc) ? "hi" : hosted.has(cc) ? "on" : undefined} />
-      ))}
-    </>
-  ), [hosted, openCcs]);
 
-  // each hosted country's size and own shape with, for every other hosted one, that one's size and how near each of its rings comes to this one's middle
-  const beside = useMemo(() => [...hosted].flatMap((cc) => {
-    const s = SHAPES.get(cc);
-    if (!s) return [];
-    const { e, own } = s;
-    const others = [...hosted].flatMap((o) => {
-      const q = o === cc ? undefined : SHAPES.get(o);
-      if (!q) return [];
-      return [{ e: q.e, rings: q.rings.map((r) => {
-        let d = Infinity;
-        for (let i = 0; i < r.pts.length; i += 2) d = Math.min(d, Math.hypot(r.pts[i] - own.x, r.pts[i + 1] - own.y));
-        return { e: r.e, d };
-      }) }];
-    });
-    return [{ cc, e, own, others }];
-  }), [hosted]);
-  // the small ones, by the home view's scale: hidden by the badge, with no shown hosted country's land beside; larger first
-  const sHome = width > 0 ? width / home.w : 0;
-  const small = useMemo(() => {
-    if (!sHome) return [];
-    const shown = narrow ? SHOWN_NARROW : SHOWN, near = narrow ? NEAR_NARROW : NEAR;
-    return beside.filter(({ e, others }) => e * sHome < shown
-      && !others.some((o) => o.e * sHome >= shown && o.rings.some((r) => r.e * sHome >= RING && r.d * sHome < near)))
-      .sort((a, b) => b.own.e - a.own.e);
-  }, [beside, sHome, narrow]);
-  // each drawn with its larger side tinyL px, until its own outline is that large
-  const tinyL = narrow ? TINY_L_NARROW : TINY_L;
-  const grown = scale > 0 ? small.filter(({ own }) => own.e * scale < tinyL) : [];
+  // ---- the land's material: its grain tiles, made for the screen's resolution (again when the window moves to a screen
+  // of another), and the view it is drawn for: the one the map last came to rest at. While the map moves only the plain
+  // land moves with it; 140 ms after the last step the material is drawn for the new view and fades in. ----
+  const [grain, setGrain] = useState<{ hi: string; lo: string; dpr: number } | null>(null);
+  useEffect(() => {
+    let mq: MediaQueryList | undefined;
+    const make = () => {
+      const dpr = window.devicePixelRatio || 1, t = grainTiles(dpr);
+      setGrain(t && { ...t, dpr });
+      mq?.removeEventListener("change", make);
+      mq = window.matchMedia(`(resolution: ${dpr}dppx)`);
+      mq.addEventListener("change", make);
+    };
+    make();
+    return () => mq?.removeEventListener("change", make);
+  }, []);
+  const [rest, setRest] = useState<View | null>(null);
+  const [still, setStill] = useState(false);
+  useEffect(() => {
+    setStill(false);
+    const t = window.setTimeout(() => { setRest(viewRef.current); setStill(true); }, 140);
+    return () => window.clearTimeout(t);
+  }, [view, width]);
+  /** closer than half the home view: country borders show, faintly, and the grain steps back */
+  const near = target.w < home.w / 2;
 
   // ---- badges on screen ----
   const placed = width > 0 ? clusters.map((c) => {
@@ -558,22 +526,66 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
     [providers, "hosting providers", "hosting provider"],
   ];
 
+  // ---- the land's material at rest: its grain (tied to the world's origin on the device's pixel grid, so it never
+  // resamples and a pan carries it with the land), its coastline under it and its shadow under that ----
+  let material: React.ReactNode = null;
+  if (grain && rest && width > 0) {
+    const s = width / rest.w, u = 1 / s, t = GRAIN * u;
+    const gx = rest.x + (Math.round(-rest.x * s * grain.dpr) / grain.dpr) * u, gy = rest.y + (Math.round(-rest.y * s * grain.dpr) / grain.dpr) * u;
+    material = (
+      <svg className={`cm-mat${still ? "" : " moving"}`} viewBox={`${rest.x} ${rest.y} ${rest.w} ${rest.w * aspect}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
+        <defs>
+          <pattern id="cm-grain" className="cm-grain" patternUnits="userSpaceOnUse" x={gx} y={gy} width={t} height={t}>
+            <rect width={t} height={t} />
+            <image className="hi" href={grain.hi} width={t} height={t} preserveAspectRatio="none" />
+            <image className="lo" href={grain.lo} width={t} height={t} preserveAspectRatio="none" />
+          </pattern>
+        </defs>
+        <g className="shade" transform={`translate(0 ${(1.4 * u).toFixed(3)})`}>{LAND}</g>
+        <g className="coast">{LAND}</g>
+        <g className="fill">{LAND}</g>
+      </svg>
+    );
+  }
+
+  // ---- the bar's event at its place: one ring goes out, one rests (the stylesheet), cut clear of a neighbouring badge ----
+  let liveRing: React.ReactNode = null;
+  const at = cur && placed.find((p) => p.c.id === liveCluster);
+  if (cur && at) {
+    const r = at.c.hosts.length === 1 ? 10 : Math.max(at.bw, at.bh) / 2 + 4.5, side = Math.ceil(r * 5.2 + 4), m = side / 2;
+    const dpr = window.devicePixelRatio || 1, snap = (v: number) => Math.round(v * dpr) / dpr;
+    const cuts = placed.filter((p) => p !== at).flatMap((p) => {
+      const dx = p.x - at.x, dy = p.y - at.y, pr = Math.max(p.bw, p.bh) / 2 + 3;
+      return Math.abs(Math.hypot(dx, dy) - r) < pr ? [<circle key={p.c.id} cx={m + dx} cy={m + dy} r={pr} fill="#000" />] : [];
+    });
+    liveRing = (
+      <svg key={`${cur.v.address}|${cur.at}|${cur.event ?? ""}`} className={`cm-live${open === at.c.id ? " open" : ""}`} data-tone={cur.event === "last reachable" ? "hold" : "ok"}
+        width={side} height={side} viewBox={`0 0 ${side} ${side}`} style={{ left: snap(at.x) - m, top: snap(at.y) - m }} aria-hidden="true" focusable="false">
+        {cuts.length > 0 && (
+          <mask id="cm-live-cut" maskUnits="userSpaceOnUse" x={0} y={0} width={side} height={side}>
+            <rect width={side} height={side} fill="#fff" />
+            {cuts}
+          </mask>
+        )}
+        <circle className="go" cx={m} cy={m} r={r} />
+        <circle className="rest" cx={m} cy={m} r={r} mask={cuts.length > 0 ? "url(#cm-live-cut)" : undefined} />
+      </svg>
+    );
+  }
+
   return (
     <section className="cm" aria-label="Map of Fibre providers">
-      <div className={`cm-atlas${zoomed ? " zoomed" : ""}${open ? " has-open" : ""}`} ref={box}
+      <div className={`cm-atlas${zoomed ? " zoomed" : ""}${near ? " near" : ""}${open ? " has-open" : ""}`} ref={box}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
         onDoubleClick={onDoubleClick}>
         <div className="cm-vp">
           {/* drawn once the box is measured: the prerendered page holds the box, not the 100 kB of outlines */}
           {width > 0 && (
             <svg className="cm-land" viewBox={`${view.x} ${view.y} ${view.w} ${view.w * aspect}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
-              {land}
-              {grown.map(({ cc, own: o }) => (
-                <path key={"tiny-" + cc} d={o.d} className={openCcs.has(cc) ? "hi" : "on"}
-                  transform={o.unit ? `translate(${o.x} ${o.y}) scale(${tinyL / scale / 100})` : `translate(${o.x} ${o.y}) scale(${tinyL / (o.e * scale)}) translate(${-o.x} ${-o.y})`} />
-              ))}
+              {LAND}
             </svg>
           )}
+          {material}
         </div>
         {/* no heading of its own: the counts on the bar say what the map shows, and "Current Fibre providers" below is the one heading */}
         <div className="cm-title">
@@ -584,6 +596,7 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
             {unchecked && <span><i className="k-none" />not checked yet</span>}
           </p>
         </div>
+        {liveRing}
         <ul className="cm-pins" aria-label="Fibre providers by location">
           {placed.map(({ c, x, y, bw, bh, hit }) => {
             const isOpen = open === c.id;
@@ -597,13 +610,25 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
             const multi = c.ccs.length > 1;
             const one = n === 1;
             const cities = c.locs > 1 ? cityCounts(c) : [];
-            // beside the badge, on the side with room, and ending above the bar, so it never covers the counts: its list scrolls instead
-            const below = y <= height * 0.5, edge = Math.max(bh, 24) / 2, floor = barAt ? Math.min(height, barAt[1]) : height;
-            const pop: React.CSSProperties = narrow
-              ? { left: -x + 8, top: height - y + 14, width: width - 16 }
-              : { [x > width * 0.6 ? "right" : "left"]: bw / 2 + 12, [below ? "top" : "bottom"]: -edge, width: 300, maxHeight: Math.max(220, below ? floor - (y - edge) - 8 : y + edge - 10) };
+            // beside the badge and ending above the bar, so it never covers the counts (its list scrolls instead), on whichever
+            // of its four sides covers the fewest other places; a tie keeps the side with room, right in the west, below in the north
+            let pop: React.CSSProperties | null = null;
+            if (isOpen && !moving && narrow) pop = { left: -x + 8, top: height - y + 14, width: width - 16 };
+            else if (isOpen && !moving) {
+              const edge = Math.max(bh, 24) / 2, floor = barAt ? Math.min(height, barAt[1]) : height, h = popHeight(n, split);
+              const sides = (["right", "left"] as const).flatMap((hz) => (["below", "above"] as const).map((vt) => {
+                const maxHeight = Math.max(220, vt === "below" ? floor - (y - edge) - 8 : y + edge - 10), ph = Math.min(h, maxHeight);
+                const x0 = hz === "right" ? x + bw / 2 + 12 : x - bw / 2 - 12 - 300, y0 = vt === "below" ? y - edge : y + edge - ph;
+                const fits = x0 >= 8 && x0 + 300 <= width - 8 && (vt === "below" ? y0 + ph <= floor - 4 : y0 >= 4);
+                const covers = placed.filter((q) => q.c !== c && q.x + q.bw / 2 + 4 > x0 && q.x - q.bw / 2 - 4 < x0 + 300 && q.y + q.bh / 2 + 4 > y0 && q.y - q.bh / 2 - 4 < y0 + ph).length;
+                const away = Number(hz !== (x > width * 0.6 ? "left" : "right")) + Number(vt !== (y <= height * 0.5 ? "below" : "above"));
+                return { hz, vt, maxHeight, fits, covers, away };
+              }));
+              const s = sides.filter((q) => q.fits).sort((p, q) => p.covers - q.covers || p.away - q.away)[0] ?? sides.find((q) => q.away === 0)!;
+              pop = { [s.hz === "right" ? "left" : "right"]: bw / 2 + 12, [s.vt === "below" ? "top" : "bottom"]: -edge, width: 300, maxHeight: s.maxHeight };
+            }
             return (
-              <li key={c.id} className={`cm-pin${one ? " one" : ""}${isOpen ? " open" : ""}${liveCluster === c.id ? " live" : ""}`}
+              <li key={c.id} className={`cm-pin${one ? " one" : ""}${isOpen ? " open" : ""}`}
                 style={{ transform: `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`, zIndex: isOpen ? 30 : undefined }}
                 onMouseEnter={() => openNow(c.id)} onMouseLeave={closeSoon}>
                 <button type="button" className="cm-b" aria-expanded={split ? undefined : isOpen} aria-describedby="cm-pins-keys"
@@ -612,9 +637,9 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
                   tabIndex={c.id === (placed.some((q) => q.c.id === roving) ? roving : placed[0]?.c.id) ? 0 : -1}
                   onFocus={() => { setRoving(c.id); openNow(c.id); }} onKeyDown={walk} onClick={() => activate(c)}>
                   <span className="cm-badge" data-tone={tone} style={{ width: bw, height: bh }}>{one ? null : n}</span>
-                  {unreach > 0 && tone !== "hold" && <i className="cm-pip hold" aria-hidden="true" style={{ left: `calc(50% + ${bw / 2 - 3}px)`, top: `calc(50% - ${bh / 2 + 2}px)` }} />}
+                  {unreach > 0 && tone !== "hold" && <i className="cm-pip hold" aria-hidden="true" style={{ left: `calc(50% + ${(bw * 0.3536 - 3.5).toFixed(1)}px)`, top: `calc(50% - ${(bh * 0.3536 + 3.5).toFixed(1)}px)` }} />}
                 </button>
-                {isOpen && !moving && (
+                {pop && (
                   <div className="cm-pop" style={pop} role="group" aria-label={place}>
                     <p className="cm-pop-h">
                       {c.ccs.length > 2 ? <b>{n} Fibre providers</b> : <><b>{place}</b><span>{n} provider{one ? "" : "s"}</span></>}
