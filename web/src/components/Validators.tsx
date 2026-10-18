@@ -87,10 +87,13 @@ function sortValue(v: Validator, k: SortKey, notLive?: boolean): number | null {
   }
 }
 
+/** the search field's mark, the site search's own */
+const FIND = <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.75" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="m10.5 10.5 3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>;
+
 /**
- * `periodSwitch`, the page's period control, sits beside the heading: the period it selects is the Shard data and
- * Endorsements columns', named in their headings. `failed`: the list could not be read and nothing of it is on screen,
- * which the empty table says rather than "no validators on record"
+ * `periodSwitch`, the page's period control, sits under the heading, on one band with the search and the filter: the
+ * period it selects is the Shard data and Endorsements columns', named in their headings. `failed`: the list could not
+ * be read and nothing of it is on screen, which the empty table says rather than "no validators on record"
  */
 export default function Validators({ rows, window: win, notLive, loading, failed, periodSwitch }: { rows: Validator[]; window: string; notLive?: boolean; loading?: boolean; failed?: { error: string | null; status?: number } | null; periodSwitch?: ReactNode }) {
   const [q, setQ] = useState("");
@@ -184,12 +187,13 @@ export default function Validators({ rows, window: win, notLive, loading, failed
   return (
     <section>
       <div className="vhead">
-        <div>
-          <div className="vtitle"><h2>Validators</h2>{periodSwitch}</div>
-          <p className="sub">{notLive ? "Bonded set" : "Endorsements over the selected period"}</p>
-        </div>
+        <h2>Validators</h2>
+        <p className="sub">{notLive ? "Bonded set" : "Endorsements over the selected period"}</p>
+      </div>
+      <div className="vband">
+        {periodSwitch}
         <div className="tools">
-          <label className="search"><span className="sr-only">Search validators</span><input type="search" placeholder="Search name or address" value={q} onChange={(e) => setQ(e.target.value)} /></label>
+          <label className="search">{FIND}<span className="sr-only">Search validators</span><input type="search" placeholder="Search name or address" value={q} onChange={(e) => setQ(e.target.value)} /></label>
           <label className="select"><span className="sr-only">Filter</span>
             <select value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
               <option value="all">All validators · {counts.all}</option>
