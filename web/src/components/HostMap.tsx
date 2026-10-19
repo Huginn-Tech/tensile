@@ -304,6 +304,12 @@ function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost }: {
     const t = window.setInterval(() => { pk.tick(Date.now()); render((n) => n + 1); }, ROTATE_MS);
     return () => window.clearInterval(t);
   }, [pk]);
+  // the names' cell as wide as the name shown, after every render: one measure a second
+  const whoRef = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const el = whoRef.current, on = el?.querySelector<HTMLElement>(":scope > .on");
+    if (el && on) el.style.width = `${Math.ceil(on.getBoundingClientRect().width)}px`;
+  });
   const now = Date.now();
   const s = pk.show(now) ?? (ev ? { kind: "endpoint" as const, ev } : null);
   if (!s) return <p className="cm-ev"><span className="cm-ev-t wait">{"\u00a0"}</span></p>;
@@ -325,7 +331,7 @@ function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost }: {
     <p className="cm-ev">
       <i key={s.key} className={`cm-ev-dot${beat?.live ? " pop" : ""}`} aria-hidden="true" />
       <span className="cm-ev-t" title={`${who.name} endorsed ${many ? "blobs" : "the blob"}${at} · settled ${utcWord(s.at)}`}>
-        <span className="cm-ev-who">
+        <span className="cm-ev-who" ref={whoRef}>
           {pk.names.map((w) => (w === s.who
             ? <span key={w} className="on"><Link href={who.href}>{who.name}</Link></span>
             : <span key={w} aria-hidden="true">{nameOf(w).name}</span>))}
