@@ -961,9 +961,11 @@ export const GROUPS: Group[] = [
         path: "/v1/tip",
         summary: "The chain's newest block and the newest blob Tensile has recorded.",
         desc: "`height` and `block_time` are the chain node's newest committed block, at most a quarter of a second old, and the answer is not cached; `block_time` is absent only when the node does not answer and Tensile is still catching up to the tip. `latest_blob`, its `promise_hash` and `settlement_height`, is the first blob /v1/blobs lists, and absent while there is none: when it changes, a new blob is on record.",
+        notes: [
+          { title: "Newest endpoint event", text: "`latest_endpoint_event` is the newest endpoint registration or change of any validator, as its `endpoint_history` words it, and absent while there is none: `address` (the consensus address), `operator_address`, `moniker`, `outcome` registered or changed, `host`, `previous_host` for a change, `height`, `time`, and `tx_hash` when Tensile recorded the transaction." },
+        ],
         params: [],
         example: EX_TIP,
-        whole: true,
       },
       {
         id: "tip-stream",

@@ -1405,14 +1405,31 @@ export function fmtShare(v: number | null | undefined): string {
 /**
  * /v1/tip: the newest block the observer has read, for the header ticker, and the newest blob it has stored
  * (latest_blob, in /v1/blobs' order; absent while there is none, and from an API older than it), which the
- * overview's recent blobs compare with the blobs they hold to know when to read the list
+ * overview's recent blobs compare with the blobs they hold to know when to read the list; and the newest endpoint
+ * registration or change of any validator (latest_endpoint_event, absent while there is none), for the overview's map
  */
 export type Tip = {
   height: number;
   block_time?: string;
   fibre_active: boolean;
   latest_blob?: { promise_hash: string; settlement_height: number };
+  latest_endpoint_event?: TipEndpointEvent;
   server_time: string;
+};
+
+/** one validator's newest successful endpoint registration, as its endpoint_history words it: its first, or a change */
+export type TipEndpointEvent = {
+  /** the consensus address, as a Validator's address */
+  address: string;
+  operator_address?: string;
+  moniker?: string;
+  outcome: "registered" | "changed";
+  host: string;
+  /** changed only */
+  previous_host?: string;
+  height: number;
+  time: string;
+  tx_hash?: string;
 };
 
 /** the newest heartbeat against one validator's Fibre host, stage by stage */

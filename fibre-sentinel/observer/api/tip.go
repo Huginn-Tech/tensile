@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/plsgiveup/fibre/fibre-sentinel/internal/status"
+	"github.com/plsgiveup/fibre/fibre-sentinel/observer/store"
 )
 
 // tipResponse is the newest block, for the site's block ticker: the one figure
@@ -31,8 +32,13 @@ type tipResponse struct {
 	// absent while it holds none. It is here so a page can tell that a blob
 	// arrived from the stream it already reads every second, and ask
 	// /v1/blobs only then, rather than every few seconds in case one did.
-	LatestBlob *tipBlob  `json:"latest_blob,omitempty"`
-	ServerTime time.Time `json:"server_time"`
+	LatestBlob *tipBlob `json:"latest_blob,omitempty"`
+	// LatestEndpointEvent is the newest endpoint registration or change on
+	// record, of any validator; absent while there is none. The overview's map
+	// names it, and names the next one as soon as the stream it already reads
+	// every second carries it.
+	LatestEndpointEvent *tipEndpointEvent `json:"latest_endpoint_event,omitempty"`
+	ServerTime          time.Time         `json:"server_time"`
 }
 
 // tipBlob names a blob: the marker a page compares with the blobs it holds,
@@ -42,6 +48,54 @@ type tipBlob struct {
 	PromiseHash      string `json:"promise_hash"`
 	SettlementHeight int64  `json:"settlement_height"`
 }
+
+// tipEndpointEvent is one validator's newest successful endpoint
+// registration, as its endpoint_history words it: registered (its first
+// endpoint) or changed (another than the one before). A registration of the
+// endpoint it already had (same), a failed one, and a change a scan gap hid
+// (after_gap) are not events here.
+type tipEndpointEvent struct {
+	Address         string `json:"address"` // the consensus address, as /v1/validators' address
+	OperatorAddress string `json:"operator_address,omitempty"`
+	Moniker         string `json:"moniker,omitempty"`
+	Outcome         string `json:"outcome"` // registered | changed
+	Host            string `json:"host"`
+	PreviousHost    string `json:"previous_host,omitempty"` // changed only
+	Height          int64  `json:"height"`
+	// Time is the block's time as the store writes it (store.TS), as
+	// endpoint_history gives it.
+	Time   string `json:"time"`
+	TxHash string `json:"tx_hash,omitempty"`
+}
+
+// hostEventsMarkSQL moves whenever a registration is stored: host_events'
+// highest rowid, which SQLite reads from the table's last entry (its min/max
+// optimisation, which a wrapping COALESCE would turn off). Rows are only
+// ever inserted, never updated or deleted, so an unchanged mark is an
+// unchanged table.
+const hostEventsMarkSQL = `SELECT MAX(rowid) FROM host_events`
+
+// newestEndpointEventsSQL is the newest registrations read from the chain's
+// transactions, newest first across every validator, each with the hash of
+// the transaction it came from when its cost line is on record (the join
+// hostWalkSQL makes). Asked only when the mark moves.
+const newestEndpointEventsSQL = `SELECT h.cons_address, h.from_height, h.from_tx_index, h.host, h.time, COALESCE(c.tx_hash, '')
+	FROM host_events h
+	LEFT JOIN tx_costs c ON c.height = h.from_height AND c.tx_index = h.from_tx_index - 1
+	WHERE h.source = 'event'
+	ORDER BY h.from_height DESC, h.from_tx_index DESC, h.cons_address DESC LIMIT 64`
+
+// hostBeforeSQL is the host a validator had before (height, from_tx_index):
+// its step just before it, of any source, as the walk takes it
+// (sqlite_autoindex_host_events_1).
+const hostBeforeSQL = `SELECT host FROM host_events
+	WHERE cons_address = ? AND (from_height < ? OR (from_height = ? AND from_tx_index < ?))
+	ORDER BY from_height DESC, from_tx_index DESC LIMIT 1`
+
+// tipEndpointMaxAge is how long the newest endpoint event is kept when no
+// registration arrives: long enough that the tip asks for it again about
+// once a minute, short enough that a validator's new moniker shows.
+const tipEndpointMaxAge = time.Minute
 
 // latestBlobSQL is the newest publication in /v1/blobs' order (settlement
 // height, then position in the block, both descending). The highest height
@@ -79,6 +133,15 @@ type tipCache struct {
 	// gen counts the reads, so a tip stream can tell an answer from an
 	// older one (tipstream.go).
 	gen uint64
+	// ep is the newest endpoint event (latestEndpointEvent), worked out at
+	// epAt when host_events' mark was epMark: worked out again only when the
+	// mark moves or tipEndpointMaxAge has passed, so the answer costs one
+	// read of the mark, not a walk of the registrations. epErrAt is as
+	// blobErrAt.
+	ep      *tipEndpointEvent
+	epMark  int64
+	epAt    time.Time
+	epErrAt time.Time
 }
 
 const tipTTL = 250 * time.Millisecond
@@ -136,6 +199,7 @@ func (s *Server) readTip(now time.Time) tipResponse {
 		out.FibreActive = s.tip.v.FibreActive
 	}
 	out.LatestBlob = s.latestBlob(ctx, now)
+	out.LatestEndpointEvent = s.latestEndpointEvent(ctx, now)
 	cancel()
 	if s.tipRPC != "" {
 		if h, t, ok := nodeTip(s.tipRPC); ok {
@@ -205,6 +269,96 @@ func (s *Server) latestBlob(ctx context.Context, now time.Time) *tipBlob {
 		return nil
 	}
 	return &b
+}
+
+// latestEndpointEvent is the newest endpoint event on record, kept in the
+// tip's cache: the mark is read with every answer the cache makes (at most
+// four a second, whoever is reading), and the registrations are walked only
+// when it moved or the event is tipEndpointMaxAge old. A store that does not
+// answer within ctx leaves the last event standing. Called with s.tip.mu
+// held.
+func (s *Server) latestEndpointEvent(ctx context.Context, now time.Time) *tipEndpointEvent {
+	var mark sql.NullInt64
+	if err := s.st.DB().QueryRowContext(ctx, hostEventsMarkSQL).Scan(&mark); err != nil {
+		s.tipErr(&s.tip.epErrAt, now, "newest endpoint event", err)
+		return s.tip.ep
+	}
+	if !s.tip.epAt.IsZero() && mark.Int64 == s.tip.epMark && now.Sub(s.tip.epAt) < tipEndpointMaxAge {
+		return s.tip.ep
+	}
+	ev, err := s.newestEndpointEvent(ctx)
+	if err != nil {
+		s.tipErr(&s.tip.epErrAt, now, "newest endpoint event", err)
+		return s.tip.ep
+	}
+	s.tip.ep, s.tip.epMark, s.tip.epAt = ev, mark.Int64, now
+	return ev
+}
+
+// tipErr logs a failed read of the tip's, once a minute at most (at).
+func (s *Server) tipErr(at *time.Time, now time.Time, what string, err error) {
+	if s.log != nil && now.Sub(*at) >= time.Minute {
+		*at = now
+		s.log.Printf("tip: %s: %v", what, err)
+	}
+}
+
+// newestEndpointEvent walks the newest registrations, newest first, to the
+// first that registered or changed an endpoint (eventOutcome, the walk's own
+// word); nil when none of them did.
+func (s *Server) newestEndpointEvent(ctx context.Context) (*tipEndpointEvent, error) {
+	type reg struct {
+		addr, host, at, hash string
+		height               int64
+		fromTx               int
+	}
+	rows, err := s.st.DB().QueryContext(ctx, newestEndpointEventsSQL)
+	if err != nil {
+		return nil, err
+	}
+	var regs []reg
+	for rows.Next() {
+		var r reg
+		if err := rows.Scan(&r.addr, &r.height, &r.fromTx, &r.host, &r.at, &r.hash); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		regs = append(regs, r)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for _, r := range regs {
+		var prev string
+		prevSet := true
+		err := s.st.DB().QueryRowContext(ctx, hostBeforeSQL, r.addr, r.height, r.height, r.fromTx).Scan(&prev)
+		if errors.Is(err, sql.ErrNoRows) {
+			prevSet = false
+		} else if err != nil {
+			return nil, err
+		}
+		outcome := eventOutcome(prevSet, prev, r.host)
+		if outcome != endpointRegistered && outcome != endpointChanged {
+			continue
+		}
+		ev := &tipEndpointEvent{Address: strings.ToLower(r.addr), Outcome: outcome, Host: r.host, Height: r.height,
+			Time: store.TS(parseTS(r.at)), TxHash: strings.ToLower(r.hash)}
+		if outcome == endpointChanged {
+			ev.PreviousHost = prev
+		}
+		ops, err := s.operatorAddrs(ctx)
+		if err != nil {
+			return nil, err
+		}
+		names, err := s.monikers(ctx)
+		if err != nil {
+			return nil, err
+		}
+		ev.OperatorAddress, ev.Moniker = ops[ev.Address], names[ev.Address]
+		return ev, nil
+	}
+	return nil, nil
 }
 
 // nodeTip asks a CometBFT RPC's /status for its newest committed block.

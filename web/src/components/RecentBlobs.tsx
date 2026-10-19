@@ -8,6 +8,8 @@ import RollNumber, { reducedMotion } from "@/components/RollNumber";
 import Info from "@/components/Info";
 import { lane } from "@/lib/status";
 import { recheck } from "@/lib/recheck";
+import { announce, prepare } from "@/lib/mapflash";
+import { Pacer } from "@/lib/pace";
 
 /**
  * The overview's recent blobs: the newest settlements as a grid of squares,
@@ -22,6 +24,14 @@ import { recheck } from "@/lib/recheck";
  * five slide together in one 420 ms move per read, the places that leave a
  * row's right end entering the next row's left. The newest is ringed and
  * whatever arrived with it glows for 1.4 s; nothing else moves.
+ *
+ * A block that comes in alone moves the grid the moment it is read: the
+ * tip brings each block as it is committed, already an even beat. Blocks
+ * that come in together (after a stall) go on one at a time, half a second
+ * apart, and many at once in one move (lib/pace.ts). Each move is told to the overview's map, whose places of the blobs'
+ * endorsers burst with it and whose pill says what was endorsed
+ * (lib/mapflash.ts): a read that brings new blobs waits up to PREPARE_MS for
+ * the map to have their endorsers, so all three go in the same frame.
  *
  * The readout names its blob's state as Tensile has it, in a small label
  * between its heading and its age: in its retention window until Tensile
@@ -67,6 +77,8 @@ const FALLBACK_MS = 30000;
 /** the least time between two reads of the whole grid for its statuses (recheck), so one that fails is not asked every 5 s */
 const RECHECK_MS = 30000;
 const SLIDE_MS = 420;
+/** the longest a read that brought new blobs waits for the map to have their endorsers (prepare) before it is shown */
+const PREPARE_MS = 1200;
 
 /** at: when the read that brought the blob's record was made */
 type Cell = { b: Blob; seq: number; at: number };
@@ -169,12 +181,20 @@ function useBlobFeed(mark: string | undefined) {
           const known = new Set(before.cells.map((c) => c.b.promise_hash));
           const allNew = (pg: Page) => pg.blobs.length > 0 && pg.blobs.every((b) => !known.has(b.promise_hash));
           let page = await readPage(lim);
-          const delta = before.loaded && before.total != null && Number.isFinite(page.total) ? page.total - before.total : 0;
+          const since = (pg: Page) => (before.loaded && before.total != null && Number.isFinite(pg.total) ? pg.total - before.total : 0);
+          let delta = since(page);
           // More arrived than the page returned, all of it new: one more read fills the squares. The second
-          // page, newest first, holds the first, so it replaces it.
-          if (before.loaded && allNew(page) && delta > page.blobs.length && page.blobs.length < CELLS) page = await readPage(Math.min(CELLS, delta));
+          // page, newest first, holds the first, so it replaces it. A block that settles between the two reads
+          // pushes the second page's oldest rows past its end, and its total says so: then once more, rather than
+          // leave those blobs off the grid.
+          for (let i = 0; i < 2 && before.loaded && allNew(page) && delta > page.blobs.length && page.blobs.length < CELLS; i++) {
+            page = await readPage(Math.min(CELLS, delta));
+            delta = since(page);
+          }
           // what even that page had no room for is counted, not shown
           const extra = before.loaded && allNew(page) ? Math.max(0, delta - page.blobs.length) : 0;
+          // the map reads the new blobs' endorsers first, so it flashes with the move (not for the first read)
+          if (before.loaded) await prepare(page.blobs.filter((b) => !known.has(b.promise_hash)).slice(0, CELLS), PREPARE_MS);
           const { feed: f, fresh } = merge(before, page, at, extra);
           apply(f);
           // ask next time for about as many as this time brought
@@ -290,6 +310,7 @@ function Age({ at, skew }: { at: string; skew: number }) {
 
 /** what the grid shows: a snapshot of the feed, and the last move into it */
 type Shown = { cells: Cell[]; total: number | null; move: { id: number; n: number; fresh: Set<string> } | null };
+const NO_SHOWN: Shown = { cells: [], total: null, move: null };
 
 type PlaceProps = { c: Cell; i: number; fresh: boolean; on: boolean; tab: boolean; ghost: boolean; onShow: (h: string) => void; onKey: (e: React.KeyboardEvent, i: number) => void; onFocusAt: (i: number) => void; onOpen: (e: React.MouseEvent, href: string) => void };
 /**
@@ -334,22 +355,87 @@ export default function RecentBlobs() {
   const [motion, setMotion] = useState(true);
   useEffect(() => { setMotion(!reducedMotion()); }, []);
 
-  // ---- the snapshot on screen: the feed, unless held ----
-  const [shown, setShown] = useState<Shown>({ cells: [], total: null, move: null });
-  useEffect(() => {
-    if (hold || !feed.loaded) return;
+  // ---- the snapshot on screen: the feed's first read at once, then what each read brings in, as it comes (pace.ts);
+  // what came while the grid was held, or while the page was hidden, in one move ----
+  const [shown, setShown] = useState<Shown>(NO_SHOWN);
+  const pacer = useRef<Pacer<Cell> | null>(null);
+  if (!pacer.current) pacer.current = new Pacer<Cell>();
+  const offered = useRef(-1); // the newest arrival handed to the pacer, by seq; -1 before the first read
+  const waiting = useRef(0); // blobs in the pacer, not yet on the grid
+  const feedRef = useRef(feed);
+  feedRef.current = feed;
+  const holdRef = useRef(hold);
+  holdRef.current = hold;
+  const beatT = useRef<number | undefined>(undefined);
+  // a beat: these cells come onto the grid, newest first, with the feed's newest word on every cell shown
+  const beat = useCallback((out: Cell[]) => {
+    if (out.length === 0) return;
+    waiting.current -= out.length;
+    const f = feedRef.current;
     setShown((v) => {
-      if (v.cells === feed.cells && v.total === feed.total) return v;
-      const head = v.cells.length ? v.cells[0].seq : null;
-      const came = head == null ? [] : feed.cells.filter((c) => c.seq > head);
-      const n = head == null ? 0 : feed.next - 1 - head;
-      return {
-        cells: feed.cells,
-        total: feed.total,
-        move: n > 0 ? { id: (v.move?.id ?? 0) + 1, n, fresh: new Set(came.map((c) => c.b.promise_hash)) } : v.move,
-      };
+      const byHash = new Map(f.cells.map((c) => [c.b.promise_hash, c]));
+      const came = [...out].sort((a, b) => b.seq - a.seq);
+      const fresh = new Set(came.map((c) => c.b.promise_hash));
+      const cells = [...came, ...v.cells.filter((c) => !fresh.has(c.b.promise_hash))].slice(0, CELLS).map((c) => byHash.get(c.b.promise_hash) ?? c);
+      return { cells, total: f.total == null ? null : f.total - waiting.current, move: { id: (v.move?.id ?? 0) + 1, n: came.length, fresh } };
     });
-  }, [feed, hold]);
+  }, []);
+  const schedule = useCallback(() => {
+    window.clearTimeout(beatT.current);
+    const p = pacer.current!;
+    const due = p.due();
+    if (due === null || holdRef.current) return;
+    beatT.current = window.setTimeout(() => {
+      if (holdRef.current) return;
+      beat(p.take(performance.now()));
+      schedule();
+    }, Math.max(0, due - performance.now()));
+  }, [beat]);
+  useEffect(() => {
+    if (!feed.loaded) return;
+    const p = pacer.current!;
+    if (offered.current < 0) {
+      // the first read is on the grid at once, without a move
+      offered.current = feed.next - 1;
+      setShown({ cells: feed.cells, total: feed.total, move: null });
+      return;
+    }
+    const now = performance.now();
+    const came = feed.cells.filter((c) => c.seq > offered.current).sort((a, b) => a.seq - b.seq);
+    for (const c of came) {
+      p.offer(c.b.settlement_height, c, now);
+    }
+    waiting.current += came.length;
+    offered.current = Math.max(offered.current, feed.next - 1);
+    // the squares on the grid take the feed's newest word (a status read since)
+    setShown((v) => {
+      const byHash = new Map(feed.cells.map((c) => [c.b.promise_hash, c]));
+      return { ...v, cells: v.cells.map((c) => byHash.get(c.b.promise_hash) ?? c), total: feed.total == null ? null : feed.total - waiting.current };
+    });
+    schedule();
+  }, [feed, schedule]);
+  // held: no beat; let go: what came in meanwhile in one move
+  useEffect(() => {
+    if (hold) { window.clearTimeout(beatT.current); return; }
+    beat(pacer.current!.flush(performance.now()));
+    schedule();
+  }, [hold, beat, schedule]);
+  // hidden: what waits goes on the grid as the page comes back, in one move, and nothing waits behind the tab
+  useEffect(() => {
+    const onVis = () => { if (!document.hidden && !holdRef.current) { beat(pacer.current!.flush(performance.now())); schedule(); } };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { document.removeEventListener("visibilitychange", onVis); window.clearTimeout(beatT.current); };
+  }, [beat, schedule]);
+
+  // ---- the move, told to the map as it is drawn: the blobs that just came in, which the map bursts with and its pill
+  // names; and once, what the grid opened with, for the pill ----
+  const toldFirst = useRef(false);
+  useLayoutEffect(() => {
+    const mv = shown.move;
+    if (mv) announce({ id: mv.id, blobs: shown.cells.filter((c) => mv.fresh.has(c.b.promise_hash)).map((c) => c.b), live: true });
+    else if (!toldFirst.current && shown.cells.length) announce({ id: 0, blobs: [shown.cells[0].b], live: false });
+    if (shown.cells.length) toldFirst.current = true;
+  }, [shown.move?.id, shown.cells.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- the readout's heading on one line, as large as it fits ----
   const headRef = useFitHead();
