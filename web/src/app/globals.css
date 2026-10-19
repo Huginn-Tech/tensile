@@ -3010,12 +3010,12 @@ button.warn:focus-visible { outline-offset: 0; }
 .eh-t .tw .ag { font-size: var(--t-small); line-height: 16px; color: var(--text-3); }
 .eh-t .ew .eh-n { line-height: 20px; }
 .eh-t .ew .cur { margin-left: 0; line-height: 16px; }
-/* the Blobs list's time, a validator's readings' and the Publishers list's last blob in that same form, in a table: the
+/* the Blobs list's time, one publisher's blobs', a validator's readings' and the Publishers list's last blob in that same form, in a table: the
    day and the second over how long ago, centred, its age shown at every table width. A list keeps its one line */
 @media (min-width: 1081px) {
-  .lg-t.lg-st td.c-t > span, .vr-t td.c-t > span, .pl-t td.c-t > span:not(.none) { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-height: 36px; vertical-align: middle; }
-  .lg-t.lg-st td.c-t .tm, .vr-t td.c-t .tm, .pl-t td.c-t .tm { line-height: 20px; text-align: center; }
-  .lg-t.lg-st td.c-t .ag, .vr-t td.c-t .ag, .pl-t td.c-t .ag { display: block; margin-left: 0; line-height: 16px; }
+  .lg-t.lg-st td.c-t > span, .lg-t.lg-one td.c-t > span, .vr-t td.c-t > span, .pl-t td.c-t > span:not(.none) { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-height: 36px; vertical-align: middle; }
+  .lg-t.lg-st td.c-t .tm, .lg-t.lg-one td.c-t .tm, .vr-t td.c-t .tm, .pl-t td.c-t .tm { line-height: 20px; text-align: center; }
+  .lg-t.lg-st td.c-t .ag, .lg-t.lg-one td.c-t .ag, .vr-t td.c-t .ag, .pl-t td.c-t .ag { display: block; margin-left: 0; line-height: 16px; }
 }
 /* the newest 50 only: said quietly, with nothing to open */
 .eh-pager .ctl { color: var(--text-3); }
