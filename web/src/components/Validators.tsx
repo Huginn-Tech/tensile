@@ -165,12 +165,17 @@ export default function Validators({ rows, window: win, notLive, loading, failed
   );
   const href = (v: Validator, hash = "") => validatorHref(v.operator_address, v.address, `${win !== "24h" ? `&window=${win}` : ""}${hash}`);
 
-  // The endorsement share, with the counts behind it in the title; a dash
+  // The endorsement share, with the counts behind it in the title and a thin bar of it under it; a dash
   // with its reason when nothing was assigned. Never a fault colour.
   const signed = (v: Validator) => {
     const s = v.signing;
     if (!s || s.assigned === 0) return <span className="muted" title={s && s.unknown > 0 ? `${int(s.unknown)} assigned promise${s.unknown === 1 ? "" : "s"} recorded before signatures were verified: nothing to say either way.` : "No settled promise assigned this validator rows in this period."}>—</span>;
-    return <span className="rate share endorsed" title={`${int(s.signed)} of ${int(s.assigned)} settled promises endorsed`}>{pctOf(s.signed, s.assigned)}</span>;
+    return (
+      <span className="rate share endorsed" title={`${int(s.signed)} of ${int(s.assigned)} settled promises endorsed`}>
+        {pctOf(s.signed, s.assigned)}
+        <i className="eb" aria-hidden="true"><i style={{ width: `${Math.min(100, (100 * s.signed) / s.assigned)}%` }} /></i>
+      </span>
+    );
   };
   // The shard data its endorsements stand for, with the count of blobs behind it in the title.
   const shard = (v: Validator) => {
