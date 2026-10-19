@@ -25,13 +25,13 @@ type SortKey = "last" | "settlements" | "bytes" | "fees" | "escrow";
 type Sort = { k: SortKey; desc: boolean };
 /** the time its column shows: its newest blob, or before the API gave that its newest escrow movement of any kind */
 const lastAt = (p: PublisherWithQueue) => (p.last_settlement_at !== undefined ? p.last_settlement_at : p.last_seen_at);
-/** what each column that sorts orders by; an account with no escrow found goes below an empty one */
+/** what each column that sorts orders by; an account with no escrow found, or one held in another denomination, goes below an empty one */
 const BY: Record<SortKey, (p: PublisherWithQueue) => number> = {
   last: (p) => Date.parse(lastAt(p) ?? "") || 0,
   settlements: (p) => p.settlements,
   bytes: (p) => p.bytes,
   fees: (p) => p.fees_utia,
-  escrow: (p) => (p.escrow?.found ? p.escrow.available_utia : -1),
+  escrow: (p) => (p.escrow?.found && !p.escrow.denom ? p.escrow.available_utia : -1),
 };
 
 /** a publisher's namespaces in the period: the most used, as the Blobs list names it and linked to its blobs, and how many more there are */
@@ -220,7 +220,7 @@ function Page() {
                     <td className="gap" aria-hidden="true" />
                     <td className="c-esc">
                       <span className="kp">Escrow</span>
-                      {e?.found ? <span className={low ? "low" : undefined} title={escTitle}>{unit(tia(e.available_utia))}</span> : <span className="none" title={escTitle}>—</span>}
+                      {e?.found && !e.denom ? <span className={low ? "low" : undefined} title={escTitle}>{unit(tia(e.available_utia))}</span> : <span className="none" title={escTitle}>—</span>}
                     </td>
                     <td className="c-m">
                       {has

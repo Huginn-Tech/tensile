@@ -144,6 +144,17 @@ func TestOtherDenomInNoUtiaFigure(t *testing.T) {
 	if m.Q.Pending.Count != 2 || m.Q.Pending.Utia != 300 || m.Q.Publishers != 1 || m.Q.Executed.Count != 1 || m.Q.Executed.Utia != 1000 {
 		t.Errorf("market queue: %+v", m.Q)
 	}
+	// Over 30 days the utia deposit of the two signers' transaction is
+	// counted beside the sample's, and the otherDenom one in it is not.
+	var m30 struct {
+		Deposits struct{ Count, Utia int64 } `json:"deposits"`
+	}
+	if code := get(t, ts, "/v1/market?window=30d", &m30); code != 200 {
+		t.Fatalf("30d market: %d", code)
+	}
+	if m30.Deposits.Count != 2 || m30.Deposits.Utia != 6_000_000_007 {
+		t.Errorf("30d deposits: %+v, want 2 of 6,000,000,007 utia", m30.Deposits)
+	}
 	// A utia account's page: its escrow, queue and check as they were.
 	if string(p1["withdrawals"]) != string(p0["withdrawals"]) {
 		t.Errorf("the sample's withdrawals: %s with the account, %s without", p1["withdrawals"], p0["withdrawals"])
@@ -223,13 +234,10 @@ func TestOtherDenomInNoUtiaFigure(t *testing.T) {
 		if got := string(row["amount"]); got != `"`+amount+otherDenom+`"` {
 			t.Errorf("%s: amount %s, want %s%s", what, got, amount, otherDenom)
 		}
-		for _, k := range []string{"amount_utia", "first_amount_utia", "reduced_utia"} {
-			if v, ok := row[k]; ok && string(v) != "0" {
-				t.Errorf("%s: %s is %s", what, k, v)
+		for _, k := range []string{"amount_utia", "first_amount_utia", "reduced_utia", "paid_utia"} {
+			if v, ok := row[k]; ok {
+				t.Errorf("%s: %s is %s, want it absent", what, k, v)
 			}
-		}
-		if v, ok := row["paid_utia"]; ok {
-			t.Errorf("%s: paid_utia is %s", what, v)
 		}
 	}
 	coin("its queued withdrawal", q.Pending[0], "400000")

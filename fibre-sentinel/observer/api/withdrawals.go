@@ -75,18 +75,18 @@ type pendingSummary struct {
 }
 
 // withdrawalRow is one withdrawal, queued or gone. One in another
-// denomination than utia (utiaDenom) has Amount, its coin now, and its
-// utia amounts read 0 and no paid_utia: the module never reduces it (a
-// charge on its escrow fails), so the amount first seen and the one paid
-// out, if it was, are that one.
+// denomination than utia (utiaDenom) has Amount, its coin now, and none of
+// the utia amounts, as a payment row in another denomination has none: the
+// module never reduces it (a charge on its escrow fails), so the amount
+// first seen and the one paid out, if it was, are that one.
 type withdrawalRow struct {
 	RequestedAt     string  `json:"requested_at"`
 	AvailableAt     string  `json:"available_at"`
 	Denom           string  `json:"denom"`
 	Amount          string  `json:"amount,omitempty"`
-	AmountUtia      int64   `json:"amount_utia"`
-	FirstAmountUtia int64   `json:"first_amount_utia"`
-	ReducedUtia     int64   `json:"reduced_utia"`
+	AmountUtia      *int64  `json:"amount_utia,omitempty"`
+	FirstAmountUtia *int64  `json:"first_amount_utia,omitempty"`
+	ReducedUtia     *int64  `json:"reduced_utia,omitempty"`
 	FirstSeenHeight int64   `json:"first_seen_height"`
 	FirstSeenAt     string  `json:"first_seen_at"`
 	LastSeenHeight  int64   `json:"last_seen_height"`
@@ -191,24 +191,24 @@ const withdrawalCols = `requested_at, available_at, denom, amount_utia, first_am
 
 func scanWithdrawal(rows *sql.Rows) (withdrawalRow, error) {
 	var w withdrawalRow
+	var amount, first int64
 	var goneH, paidH, paidU sql.NullInt64
 	var goneAt, outcome, paidAt sql.NullString
-	if err := rows.Scan(&w.RequestedAt, &w.AvailableAt, &w.Denom, &w.AmountUtia, &w.FirstAmountUtia,
+	if err := rows.Scan(&w.RequestedAt, &w.AvailableAt, &w.Denom, &amount, &first,
 		&w.FirstSeenHeight, &w.FirstSeenAt, &w.LastSeenHeight, &w.LastSeenAt, &goneH, &goneAt,
 		&outcome, &w.OutcomeReason, &paidH, &paidAt, &paidU); err != nil {
 		return w, err
 	}
-	if w.Denom != utiaDenom {
-		w.Amount = coinText(w.AmountUtia, w.Denom)
-		w.AmountUtia, w.FirstAmountUtia, paidU = 0, 0, sql.NullInt64{}
-	}
-	w.ReducedUtia = w.FirstAmountUtia - w.AmountUtia
-	if w.ReducedUtia < 0 {
-		w.ReducedUtia = 0
+	if w.Denom == utiaDenom {
+		reduced := max(first-amount, 0)
+		w.AmountUtia, w.FirstAmountUtia, w.ReducedUtia = &amount, &first, &reduced
+		w.PaidUtia = nullInt(paidU)
+	} else {
+		w.Amount = coinText(amount, w.Denom)
 	}
 	w.GoneHeight, w.GoneAt = nullInt(goneH), nullStr(goneAt)
 	w.Outcome = nullStr(outcome)
-	w.PaidHeight, w.PaidAt, w.PaidUtia = nullInt(paidH), nullStr(paidAt), nullInt(paidU)
+	w.PaidHeight, w.PaidAt = nullInt(paidH), nullStr(paidAt)
 	if w.Outcome != nil && *w.Outcome == store.WithdrawalExecuted && w.PaidAt != nil {
 		if d, ok := secondsBetween(w.RequestedAt, *w.PaidAt); ok {
 			w.PayoutDelayS = &d

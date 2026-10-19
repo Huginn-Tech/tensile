@@ -823,7 +823,7 @@ export const GROUPS: Group[] = [
         id: "publisher",
         path: "/v1/publishers/{addr}",
         summary: "One publisher: fees, escrow, withdrawals and recent payments.",
-        desc: "`window` and `as_of` apply to the `publisher` object only; the rest of the answer is as of now. Each of `windows` lists its namespaces as a row does; the publisher's blobs are /v1/blobs?publisher=.",
+        desc: "`window` and `as_of` apply to the `publisher` object only; the rest of the answer is as of now. Each of `windows` lists its namespaces as a row does; the publisher's blobs are /v1/blobs?publisher=. A movement in another denomination than utia, in `recent_payments` or among the `withdrawals`' `pending` and `left_queue`, has `amount`, the coin as the chain wrote it, and no `amount_utia` or other utia amount.",
         params: [
           { name: "addr", in: "path", type: "string", required: true, desc: "The publisher's celestia1… account.", example: PUBLISHER },
           windowParam, asOf,
@@ -850,7 +850,7 @@ export const GROUPS: Group[] = [
         id: "market",
         path: "/v1/market",
         summary: "Blob market totals: settlements, fees, bytes, escrow, daily figures, readings.",
-        desc: "`readings` counts every blob on record by Tensile's reading, available, unavailable and not_read, over the whole record whatever the period.",
+        desc: "`readings` counts every blob on record by Tensile's reading, available, unavailable and not_read, over the whole record whatever the period. `deposits`, `escrow_held_utia`, `escrow_accounts` and `withdrawal_queue` count utia alone: a deposit, escrow or withdrawal in another denomination is in none of them.",
         params: [windowParam, asOf],
         example: EX_MARKET,
       },

@@ -701,8 +701,8 @@ func (s *Server) txWithdrawal(ctx context.Context, publisher, at string) (*txWit
 		case w.Outcome != nil && *w.Outcome == store.WithdrawalConsumed:
 			out.Outcome = "consumed"
 		}
-		if w.ReducedUtia > 0 {
-			out.ReducedUtia = w.ReducedUtia
+		if w.ReducedUtia != nil && *w.ReducedUtia > 0 {
+			out.ReducedUtia = *w.ReducedUtia
 		}
 		return out, nil
 	}

@@ -269,7 +269,8 @@ function Publisher({ addr }: { addr: string }) {
     `${queued ? "as" : "As"} of block #${int(e.height)}, ${utcWord(e.updated_at)}`,
     e.denom ? `held in ${e.denom}, not TIA` : "",
   ].filter(Boolean).join("; ") : p.escrow ? "No escrow account on the chain" : "Not read yet";
-  const escVal = e ? <>{unit(tia(e.available_utia))}{escWarn && <Warn text={escWarn} />}</> : <span className="na">—</span>;
+  // an escrow held in another denomination has no TIA: a dash, its denomination on hover
+  const escVal = e && !e.denom ? <>{unit(tia(e.available_utia))}{escWarn && <Warn text={escWarn} />}</> : <span className="na">—</span>;
   const settledTitle = posted && newest ? [first ? `First ${utcWord(first)}` : "", `last ${utcWord(newest)}`].filter(Boolean).join("; ") : undefined;
   const paidTitle = paid > 0 ? [
     `${tia(p.fees_utia)} in fees for ${plural(p.settlements, "settlement")}`,
