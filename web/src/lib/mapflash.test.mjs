@@ -13,7 +13,7 @@ const load = (file) => {
   const js = ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 } }).outputText;
   return import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
 };
-const { Flasher, endorsersOf, placesOf, onArrival, announce, onPrepare, prepare } = await load("./mapflash.ts");
+const { Flasher, endorsersOf, placesOf, onArrival, announce } = await load("./mapflash.ts");
 
 // a validator set of 90: the first 70 hold rows, and of those the ones a blob's seed picks signed
 const VALS = Array.from({ length: 90 }, (_, i) => (i + 1).toString(16).padStart(40, "0"));
@@ -44,12 +44,11 @@ test("a blob's endorsers are the validators its card counts: with rows, signatur
 test("one blob per block: it flashes as the grid shows it, with its endorsers, once", () => {
   const f = new Flasher();
   const b = blob(1, 100);
-  // the tip names it first: its record is asked for ahead of the grid's move, and answers before it
-  assert.equal(f.ahead(b.row.promise_hash, 100), true);
-  assert.equal(f.ahead(b.row.promise_hash, 100), false, "asked once");
-  assert.equal(f.record(b.row.promise_hash, endorsersOf(b.assignments)), null, "no flash before the grid shows the blob");
-  const { ask, flash } = f.arrive({ id: 1, blobs: [b.row], live: true }, true);
-  assert.deepEqual(ask, [], "its record is in already");
+  // the grid's move asks for its record; the list brought it, so the page records it in the same turn
+  const { ask, flash: none } = f.arrive({ id: 1, blobs: [b.row], live: true }, true);
+  assert.deepEqual(ask, [b.row.promise_hash]);
+  assert.equal(none, null, "not before its record");
+  const flash = f.record(b.row.promise_hash, endorsersOf(b.assignments));
   assert.ok(flash, "the flash goes with the grid's move");
   assert.deepEqual(flash.moves, [1]);
   assert.deepEqual(flash.blobs.map((x) => x.hash), [b.row.promise_hash]);
@@ -62,9 +61,8 @@ test("one blob per block: it flashes as the grid shows it, with its endorsers, o
 test("several blobs in one block: one flash for all of them, once every record is in", () => {
   const f = new Flasher();
   const bs = [blob(11, 200, 60), blob(12, 200, 62), blob(13, 200, 64), blob(14, 200, 66)];
-  f.ahead(bs[0].row.promise_hash, 200);
   const { ask, flash } = f.arrive({ id: 1, blobs: bs.map((b) => b.row), live: true }, true);
-  assert.deepEqual(ask, bs.slice(1).map((b) => b.row.promise_hash), "each record asked once: the newest was asked ahead");
+  assert.deepEqual(ask, bs.map((b) => b.row.promise_hash), "each record asked once");
   assert.equal(flash, null, "not before the records are in");
   for (const b of bs.slice(0, 3)) assert.equal(f.record(b.row.promise_hash, endorsersOf(b.assignments)), null);
   const done = f.record(bs[3].row.promise_hash, endorsersOf(bs[3].assignments));
@@ -80,7 +78,6 @@ test("a record that answers after the grid moved flashes then; one for a blob th
   const f = new Flasher();
   const a = blob(21, 300), stray = blob(22, 301);
   assert.equal(f.arrive({ id: 1, blobs: [a.row], live: true }, true).flash, null);
-  assert.equal(f.ahead(stray.row.promise_hash, 301), true);
   assert.equal(f.record(stray.row.promise_hash, endorsersOf(stray.assignments)), null, "the grid has not shown it");
   const late = f.record(a.row.promise_hash, endorsersOf(a.assignments));
   assert.deepEqual(late?.blobs.map((x) => x.hash), [a.row.promise_hash], "only the blob the grid showed");
@@ -102,22 +99,18 @@ test("nothing on load, nothing replayed after the page was hidden; the next bloc
   const old = blob(41, 500), late = blob(42, 501), hidden1 = blob(43, 502), hidden2 = blob(44, 503), next = blob(45, 505);
   // the grid's first read: not live
   assert.deepEqual(f.arrive({ id: 0, blobs: [old.row], live: true }, false), { ask: [], flash: null });
-  assert.equal(f.ahead(old.row.promise_hash, 500), false, "a blob already on the grid is not asked for");
   // a move whose record was out when the page was hidden: dropped
   f.arrive({ id: 1, blobs: [late.row], live: true }, true);
   f.hidden();
   assert.equal(f.record(late.row.promise_hash, endorsersOf(late.assignments)), null, "no flash queued while hidden");
   // shown again: before the tip has answered, nothing is asked for or flashes
-  assert.equal(f.ahead(hidden1.row.promise_hash, 502), false);
   assert.deepEqual(f.arrive({ id: 2, blobs: [hidden1.row], live: true }, true), { ask: [], flash: null });
   // the tip answers at 504: what settled at or below it came while the page was hidden
   f.back(504);
-  assert.equal(f.ahead(hidden2.row.promise_hash, 503), false);
   assert.deepEqual(f.arrive({ id: 3, blobs: [hidden2.row], live: true }, true), { ask: [], flash: null });
   // the next block flashes
-  assert.equal(f.ahead(next.row.promise_hash, 505), true);
   const { ask, flash } = f.arrive({ id: 4, blobs: [next.row], live: true }, true);
-  assert.deepEqual(ask, []);
+  assert.deepEqual(ask, [next.row.promise_hash]);
   assert.equal(flash, null);
   assert.deepEqual(f.record(next.row.promise_hash, endorsersOf(next.assignments))?.moves, [4]);
   // and a page that is hidden at the move flashes nothing for it
@@ -153,36 +146,6 @@ test("the grid's moves reach the map through announce", () => {
   off();
   announce({ id: 8, blobs: [] });
   assert.deepEqual(got, [7]);
-});
-
-test("the grid waits for the map's records before it moves: until they are in, at most as long as it says, not without a map", async () => {
-  const b = blob(61, 700).row;
-  const ms = (since) => Date.now() - since;
-  let t0 = Date.now();
-  await prepare([b], 5000);
-  assert.ok(ms(t0) < 1000, "no map listening: at once");
-  let release;
-  const off = onPrepare((blobs) => {
-    assert.deepEqual(blobs, [b]);
-    return new Promise((r) => { release = r; });
-  });
-  let done = false;
-  const p = prepare([b], 5000).then(() => { done = true; });
-  await new Promise((r) => setTimeout(r, 30));
-  assert.equal(done, false, "waits while the records are out");
-  release();
-  await p;
-  assert.equal(done, true, "and goes once they are in");
-  // a map whose records do not come, or fail: the grid moves after ms, or at once
-  const off2 = onPrepare(() => new Promise(() => {}));
-  off(); // an earlier listener leaving does not take the newer one with it
-  t0 = Date.now();
-  await prepare([b], 40);
-  assert.ok(ms(t0) >= 30 && ms(t0) < 2000, `after ${ms(t0)} ms`);
-  off2();
-  const off3 = onPrepare(() => Promise.reject(new Error("no answer")));
-  await prepare([b], 5000);
-  off3();
 });
 
 // A stream as mainnet may send it: a block every few seconds with one to five blobs, records answering out of order
@@ -238,9 +201,6 @@ test("a long stream: every live blob flashes once, with its card's endorsers, an
       answer(h + 1);
       continue;
     }
-    // the tip names the newest; its record is asked ahead of the grid's read
-    const newest = bs[k - 1].row.promise_hash;
-    if (f.ahead(newest, h)) pending.push({ hash: newest, at: h + rnd() * 1.2 });
     // most blocks reach the grid in one read; about one in ten in two, its first blob alone first
     const parts = k > 1 && rnd() < 0.1 ? [bs.slice(0, 1), bs.slice(1)] : [bs];
     for (const part of parts) {

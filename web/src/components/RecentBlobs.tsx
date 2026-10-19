@@ -8,7 +8,7 @@ import RollNumber, { reducedMotion } from "@/components/RollNumber";
 import Info from "@/components/Info";
 import { lane } from "@/lib/status";
 import { recheck } from "@/lib/recheck";
-import { announce, prepare } from "@/lib/mapflash";
+import { announce } from "@/lib/mapflash";
 import { Pacer } from "@/lib/pace";
 
 /**
@@ -28,10 +28,13 @@ import { Pacer } from "@/lib/pace";
  * A block that comes in alone moves the grid the moment it is read: the
  * tip brings each block as it is committed, already an even beat. Blocks
  * that come in together (after a stall) go on one at a time, half a second
- * apart, and many at once in one move (lib/pace.ts). Each move is told to the overview's map, whose places of the blobs'
- * endorsers burst with it and whose pill says what was endorsed
- * (lib/mapflash.ts): a read that brings new blobs waits up to PREPARE_MS for
- * the map to have their endorsers, so all three go in the same frame.
+ * apart, and many at once in one move (lib/pace.ts). Each move is told to
+ * the overview's map, whose places of the blobs' endorsers burst with it and
+ * whose pill names them (lib/mapflash.ts). The list is read with each blob's
+ * endorsers (?endorsers=1), so the grid, the latest blob's card, the burst
+ * and the pill read one answer, in the same frame. Of the blocks one read
+ * brings after a stall, only the newest bursts and is named: the older come
+ * onto the grid quietly.
  *
  * The readout names its blob's state as Tensile has it, in a small label
  * between its heading and its age: in its retention window until Tensile
@@ -77,8 +80,6 @@ const FALLBACK_MS = 30000;
 /** the least time between two reads of the whole grid for its statuses (recheck), so one that fails is not asked every 5 s */
 const RECHECK_MS = 30000;
 const SLIDE_MS = 420;
-/** the longest a read that brought new blobs waits for the map to have their endorsers (prepare) before it is shown */
-const PREPARE_MS = 1200;
 
 /** at: when the read that brought the blob's record was made */
 type Cell = { b: Blob; seq: number; at: number };
@@ -95,11 +96,16 @@ const EMPTY: Feed = { cells: [], next: 0, total: null, loaded: false, error: nul
 
 type Page = { blobs: Blob[]; total: number };
 
-async function readPage(limit: number): Promise<Page> {
+/**
+ * a page of the newest blobs; named: with each blob's endorsers (?endorsers=1), for the reads that bring new blobs in
+ * after the first, which the map bursts with and its pill names. The first read and the whole grid's re-reads for its
+ * statuses go without: fifty blobs' endorsers are some 70 kB the page has no use for there.
+ */
+async function readPage(limit: number, named = false): Promise<Page> {
   const ctl = new AbortController();
   const t = window.setTimeout(() => ctl.abort(), 15000);
   try {
-    const r = await fetch(`${API_BASE}/v1/blobs?limit=${limit}`, { cache: "no-store", signal: ctl.signal });
+    const r = await fetch(`${API_BASE}/v1/blobs?limit=${limit}${named ? "&endorsers=1" : ""}`, { cache: "no-store", signal: ctl.signal });
     if (!r.ok) throw new Error(String(r.status));
     const j = await r.json();
     return { blobs: Array.isArray(j.blobs) ? j.blobs : [], total: typeof j.total === "number" ? j.total : NaN };
@@ -118,7 +124,8 @@ function merge(s: Feed, p: Page, at: number, extra = 0): { feed: Feed; fresh: nu
   const known = new Set(s.cells.map((c) => c.b.promise_hash));
   const kept = s.cells.map((c) => {
     const nb = byHash.get(c.b.promise_hash);
-    return nb ? { ...c, b: nb, at } : c;
+    // a re-read without endorsers keeps the ones the square came with
+    return nb ? { ...c, b: nb.endorsers || !c.b.endorsers ? nb : { ...nb, endorsers: c.b.endorsers }, at } : c;
   });
   const fresh = p.blobs.filter((b) => !known.has(b.promise_hash)).slice(0, CELLS);
   const total = Number.isFinite(p.total) ? p.total : s.total;
@@ -173,6 +180,7 @@ function useBlobFeed(mark: string | undefined) {
         const at = Date.now();
         last.current = at;
         const lim = whole.current ? CELLS : limit.current;
+        const named = cur.current.loaded && !whole.current;
         if (whole.current) lastWhole.current = at;
         whole.current = false;
         try {
@@ -180,7 +188,7 @@ function useBlobFeed(mark: string | undefined) {
           // how many settled since the last read, by the API's total
           const known = new Set(before.cells.map((c) => c.b.promise_hash));
           const allNew = (pg: Page) => pg.blobs.length > 0 && pg.blobs.every((b) => !known.has(b.promise_hash));
-          let page = await readPage(lim);
+          let page = await readPage(lim, named);
           const since = (pg: Page) => (before.loaded && before.total != null && Number.isFinite(pg.total) ? pg.total - before.total : 0);
           let delta = since(page);
           // More arrived than the page returned, all of it new: one more read fills the squares. The second
@@ -188,13 +196,11 @@ function useBlobFeed(mark: string | undefined) {
           // pushes the second page's oldest rows past its end, and its total says so: then once more, rather than
           // leave those blobs off the grid.
           for (let i = 0; i < 2 && before.loaded && allNew(page) && delta > page.blobs.length && page.blobs.length < CELLS; i++) {
-            page = await readPage(Math.min(CELLS, delta));
+            page = await readPage(Math.min(CELLS, delta), named);
             delta = since(page);
           }
           // what even that page had no room for is counted, not shown
           const extra = before.loaded && allNew(page) ? Math.max(0, delta - page.blobs.length) : 0;
-          // the map reads the new blobs' endorsers first, so it flashes with the move (not for the first read)
-          if (before.loaded) await prepare(page.blobs.filter((b) => !known.has(b.promise_hash)).slice(0, CELLS), PREPARE_MS);
           const { feed: f, fresh } = merge(before, page, at, extra);
           apply(f);
           // ask next time for about as many as this time brought
@@ -367,6 +373,8 @@ export default function RecentBlobs() {
   const holdRef = useRef(hold);
   holdRef.current = hold;
   const beatT = useRef<number | undefined>(undefined);
+  // the blobs of a read's older blocks, which come onto the grid without a burst or a name (a stall's catch-up)
+  const quiet = useRef(new Set<string>());
   // a beat: these cells come onto the grid, newest first, with the feed's newest word on every cell shown
   const beat = useCallback((out: Cell[]) => {
     if (out.length === 0) return;
@@ -402,7 +410,9 @@ export default function RecentBlobs() {
     }
     const now = performance.now();
     const came = feed.cells.filter((c) => c.seq > offered.current).sort((a, b) => a.seq - b.seq);
+    const top = came.reduce((m, c) => Math.max(m, c.b.settlement_height), 0);
     for (const c of came) {
+      if (c.b.settlement_height < top) quiet.current.add(c.b.promise_hash);
       p.offer(c.b.settlement_height, c, now);
     }
     waiting.current += came.length;
@@ -432,7 +442,12 @@ export default function RecentBlobs() {
   const toldFirst = useRef(false);
   useLayoutEffect(() => {
     const mv = shown.move;
-    if (mv) announce({ id: mv.id, blobs: shown.cells.filter((c) => mv.fresh.has(c.b.promise_hash)).map((c) => c.b), live: true });
+    if (mv) {
+      const blobs = shown.cells.filter((c) => mv.fresh.has(c.b.promise_hash)).map((c) => c.b);
+      const live = blobs.some((b) => !quiet.current.has(b.promise_hash));
+      for (const b of blobs) quiet.current.delete(b.promise_hash);
+      announce({ id: mv.id, blobs, live });
+    }
     else if (!toldFirst.current && shown.cells.length) announce({ id: 0, blobs: [shown.cells[0].b], live: false });
     if (shown.cells.length) toldFirst.current = true;
   }, [shown.move?.id, shown.cells.length > 0]); // eslint-disable-line react-hooks/exhaustive-deps

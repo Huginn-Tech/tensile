@@ -7,15 +7,14 @@
  *   move), and only those flash: a blob the grid does not show never does, and none flashes twice.
  * - A blob's endorsers are those the latest blob's card counts ("N of M validators", the blob's attested_with_rows):
  *   the validators with rows whose signature on the settlement verified (endorsersOf).
- * - The endorsers come from the blob's own record (/v1/blobs/{hash}), asked once per blob before the grid moves: the
- *   tip names the newest blob first, and the grid, once it has read new blobs, waits a moment for the map to have
- *   their records (prepare). A move whose records are all in flashes at once, with the move; one still waiting
- *   flashes when they are, unless the page was hidden meanwhile. Moves flash in the grid's order, and moves whose
- *   records come in together flash as one.
+ * - The endorsers come with the blobs, on the grid's own read of the list (/v1/blobs?endorsers=1): the page records
+ *   them (record) as the move comes, so the move flashes at once, with the grid. A blob whose endorsers are not on the
+ *   list (an API from before the field) is recorded as unknown and flashes nothing. The rule still lets a record
+ *   come after its move, in the grid's order, moves whose records come in together flashing as one.
  * - Nothing flashes for the blobs on the grid when the page opens (the grid's first read is no move), with reduced
  *   motion (the map does not listen), or for a blob that settled while the page was hidden: hidden() drops what was
  *   waiting, and until back() names the chain's height once the page is shown again, and at or below that height
- *   for good, a blob is neither asked for nor flashed.
+ *   for good, a blob is not flashed.
  * - On the map, every endorser with a place flashes it (placesOf); one with no place on the map (no endpoint, or none
  *   located) is counted, not drawn.
  */
@@ -27,6 +26,8 @@ export type Signer = { validator_address: string; row_count: number; attested: b
 export type ArrivedBlob = {
   promise_hash: string; settlement_height: number; settlement_tx_index?: number; settlement_time?: string;
   attested_with_rows?: number | null; attested_voting_power?: number | null; total_voting_power?: number | null;
+  /** its endorsers by consensus address, as /v1/blobs?endorsers=1 gives them; absent from an API before the field */
+  endorsers?: string[] | null;
 };
 
 /**
@@ -74,24 +75,6 @@ export function announce(a: Arrival): void {
   for (const fn of listeners) fn(a);
 }
 
-/** the map, while it listens: asked about blobs before the grid shows them, it reads their records (onPrepare) */
-let preparer: ((blobs: ArrivedBlob[]) => Promise<unknown>) | null = null;
-export function onPrepare(fn: (blobs: ArrivedBlob[]) => Promise<unknown>): () => void {
-  preparer = fn;
-  return () => { if (preparer === fn) preparer = null; };
-}
-/**
- * Before the grid shows blobs it has just read: the map reads their endorsers first, so its flash goes with the grid's
- * move, in the same frame. Resolves once the map has them, at once when no map listens, and after ms at the latest;
- * a record later than that still flashes, when it is in.
- */
-export function prepare(blobs: ArrivedBlob[], ms: number): Promise<void> {
-  if (!preparer || blobs.length === 0) return Promise.resolve();
-  let t: ReturnType<typeof setTimeout> | undefined;
-  const late = new Promise<void>((r) => { t = setTimeout(r, ms); });
-  return Promise.race([preparer(blobs).then(() => {}, () => {}), late]).then(() => clearTimeout(t));
-}
-
 /** how many blobs the flasher remembers having seen or asked for: far more than the grid's fifty squares */
 const MEMORY = 2000;
 
@@ -107,7 +90,7 @@ function remember<T>(m: Map<string, T>, k: string, v: T) {
 export class Flasher {
   /** every blob the grid has brought in, live or not: none flashes twice */
   private seen = new Map<string, true>();
-  /** the blobs whose record was asked for, so none is asked twice */
+  /** the blobs whose record the flasher waits for, so none is asked twice */
   private asked = new Map<string, true>();
   /** the records in: each blob's endorsers, or null when its record did not answer */
   private got = new Map<string, string[] | null>();
@@ -115,17 +98,6 @@ export class Flasher {
   private waiting: Move[] = [];
   /** blobs settled at or below this height came while the page was hidden: Infinity from hidden() to back() */
   private floor = 0;
-
-  /**
-   * A blob the grid is about to show (the tip names it, or the grid has read it): whether to ask for its record now,
-   * ahead of the grid's move, so the map can flash with the move. Nothing is asked for a blob already asked for or
-   * already brought in, or one that settled while the page was hidden.
-   */
-  ahead(hash: string, height: number): boolean {
-    if (height <= this.floor || this.seen.has(hash) || this.asked.has(hash)) return false;
-    remember(this.asked, hash, true);
-    return true;
-  }
 
   /**
    * The grid moved: these blobs just came in. live is false when nothing may flash for them (the page is hidden).

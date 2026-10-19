@@ -2,8 +2,9 @@
  * The overview map's burst, drawn: what the places of a beat's endorsers do (lib/mapflash.ts says which places). It
  * takes the logic of a block explorer's live map, not its look: the land, the badges and the colours stay the map's.
  *
- * - Pop: each place's badge squeezes a little, swells to 1.2x filled with its own ring colour (a lone dot swells and
- *   brightens instead), and settles back, in POP_MS. On the badge itself, once.
+ * - Pop: each place's badge squeezes a little, swells to 1.2x (a lone dot to 1.35x) and settles back, in POP_MS,
+ *   while a fill in its ring colour (white on a lone dot) shows over its body and fades. Its transform and the fill's
+ *   opacity alone animate, on the compositor; nothing of the badge is read to do it.
  * - Ring: one thin ring per place leaves the badge's rim and slows as it goes (ease-out-quart) over RING_MS, light
  *   (--cm-burst-hi: white on the dark map) for its first third and then the map's teal (--cm-live), fading as
  *   (1 - t)^2.5; a place of many endorsers sends it further and a little brighter. Every ring is on one canvas under
@@ -14,13 +15,15 @@
  *
  * Nothing here touches the land or its material layer, and between bursts only the warmth's step runs, while any
  * place is warm. The page decides when a burst may run at all: not with reduced motion, not while hidden (stop()
- * clears what is out).
+ * clears what is out, wake() brings the warmth to where it is now).
  */
 
 /** a place of the burst and how many of the beat's endorsers it holds */
 export type BurstPlace = { id: string; n: number };
-/** where a place is now, in the canvas's CSS px, its badge's radius, and its badge and warmth elements */
-export type Where = (id: string) => { x: number; y: number; r: number; badge: HTMLElement | null; trace: HTMLElement | null; one: boolean } | null;
+/** where a place is now, in the canvas's CSS px, its badge's radius, and whether it is a lone dot: asked every frame */
+export type Where = (id: string) => { x: number; y: number; r: number; one: boolean } | null;
+/** a place's elements: its badge, the badge's fill, and its warmth (HostMap.tsx keeps them, so this asks no query) */
+export type Els = (id: string) => { badge: HTMLElement | null; pop: HTMLElement | null; trace: HTMLElement | null } | null;
 
 export const POP_MS = 420;
 export const RING_MS = 1300;
@@ -63,10 +66,12 @@ export class Burst {
   private hi: [number, number, number] = [255, 255, 255];
   private canvas: HTMLCanvasElement;
   private where: Where;
+  private els: Els;
 
-  constructor(canvas: HTMLCanvasElement, where: Where) {
+  constructor(canvas: HTMLCanvasElement, where: Where, els: Els) {
     this.canvas = canvas;
     this.where = where;
+    this.els = els;
     this.ctx = canvas.getContext("2d");
   }
 
@@ -79,7 +84,7 @@ export class Burst {
     if (this.rings.length === 0) this.ctx?.clearRect(0, 0, W, H);
   }
 
-  /** a beat's places: each pops, sends its ring and warms, now */
+  /** a beat's places: each pops, sends its ring and warms, now. The colours are read once, before anything moves */
   fire(places: BurstPlace[], now = performance.now()): void {
     if (places.length === 0) return;
     const cs = getComputedStyle(this.canvas);
@@ -88,10 +93,11 @@ export class Burst {
     for (const p of places) {
       const at = this.where(p.id);
       if (!at) continue;
-      if (at.badge) this.pop(at.badge, at.one);
+      const el = this.els(p.id);
+      if (el?.badge) this.pop(el.badge, el.pop, at.one);
       const w = warmer(this.warmth.get(p.id), p.n, now);
       this.warmth.set(p.id, w);
-      if (at.trace) at.trace.style.opacity = w.h.toFixed(3);
+      if (el?.trace) el.trace.style.opacity = w.h.toFixed(3);
       this.rings = this.rings.filter((r) => r.id !== p.id);
       this.rings.push({ id: p.id, n: p.n, t0: now });
     }
@@ -99,7 +105,7 @@ export class Burst {
     if (this.step === undefined) this.step = setInterval(this.cool, STEP_MS);
   }
 
-  /** what is out goes: the page was hidden, or the map went away; the warmth stays, and steps down from where it is */
+  /** what is out goes: the page was hidden, or the map went away; the warmth holds where it was until wake() */
   stop(): void {
     cancelAnimationFrame(this.raf);
     this.raf = 0;
@@ -109,27 +115,27 @@ export class Burst {
     this.step = undefined;
   }
 
-  private pop(badge: HTMLElement, one: boolean) {
-    if (one) {
-      badge.animate([
-        { transform: "scale(1)", filter: "brightness(1)" },
-        { transform: "scale(0.96)", filter: "brightness(1.15)", offset: 0.1 },
-        { transform: "scale(1.35)", filter: "brightness(1.9)", offset: 0.4 },
-        { transform: "scale(1)", filter: "brightness(1)" },
-      ], { duration: POP_MS, easing: "ease-out" });
-      return;
-    }
-    const fill = getComputedStyle(badge).getPropertyValue("--cm-ring").trim() || "#33b3bf";
-    const ink = getComputedStyle(this.canvas).getPropertyValue("--cm-open-ink").trim() || "#04171a";
+  /** the page is shown again: the warmth as it is now (cooled while hidden, maybe to nothing), and stepping down again */
+  wake(): void {
+    if (this.warmth.size === 0) return;
+    this.cool();
+    if (this.warmth.size > 0 && this.step === undefined) this.step = setInterval(this.cool, STEP_MS);
+  }
+
+  private pop(badge: HTMLElement, fill: HTMLElement | null, one: boolean) {
+    const up = one ? 1.35 : 1.2;
     badge.animate([
       { transform: "scale(1)" },
-      { transform: "scale(0.96)", backgroundColor: fill, offset: 0.1 },
-      { transform: "scale(1.2)", backgroundColor: fill, offset: 0.4 },
-      { transform: "scale(1)", backgroundColor: fill, offset: 0.6 },
+      { transform: "scale(0.96)", offset: 0.1 },
+      { transform: `scale(${up})`, offset: 0.4 },
       { transform: "scale(1)" },
     ], { duration: POP_MS, easing: "ease-out" });
-    // the figure in the fill's ink while the fill is on, back at once when the fill is half gone, never mid-way grey
-    badge.animate([{ color: ink, offset: 0.1 }, { color: ink, offset: 0.8, easing: "steps(1, start)" }], { duration: POP_MS, easing: "ease-out" });
+    fill?.animate([
+      { opacity: 0 },
+      { opacity: one ? 0.7 : 0.85, offset: 0.1 },
+      { opacity: one ? 0.7 : 0.85, offset: 0.5 },
+      { opacity: 0 },
+    ], { duration: POP_MS, easing: "ease-out" });
   }
 
   /** a step of the warmth, once a second while any place is warm */
@@ -137,7 +143,7 @@ export class Burst {
     const now = performance.now();
     for (const [id, w] of this.warmth) {
       const h = warmthAt(w, now);
-      const el = this.where(id)?.trace;
+      const el = this.els(id)?.trace;
       if (h < 0.03) {
         this.warmth.delete(id);
         if (el) el.style.opacity = "0";

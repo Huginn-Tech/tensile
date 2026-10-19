@@ -457,6 +457,8 @@ export type Blob = {
   total_voting_power?: number;
   /** how many of validators_with_rows endorsed the promise; absent before signatures were verified */
   attested_with_rows?: number;
+  /** the validators attested_with_rows counts, by consensus address: on /v1/blobs?endorsers=1 alone */
+  endorsers?: string[];
   promise_hash: string;
   commitment: string;
   namespace: string;
