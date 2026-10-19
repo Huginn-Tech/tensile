@@ -64,7 +64,7 @@ export function FeeValue({ fee, payer, owner, messages = 1 }: { fee?: string; pa
   const other = !!payer && !!owner && !sameAcct(payer, owner);
   const text = feeTia(fee);
   const hover = [coins(fee), other && `paid by ${payer}`, messages > 1 && "covers the whole transaction"].filter(Boolean).join(" · ");
-  return <b title={hover}>{text.includes(",") ? text : unit(text)}</b>;
+  return <b className="tia" title={hover}>{text.includes(",") ? text : unit(text)}</b>;
 }
 
 /**
@@ -190,7 +190,7 @@ function Page({ t, HEX, meta, metaErr, at }: { t: TxAnswer; HEX: string; meta: M
     case "settlement":
       if (x.blob_size != null) add("sz", "Blob size", <b>{unit(bytes(x.blob_size))}</b>, "The size the blob paid for: Celestia's upload size, with header and padding, without parity.");
       if (!failed) {
-        add("fee", "Fee paid", x.fee_paid_utia != null ? <><b>{unit(tia(x.fee_paid_utia))}</b><em>from escrow · {x.timed_out ? "timed out" : x.settled ? "settled" : "not settled yet"}</em></> : <em>not recorded</em>,
+        add("fee", "Fee paid", x.fee_paid_utia != null ? <><b className="tia">{unit(tia(x.fee_paid_utia))}</b><em>from escrow · {x.timed_out ? "timed out" : x.settled ? "settled" : "not settled yet"}</em></> : <em>not recorded</em>,
           "Charged to the publisher's escrow; not the settlement transaction's own fee.");
       } else {
         add("fee", "Fee paid", <><b>None</b><em>nothing was charged to the escrow</em></>);
