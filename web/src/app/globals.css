@@ -754,6 +754,9 @@ button.rowlink:hover { color: var(--accent-ink); text-decoration: underline; }
 .hostingband .ctry .soft { margin-left: 0; }
 /* ------------------------------------------------ validator: the checks filter --- */
 /* the filter's counts sit in the button, quieter than its word */
+/* the validator page's tabs and their list at least a screen tall, so a shorter list (Endpoint history after Latest
+   checks) never shortens the page under the reader: the tabs stay where they are and only the list below them changes */
+#evidence { min-height: 100vh; }
 #evidence .seg { margin-top: 0; }
 #evidence .seg .n { color: var(--text-3); font-variant-numeric: tabular-nums; margin-left: 4px; }
 
