@@ -181,11 +181,12 @@ function v6net(a) {
 
 // The client a request is counted as: the front proxy's X-Forwarded-For when
 // the request comes from a private address (the proxy's container), else the
-// socket's; an IPv6 address by its /64 (v6net).
+// socket's; an IPv6 address by its /64 (v6net). Of a list, the last address:
+// the one the proxy added. Those before it are whatever the client sent.
 function clientOf(req) {
   const peer = (req.socket.remoteAddress || "").replace(/^::ffff:/, "");
   const priv = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|::1$|f[cd])/.test(peer);
-  const xff = priv && typeof req.headers["x-forwarded-for"] === "string" ? req.headers["x-forwarded-for"].split(",")[0].trim() : "";
+  const xff = priv && typeof req.headers["x-forwarded-for"] === "string" ? req.headers["x-forwarded-for"].split(",").pop().trim() : "";
   const who = (xff || peer).toLowerCase().replace(/^::ffff:(?=\d+\.)/, "");
   return who.includes(":") ? v6net(who) : who;
 }

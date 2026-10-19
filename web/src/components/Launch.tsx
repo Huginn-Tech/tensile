@@ -25,7 +25,18 @@ export default function Launch({ children }: { children: React.ReactNode }) {
 
 function Gate({ children }: { children: React.ReactNode }) {
   const [live, setLive] = useState(false);
-  useEffect(() => onTip((f) => { if (f.data?.fibre_active) setLive(true); }), []);
+  useEffect(() => {
+    // A page that waited on the countdown opens within 3 s of the news, at a time of its own: the stream tells every
+    // open page in the same instant, and all of them asking for the explorer's data at once would be more than the
+    // site's proxy lets through together. A page opened once Fibre is live opens at once.
+    let waited = false, t: number | undefined;
+    const off = onTip((f) => {
+      if (!f.data) return;
+      if (!f.data.fibre_active) { waited = true; return; }
+      if (t === undefined) t = window.setTimeout(() => setLive(true), waited ? Math.random() * 3000 : 0);
+    });
+    return () => { off(); window.clearTimeout(t); };
+  }, []);
   return live ? <>{children}</> : <Countdown />;
 }
 
@@ -68,18 +79,24 @@ function Countdown() {
   const p = left != null ? parts(left) : null;
   const togo = h ? Math.max(0, TARGET - h) : null;
   const reached = togo === 0;
+  // the clock at zero before the block: the chain is slower than its pace said, and the block is due any moment
+  const due = left != null && left <= 0 && !reached;
   // the expected minute, as a reader reads a time
   const atMin = at != null ? Math.round(at / 60000) * 60000 : null;
   const units: [string, string][] = p
     ? [...(p.d > 0 ? [[String(p.d), p.d === 1 ? "day" : "days"] as [string, string]] : []), [two(p.h), "hours"], [two(p.m), "minutes"], [two(p.s), "seconds"]]
     : [["00", "hours"], ["00", "minutes"], ["00", "seconds"]];
-  const said = p ? `${p.d ? `${p.d} days ` : ""}${p.h} hours ${p.m} minutes left` : "Connecting";
+  const said = due ? "Any moment" : p ? `${p.d ? `${p.d} days ` : ""}${p.h} hours ${p.m} minutes left` : "Connecting";
+  // the other network's site at this page's own path: a link to this domain from before mainnet was a Mocha one
+  const [path, setPath] = useState("");
+  useEffect(() => { setPath(window.location.pathname + window.location.search); }, []);
+  const other = OTHER_SITE ? OTHER_SITE.origin + (path === "/" ? "" : path) : "";
 
   return (
     <div className="lc">
       <header className="lc-top">
         <a className="lc-brand" href="/" aria-label="Tensile"><Mark size={20} /><span>Tensile</span></a>
-        {OTHER_SITE && <a className="lc-other" href={OTHER_SITE.origin}>Tensile on {OTHER_SITE.label} <span aria-hidden="true">→</span></a>}
+        {OTHER_SITE && <a className="lc-other" href={other}>Tensile on {OTHER_SITE.label} <span aria-hidden="true">→</span></a>}
       </header>
       <main className="lc-main">
         <p className="lc-eyebrow"><CelestiaMark size={15} />Celestia mainnet</p>
@@ -99,14 +116,14 @@ function Countdown() {
           <div><dt>Current block</dt><dd>{h ? <><i key={beat} className={`bt-dot ok${beat ? " beat" : ""}`} aria-hidden="true" />{int(h)}</> : <span className="wait">00,000,000</span>}</dd></div>
           <div><dt>Activation block</dt><dd>{int(TARGET)}</dd></div>
           <div><dt>Blocks to go</dt><dd>{togo != null ? int(togo) : <span className="wait">00,000</span>}</dd></div>
-          <div><dt>Expected around</dt><dd>{atMin != null && !reached ? <>{UTC(atMin)}<small>{LOCAL(atMin)} your time</small></> : reached ? "Now" : <span className="wait">Oct 00, 00:00 UTC</span>}</dd></div>
+          <div><dt>Expected around</dt><dd>{reached ? "Now" : due ? "Any moment" : atMin != null ? <>{UTC(atMin)}<small>{LOCAL(atMin)} your time</small></> : <span className="wait">Oct 00, 00:00 UTC</span>}</dd></div>
         </dl>
         <p className="lc-note">
           {reached
             ? "The activation block is in. Tensile opens here as soon as the chain reports Fibre live."
             : "From that block on, this is Tensile's explorer for Fibre on mainnet: blobs, publishers, escrow, Fibre providers, validators and their endorsements, in real time. It opens here by itself."}
         </p>
-        {OTHER_SITE && <p className="lc-links"><a className="lc-btn" href={OTHER_SITE.origin}>Explore Fibre on {OTHER_SITE.label} now <span aria-hidden="true">→</span></a></p>}
+        {OTHER_SITE && <p className="lc-links"><a className="lc-btn" href={other}>Explore Fibre on {OTHER_SITE.label} now <span aria-hidden="true">→</span></a></p>}
       </main>
     </div>
   );

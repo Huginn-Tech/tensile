@@ -1071,7 +1071,8 @@ export function subscribe(key: string, path: string, refreshMs: number, fn: (f: 
         // on screen for minutes after a restart of a few seconds, and one asked
         // every second went on asking a proxy that refused it. A 404 or a 400
         // says something about the record, not the API, and waits its interval.
-        if (apiFailing(next)) wait = failRetryMs(++own.fails, refreshMs, retryMs);
+        // up to half as long again, at random: pages refused together do not all ask again together
+        if (apiFailing(next)) wait = Math.round(failRetryMs(++own.fails, refreshMs, retryMs) * (1 + Math.random() * 0.5));
         else own.fails = 0;
       }
       const out = own.last;
