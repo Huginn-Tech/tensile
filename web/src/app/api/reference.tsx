@@ -392,6 +392,9 @@ function TryIt({ ep }: { ep: Endpoint }) {
 }
 
 function Body({ ep }: { ep: Endpoint }) {
+  // the examples are Mocha's answers: on another network's site they say so
+  const { data: meta } = useApi<Meta>("/v1/meta"); // the header's stream: no request of its own
+  const from = meta?.chain_id && meta.chain_id !== EXAMPLE_CHAIN ? " from Mocha" : "";
   return (
     <>
       {ep.desc && <p className="api-desc">{ticks(ep.desc)}</p>}
@@ -411,11 +414,11 @@ function Body({ ep }: { ep: Endpoint }) {
       {ep.errors && <p className="api-errors"><b>Errors</b> {ticks(ep.errors)}</p>}
       <TryIt ep={ep} />
       {ep.example && <>
-        <h4 className="api-h4">{ep.whole ? "Example response" : "Example response, trimmed"}</h4>
+        <h4 className="api-h4">{`Example response${from}${ep.whole ? "" : ", trimmed"}`}</h4>
         <Code text={ep.example} format={ep.format} label={`Example response of ${ep.path}`} />
       </>}
       {ep.also && <>
-        <h4 className="api-h4">{`Example response for ${ep.also.what}${ep.also.whole ? "" : ", trimmed"}`}</h4>
+        <h4 className="api-h4">{`Example response${from} for ${ep.also.what}${ep.also.whole ? "" : ", trimmed"}`}</h4>
         <Code text={ep.also.example} format={ep.format} label={`Example response of ${ep.path} for ${ep.also.what}`} />
       </>}
     </>

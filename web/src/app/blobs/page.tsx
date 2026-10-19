@@ -255,6 +255,8 @@ function Page() {
 
   const { data: meta } = useApi<Meta>("/v1/meta");
   const m = useApi<Market>(`/v1/market?window=${win}`);
+  // every settlement on record, for the chart to begin where the record does (the same stream as the period's on "all")
+  const all = useApi<Market>("/v1/market?window=all");
   const nss = useApi<{ namespaces: NamespaceRow[]; truncated?: boolean }>("/v1/namespaces?limit=100");
   // the publishers, once the reader opens their filter
   const [wantPubs, setWantPubs] = useState(false);
@@ -319,7 +321,7 @@ function Page() {
       <PreLive meta={meta} />
       {/* the deck's figures only: the list under them is read on its own, and says so in its own rows */}
       {m.error && <div className="note hold"><span className="label">Observer</span><p>{failedWords(m)}: the period&rsquo;s figures could not be {m.data ? "refreshed" : "read"}.{m.data && m.fetchedAt ? ` They are the ones read at ${hhmm(m.fetchedAt)}.` : ""}</p></div>}
-      <BlobsDeck win={win} onWin={setWin} market={m.data} newest={newest} skew={skew} narrowed={!!(ns || pub || found)} />
+      <BlobsDeck win={win} onWin={setWin} market={m.data} record={all.data?.settlements ?? null} newest={newest} skew={skew} narrowed={!!(ns || pub || found)} />
 
       <section id="list" className="listing lg-list">
         <div className="list-head">

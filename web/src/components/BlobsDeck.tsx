@@ -144,11 +144,13 @@ const METRICS: Record<Metric, {
 
 const WIDE = "The figures cover every namespace and publisher; the filter narrows only the list below.";
 
-export default function BlobsDeck({ win, onWin, market, newest, skew, narrowed = false }: {
+export default function BlobsDeck({ win, onWin, market, record, newest, skew, narrowed = false }: {
   win: WindowName;
   onWin: (w: WindowName) => void;
   /** /v1/market for the period; the last answer stays while another period loads */
   market: Market | null;
+  /** settlements on record, over the whole record (/v1/market?window=all); null while not known */
+  record?: number | null;
   /** the chain's newest blobs, newest first, whatever the list below is filtered to */
   newest: Blob[] | null;
   skew: number;
@@ -197,7 +199,9 @@ export default function BlobsDeck({ win, onWin, market, newest, skew, narrowed =
   }
 
   // ---- the period's figures, the three that have a chart as tabs over it ----
-  const series = m ? buckets(m, shownWin) : [];
+  // the period holds every settlement on record: Fibre went live within it, and the chart begins at the first
+  const fromFirst = !!m && record != null && m.settlements >= record;
+  const series = m ? buckets(m, shownWin, fromFirst) : [];
   const unitWord = shownWin === "24h" ? "hour" : "day";
   const M = METRICS[metric];
   const keys = Object.keys(METRICS) as Metric[];
