@@ -16,8 +16,15 @@ import (
 	"github.com/plsgiveup/fibre/fibre-sentinel/observer/store"
 )
 
-// withTipKeepAlive sets the tip streams' ping pace, for tests.
+// withTipKeepAlive, withTipLifetime and withTipRead set the tip streams'
+// ping pace, their lifetime and their producer's read, for tests.
 func withTipKeepAlive(d time.Duration) Option { return func(s *Server) { s.streams.keepAlive = d } }
+
+func withTipLifetime(d time.Duration) Option { return func(s *Server) { s.streams.lifetime = d } }
+
+func withTipRead(f func() (tipResponse, uint64)) Option {
+	return func(s *Server) { s.streams.read = f }
+}
 
 // streamServer is an API whose tip the collector's meta row names, served
 // over HTTP as observer-api serves it (a stream needs a real connection: its
@@ -208,9 +215,10 @@ func TestTipStreamSendsTheTipAndEachChange(t *testing.T) {
 	}
 }
 
-// Past the cap a stream is refused with a 503 (its page polls /v1/tip), and
-// /v1/health's tip_streams fails, while api_errors does not; a stream that
-// closes lets the next in. At 0 none opens, and the check says it is off.
+// Past the cap a stream is refused with a 503 (its page polls /v1/tip). One
+// refusal fails no check, api_errors included, and /v1/health says nothing
+// of the streams but "ok"; a stream that closes lets the next in. At 0 none
+// opens, and that is no failure either.
 func TestTipStreamCap(t *testing.T) {
 	srv, _, ts := streamServer(t, WithTipStreams(2))
 	var first io.Closer
@@ -224,9 +232,6 @@ func TestTipStreamCap(t *testing.T) {
 			first = res.Body
 		}
 	}
-	if c := srv.tipStreamsCheck(srv.now()); !c.OK || !strings.Contains(c.Detail, "2 open") {
-		t.Errorf("at the cap, none refused yet: %+v", c)
-	}
 	res, err := ts.Client().Get(ts.URL + "/v1/tip/stream")
 	if err != nil {
 		t.Fatal(err)
@@ -236,11 +241,17 @@ func TestTipStreamCap(t *testing.T) {
 	if res.StatusCode != http.StatusServiceUnavailable || res.Header.Get("Retry-After") == "" || !strings.Contains(string(body), "/v1/tip") {
 		t.Fatalf("past the cap: %d %q %s", res.StatusCode, res.Header.Get("Retry-After"), body)
 	}
-	if c := srv.tipStreamsCheck(srv.now()); c.OK || !strings.Contains(c.Detail, "1 refused") || !strings.Contains(c.Detail, "at most 2 at once") {
-		t.Errorf("a stream refused at the cap: %+v", c)
+	if c := srv.tipStreamsCheck(srv.now()); !c.OK || c.Detail != "ok" {
+		t.Errorf("one stream refused at the cap: %+v", c)
 	}
 	if c := srv.apiErrorsCheck(srv.now()); !c.OK {
 		t.Errorf("a refusal at the cap is not an error of the API's: %+v", c)
+	}
+	srv.streams.mu.Lock()
+	refused := srv.streams.refused
+	srv.streams.mu.Unlock()
+	if refused != 1 {
+		t.Errorf("%d refusals counted, want 1", refused)
 	}
 
 	first.Close()
@@ -258,8 +269,112 @@ func TestTipStreamCap(t *testing.T) {
 	if res.StatusCode != http.StatusServiceUnavailable {
 		t.Errorf("-tip-streams 0: status %d", res.StatusCode)
 	}
-	if c := off.tipStreamsCheck(off.now()); !c.OK || !strings.Contains(c.Detail, "off") {
+	if c := off.tipStreamsCheck(off.now()); !c.OK || c.Detail != "ok" {
 		t.Errorf("-tip-streams 0 is not a failure: %+v", c)
+	}
+}
+
+// tip_streams fails only on refusals at the cap in 5 distinct minutes of the
+// last 15, and its detail says that and no figure of the streams: one
+// refusal, a burst in one minute, or refusals older than the window do not
+// fail it.
+func TestTipStreamsCheckWantsSustainedRefusals(t *testing.T) {
+	s := &Server{}
+	now := time.Date(2026, 10, 19, 12, 30, 30, 0, time.UTC)
+	refuse := func(at time.Time) {
+		s.streams.mu.Lock()
+		s.streams.noteRefused(at)
+		s.streams.mu.Unlock()
+	}
+	// in the order they come: some before the window, some in it, and a
+	// burst in this minute
+	for m := 29; m >= 15; m-- {
+		refuse(now.Add(-time.Duration(m) * time.Minute))
+	}
+	for m := 3; m >= 1; m-- {
+		refuse(now.Add(-time.Duration(m) * time.Minute))
+	}
+	for i := 0; i < 50; i++ {
+		refuse(now)
+	}
+	if c := s.tipStreamsCheck(now); !c.OK || c.Detail != "ok" {
+		t.Fatalf("refusals in 4 minutes of the last 15: %+v", c)
+	}
+	refuse(now.Add(-14 * time.Minute))
+	c := s.tipStreamsCheck(now)
+	if c.OK || !strings.Contains(c.Detail, "refusing streams at the cap in 5 of the last 15m") {
+		t.Fatalf("refusals in 5 minutes of the last 15: %+v", c)
+	}
+	if strings.Contains(c.Detail, "open") || strings.Contains(c.Detail, "allowed") {
+		t.Errorf("the public detail names the streams' figures: %q", c.Detail)
+	}
+	// a quarter of an hour later the window has moved past all of them
+	if c := s.tipStreamsCheck(now.Add(15 * time.Minute)); !c.OK {
+		t.Errorf("refusals out of the window still fail it: %+v", c)
+	}
+}
+
+// A stream lives its time (an hour, here 600 ms less up to a twelfth), then
+// says "end", for its page to open another at once, and closes.
+func TestTipStreamEndsAfterItsLifetime(t *testing.T) {
+	srv, _, ts := streamServer(t, withTipLifetime(600*time.Millisecond))
+	_, evs := openStream(t, ts)
+	nextEvent(t, evs, "tip", 3*time.Second)
+	ev := nextEvent(t, evs, "end", 3*time.Second)
+	var e struct {
+		ServerTime time.Time `json:"server_time"`
+	}
+	if err := json.Unmarshal([]byte(ev.data), &e); err != nil || e.ServerTime.IsZero() {
+		t.Errorf("end %q: %v", ev.data, err)
+	}
+	timeout := time.After(3 * time.Second)
+	for open := true; open; {
+		select {
+		case _, open = <-evs:
+		case <-timeout:
+			t.Fatal("the stream stayed open after its end")
+		}
+	}
+	waitFor(t, 3*time.Second, "the stream let go", func() bool { n, _ := streamState(srv); return n == 0 })
+	if res, _ := openStream(t, ts); res.StatusCode != http.StatusOK {
+		t.Errorf("a stream after one ended: status %d", res.StatusCode)
+	}
+}
+
+// A producer that panics takes nothing else down: every stream is ended and
+// refused from then on (the pages poll), /v1/tip still answers, and no
+// goroutine of the streams is left.
+func TestTipStreamProducerPanicEndsTheStreams(t *testing.T) {
+	srv, _, ts := streamServer(t, withTipRead(func() (tipResponse, uint64) { panic("a bug in the producer") }))
+	_, evs := openStream(t, ts)
+	nextEvent(t, evs, "tip", 3*time.Second)
+	timeout := time.After(3 * time.Second)
+	for open := true; open; {
+		select {
+		case _, open = <-evs:
+		case <-timeout:
+			t.Fatal("a stream outlived its producer")
+		}
+	}
+	waitFor(t, 3*time.Second, "the streams and the producer stopped", func() bool {
+		n, running := streamState(srv)
+		return n == 0 && !running && streamGoroutines() == 0
+	})
+	res, err := ts.Client().Get(ts.URL + "/v1/tip/stream")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusServiceUnavailable {
+		t.Errorf("a stream after the producer failed: status %d", res.StatusCode)
+	}
+	res, err = ts.Client().Get(ts.URL + "/v1/tip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Errorf("/v1/tip after the producer failed: status %d", res.StatusCode)
 	}
 }
 
@@ -286,8 +401,11 @@ func TestTipStreamEndsWithItsReader(t *testing.T) {
 		n, running := streamState(srv)
 		return n == 0 && !running && streamGoroutines() == 0
 	})
-	if c := srv.tipStreamsCheck(srv.now()); !c.OK || !strings.Contains(c.Detail, "0 open, at most 3 at once") {
-		t.Errorf("after the readers left: %+v", c)
+	srv.streams.mu.Lock()
+	peak := srv.streams.peak
+	srv.streams.mu.Unlock()
+	if peak != 3 {
+		t.Errorf("peak %d, want 3", peak)
 	}
 
 	// a HEAD has its headers and nothing more, at once

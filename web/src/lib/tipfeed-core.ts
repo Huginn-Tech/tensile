@@ -13,10 +13,13 @@ import type { Fetch, Tip } from "@/lib/api";
  *    2 s doubling to a minute, from 2 s again once a stream had stayed live STEADY_MS. A stream that goes quiet twice
  *    in a row without staying live that long is given up for the page's life (a proxy holding its events back would
  *    otherwise leave the page a tip behind for STALL_MS at every try): the polling alone, as before.
+ *  - the stream's end: the API ends each stream within an hour with an "end" event, and a new one is opened at once,
+ *    with no failure counted and no back-off; the polling stands in until its first tip. An end before the stream had
+ *    stayed live STEADY_MS is a failure, so an API that ends every stream at once cannot keep a page reconnecting.
  *  - hidden for HIDDEN_MS: the stream is closed and nothing is asked. Shown again, the tip is asked at once (the
  *    polling's first ask) and the stream opened again.
- *  - no stream to open (no EventSource, or a page served over HTTP/1, where a stream would hold one of the browser's
- *    six connections to the site for as long as the page is open): the polling alone, as before.
+ *  - no stream to open (no EventSource, or a page not known to have come over HTTP/2 or 3, streamsOver): the polling
+ *    alone, as before.
  */
 
 /** no tip and no ping for this long: the stream is taken for dead */
@@ -47,6 +50,16 @@ export function fresher(prev: Tip | null, next: Tip): boolean {
   if (!prev) return true;
   const a = Date.parse(prev.server_time), b = Date.parse(next.server_time);
   return !(Number.isFinite(a) && Number.isFinite(b) && b < a);
+}
+
+/**
+ * Whether a page that came over this protocol (its navigation's nextHopProtocol) may open a stream: over HTTP/2 or 3
+ * only. Over HTTP/1 a browser keeps six connections to a site and a stream holds one for as long as the page is open,
+ * so a few tabs would leave the site's requests queueing; a browser that does not say (Safari may give "") is taken as
+ * HTTP/1, and polls as before.
+ */
+export function streamsOver(protocol: string | undefined | null): boolean {
+  return /^h[23]/i.test(protocol ?? "");
 }
 
 export type Phase = "polling" | "opening" | "live" | "asleep";
@@ -153,6 +166,14 @@ export function createTipFeed(deps: Deps): Feed {
       emit();
     }));
     s.addEventListener("ping", mine(beat));
+    // the end of the stream's life (an hour at most): another at once, which is no failure
+    s.addEventListener("end", mine(() => {
+      if (phase !== "live" || now() - liveSince < STEADY_MS) return fail();
+      fails = 0;
+      stalls = 0;
+      closeSource();
+      openStream();
+    }));
     s.addEventListener("error", mine(() => fail()));
     beat();
   }

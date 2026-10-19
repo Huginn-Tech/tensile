@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { API_BASE, TIP_MS, subscribe, type Fetch, type Tip } from "@/lib/api";
-import { createTipFeed, type Feed } from "@/lib/tipfeed-core";
+import { createTipFeed, streamsOver, type Feed } from "@/lib/tipfeed-core";
 
 /**
  * The page's one tip: every reader of /v1/tip (the header's block, the recent blobs, the lists' live rows, the
@@ -14,7 +14,7 @@ function tipFeed(): Feed {
     feed = createTipFeed({
       url: `${API_BASE}/v1/tip/stream`,
       poll: (fn) => subscribe(`${TIP_MS}|/v1/tip`, "/v1/tip", TIP_MS, fn as (f: Fetch<unknown>) => void),
-      open: typeof EventSource === "undefined" || overHttp1() ? undefined : (url) => {
+      open: typeof EventSource === "undefined" || !streamsOver(pageProtocol()) ? undefined : (url) => {
         const es = new EventSource(url);
         return { addEventListener: (type, fn) => es.addEventListener(type, (e) => fn(e as MessageEvent)), close: () => es.close() };
       },
@@ -24,17 +24,13 @@ function tipFeed(): Feed {
   return feed;
 }
 
-/**
- * Whether the page came over HTTP/1, where a browser keeps six connections to a site and a stream would hold one of
- * them for as long as the page is open: a few tabs would leave the site's requests queueing. Unknown (a browser that
- * does not say) is taken as HTTP/2, which both sites' front proxies speak.
- */
-function overHttp1(): boolean {
+/** the protocol the page came over ("h2", "h3", "http/1.1"), "" where the browser does not say (streamsOver) */
+function pageProtocol(): string {
   try {
     const nav = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
-    return /^http\/1/i.test(nav?.nextHopProtocol ?? "");
+    return nav?.nextHopProtocol ?? "";
   } catch {
-    return false;
+    return "";
   }
 }
 

@@ -14,7 +14,7 @@ const load = (file) => {
 };
 
 mock.timers.enable({ apis: ["setTimeout", "Date"] });
-const { createTipFeed, retryMs, fresher } = await load("./tipfeed-core.ts");
+const { createTipFeed, retryMs, fresher, streamsOver } = await load("./tipfeed-core.ts");
 
 const tip = (height, at) => JSON.stringify({ height, fibre_active: true, server_time: new Date(at).toISOString() });
 
@@ -46,6 +46,44 @@ test("retryMs: 2 s doubling to a minute, spread a quarter either way", () => {
   assert.equal(retryMs(0), 2000);
   assert.equal(retryMs(1, 0), 1500);
   assert.equal(retryMs(1, 1), 2500);
+});
+
+test("streamsOver: a page streams only when it came over HTTP/2 or 3; one that does not say polls", () => {
+  for (const p of ["h2", "h3", "h3-29", "H2"]) assert.equal(streamsOver(p), true, p);
+  for (const p of ["http/1.1", "http/1.0", "", undefined, null, "hq", "spdy/3"]) assert.equal(streamsOver(p), false, String(p));
+});
+
+test("the stream's end, after it had stayed live a while, opens another at once, with no failure counted", () => {
+  const { feed, poll, src, seen, stop } = setup();
+  src.cur().send("tip", tip(1, Date.now()));
+  for (let i = 0; i < 5; i++) { mock.timers.tick(15000); src.cur().send("ping", "{}"); }
+  const first = src.cur();
+  first.send("end", "{}");
+  assert.equal(first.closed, true);
+  assert.equal(src.opened.length, 2, "another at once");
+  assert.equal(feed.phase(), "opening");
+  assert.equal(poll.subs, 1, "the polling stands in until its first tip");
+  assert.equal(seen.at(-1).data.height, 1, "the tip stays on screen");
+  assert.equal(seen.at(-1).error, null);
+  src.cur().send("tip", tip(2, Date.now()));
+  assert.equal(feed.phase(), "live");
+  assert.equal(poll.subs, 0);
+  // the end was no failure: the next one waits 2 s, not 4
+  src.cur().send("error");
+  mock.timers.tick(2000);
+  assert.equal(src.opened.length, 3);
+  stop();
+});
+
+test("an end before the stream had stayed live a minute is a failure, with its back-off", () => {
+  const { feed, src, stop } = setup();
+  src.cur().send("tip", tip(1, Date.now()));
+  src.cur().send("end", "{}");
+  assert.equal(feed.phase(), "polling");
+  assert.equal(src.opened.length, 1, "not at once");
+  mock.timers.tick(2000);
+  assert.equal(src.opened.length, 2);
+  stop();
 });
 
 test("fresher: an answer the server gave before the one on screen does not replace it", () => {

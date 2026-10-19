@@ -34,10 +34,6 @@ CapabilityBoundingSet=
 SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
 MemoryMax=256M
-# Each open tip stream (/api/v1/tip/stream) holds two sockets for as long as
-# its page is shown. systemd's default soft limit of 1,024 files would let
-# site-server open about 256 (STREAMS_TOTAL); past them pages poll.
-LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target

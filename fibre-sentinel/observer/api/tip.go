@@ -96,18 +96,20 @@ func (s *Server) handleTip(w http.ResponseWriter, r *http.Request) {
 // it is tipTTL old, with the server's time. gen is the read it came from
 // (tipCache.gen). /v1/tip and the tip streams' producer both read it here,
 // so the node and the store are asked at the one pace however many read.
+// The lock is let go deferred: a read that panics leaves no later reader
+// waiting on it.
 func (s *Server) cachedTip() (tipResponse, uint64) {
 	now := s.now()
 	s.tip.mu.Lock()
+	defer s.tip.mu.Unlock()
 	if now.Sub(s.tip.at) >= tipTTL {
 		s.tip.v = s.readTip(now)
 		s.tip.at = now
 		s.tip.gen++
 	}
-	v, gen := s.tip.v, s.tip.gen
-	s.tip.mu.Unlock()
+	v := s.tip.v
 	v.ServerTime = now.UTC()
-	return v, gen
+	return v, s.tip.gen
 }
 
 // readTip asks the node first (WithTipRPC): its newest committed block, the

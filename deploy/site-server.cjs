@@ -111,12 +111,12 @@ const INFLIGHT_PER_CLIENT = 16, INFLIGHT_TOTAL = 48;
 // TIP_RATE token; an open one holds none of INFLIGHT_PER_CLIENT's places (a
 // page's stream would leave its client 15 for everything else), but one of
 // STREAMS_PER_CLIENT's, TIP_RATE's thirty pages, and of the site's
-// STREAMS_TOTAL, which the open-file limit bounds: a stream holds two
-// sockets, the client's and the API's. A stream refused leaves its page
-// polling /v1/tip, as every page did before.
+// STREAMS_TOTAL (streamsAllowed). A stream refused leaves its page polling
+// /v1/tip, as every page did before.
 const STREAMS_PER_CLIENT = 30;
 const STREAMS_TOTAL = streamsAllowed();
 const streams = new Set();                      // the open streams' responses, cut at shutdown
+let closing = false;                            // set at SIGTERM: no stream is opened after it
 // A client is an IPv4 address or an IPv6 /64 (clientOf). Past CLIENTS_MAX of
 // them in the last ten minutes, which this site's readers do not come near,
 // every new one shares one allowance: a flood of new addresses neither grows
@@ -132,17 +132,21 @@ setInterval(() => {
   sayFull(now);
 }, 60_000).unref();
 
-// Half the files the process may hold open, less 512 for everything else:
-// the soft limit from /proc (Linux), else 1,024, a common default, which
-// leaves 256 streams. fibre-site@'s unit raises it (LimitNOFILE), and then
-// the API's own cap (observer-api -tip-streams) is the one a stream meets.
+// The site's streams: at most 5,000, for memory. fibre-site@'s MemoryMax=256M
+// is the real ceiling: a stream holds two sockets, the client's and the
+// API's, some tens of KB with their buffers, beside the compressed files'
+// 64 MB. Within that, at most half the files the process may hold open,
+// less 512 for everything else: Node raises its soft limit to the hard one
+// at start (systemd's 524,288), read here from /proc (Linux), else taken as
+// 1,024. The API's own cap (observer-api -tip-streams, 2,000) is the one a
+// stream meets first.
 function streamsAllowed() {
   let soft = 1024;
   try {
     const m = /^Max open files\s+(\d+|unlimited)/m.exec(fs.readFileSync("/proc/self/limits", "utf8"));
     if (m) soft = m[1] === "unlimited" ? 1 << 20 : Number(m[1]);
   } catch { /* not Linux */ }
-  return Math.max(0, Math.floor((soft - 512) / 2));
+  return Math.min(5000, Math.max(0, Math.floor((soft - 512) / 2)));
 }
 
 // Streams refused at STREAMS_TOTAL go to the journal, at most once a minute
@@ -151,7 +155,7 @@ function streamsAllowed() {
 let fullSaidAt = 0, fullUnsaid = 0;
 function sayFull(now) {
   if (fullUnsaid === 0 || now - fullSaidAt < 60_000) return;
-  console.log(`site-server: tip streams: ${fullUnsaid} refused at the cap of ${STREAMS_TOTAL} (open files), ${streams.size} open; their pages ask /v1/tip every second instead`);
+  console.log(`site-server: tip streams: ${fullUnsaid} refused at the site's cap of ${STREAMS_TOTAL}, ${streams.size} open; their pages ask /v1/tip every second instead`);
   fullSaidAt = now;
   fullUnsaid = 0;
 }
@@ -343,6 +347,12 @@ function proxy(req, res, u) {
   // The tip stream passes like any answer, each event as it comes: nothing
   // here buffers or compresses an API answer.
   const stream = u.pathname === "/api/v1/tip/stream";
+  // A server that is stopping opens no stream, on a connection still open to
+  // it: the page polls until it is back.
+  if (stream && closing) {
+    res.writeHead(503, { ...SECURITY, "content-type": "application/json", "retry-after": "5" });
+    return res.end('{"error":"the site is restarting: ask /v1/tip"}');
+  }
   const counted = !u.pathname.startsWith("/api/v1/avatars/");
   const slot = counted ? admit(req, res, stream ? "stream" : u.pathname === "/api/v1/tip" ? "tip" : "data") : null;
   if (counted && !slot) return;
@@ -430,9 +440,12 @@ server.listen(LISTEN.port, LISTEN.host, () => {
   warm().then(() => console.log(`site-server: ${packed.size} files compressed in ${Date.now() - t0} ms (${Math.round(packedBytes / 1024)} KB kept)`));
 });
 // A tip stream never ends by itself, so close() would wait on them until
-// systemd killed the process: each is cut, and its page polls until the
-// server is back.
+// systemd killed the process: each is cut, none is opened after (closing),
+// and its page polls until the server is back. Whatever else is still open
+// is given 5 s.
 for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => {
+  closing = true;
   server.close(() => process.exit(0));
   for (const r of streams) r.destroy();
+  setTimeout(() => process.exit(0), 5000).unref();
 });

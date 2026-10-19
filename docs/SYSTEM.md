@@ -739,11 +739,14 @@ GET /v1/tip                   the newest block read, and the newest blob stored 
                               one answer kept for 250 ms, so the node and the store are asked
                               at most four times a second however many pages poll it
 GET /v1/tip/stream            /v1/tip as server-sent events: "tip" (the same JSON) on connecting
-                              and whenever a field but server_time changes, "ping" every 15 s;
-                              one producer reads /v1/tip's cache while any stream is open and
-                              hands each change to every stream, so a stream asks the node and
-                              the store nothing of its own; at most -tip-streams (2,000) open,
-                              a 503 past it (tip_streams in /v1/health)
+                              and whenever a field but server_time changes, "ping" every 15 s,
+                              "end" before the API closes it, within an hour; one producer reads
+                              /v1/tip's cache while any stream is open and hands each change to
+                              every stream, so a stream asks the node and the store nothing of
+                              its own; at most -tip-streams (2,000) open, a 503 past it
+                              (tip_streams in /v1/health fails on refusals in 5 minutes of 15;
+                              the counts are in the journal, not there); a producer that panics
+                              is logged and ends the streams until a restart
 GET /v1/market                the publisher side, and the network's reading totals over the whole
                               record (readings: available, unavailable, not_read)
 GET /v1/publishers[/{addr}]   incl. the escrow withdrawal queue read from state
@@ -1021,9 +1024,11 @@ while that stream is not delivering (opening, refused, cut, a tip it cannot
 read, or nothing for 20 s), so a stream that fails leaves the page as it
 was before the stream. A failed stream is asked for again 2 s later,
 doubling to a minute; one that goes quiet twice without staying live a
-minute is given up for the page's life. A page hidden for a minute closes
-its stream and asks nothing, and asks the tip at once when it is shown. A
-page served over HTTP/1, or by a browser with no EventSource, only polls
+minute is given up for the page's life. A stream's `end` (within the hour)
+opens another at once, with no back-off. A page hidden for a minute closes
+its stream and asks nothing, and asks the tip at once when it is shown.
+Only a page that came over HTTP/2 or 3 opens a stream: one over HTTP/1,
+one whose browser does not say, or one with no EventSource only polls
 (`lib/tipfeed-core.ts`). The header's
 search asks for a blob identifier that found nothing again each time
 `/v1/tip`'s `latest_blob` changes, while its panel is open, for two minutes
@@ -1149,8 +1154,9 @@ each holding its place only until the API's answer begins, so a slow
 reader costs only its own 16); an answer with no byte moving for 60 s is
 given up, and a client that leaves cancels its request to the API. A tip
 stream passes through unbuffered and uncompressed and holds none of those
-16, but one of the client's 30 streams and of the site's (half the
-open-file limit, less 512; the unit sets `LimitNOFILE=65536`). A front
+16, but one of the client's 30 streams and of the site's 5,000 (the
+unit's `MemoryMax` is the real ceiling); at a stop it cuts them, opens
+none, and exits within 5 s. A front
 proxy must pass `/api/v1/tip/stream` unbuffered with a read timeout past
 the 15-second ping: Caddy does so as it is (`reverse_proxy` flushes
 `text/event-stream`; the Caddyfiles leave it out of `encode`); nginx needs

@@ -398,12 +398,7 @@ func newServer(st *store.Store, info VantageInfo, log *scan.Logger, opts ...Opti
 	for _, o := range opts {
 		o(s)
 	}
-	if s.streams.max < 0 {
-		s.streams.max = DefaultTipStreams
-	}
-	if s.streams.keepAlive == 0 {
-		s.streams.keepAlive = tipStreamKeepAlive
-	}
+	s.initTipStreams()
 	if s.lanes == (lanes{}) {
 		s.lanes = defaultLanes
 	}

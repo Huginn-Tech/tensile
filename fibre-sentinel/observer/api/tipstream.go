@@ -20,20 +20,29 @@ package api
 //	event: tip
 //	data: <the answer /v1/tip gives, on one line>
 //
-// and every tipStreamKeepAlive:
+// every tipStreamKeepAlive:
 //
 //	event: ping
 //	data: {"server_time":"..."}
 //
 // which keeps the proxies on the way from closing a quiet connection and
 // tells the page the stream is alive while the chain is (a halted chain
-// sends no tip). An SSE comment would do the first, but a browser's
-// EventSource does not hand a comment to the page.
+// sends no tip; an SSE comment would keep a proxy, but a browser's
+// EventSource does not hand a comment to the page); and when the stream has
+// lived its time (lifeOf, an hour at most), before the API closes it:
+//
+//	event: end
+//	data: {"server_time":"..."}
+//
+// on which the page opens a new one at once, as from a failure but without
+// its back-off: no connection is held for good through proxies that may not
+// expect it.
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"net/http"
 	"sync"
 	"time"
@@ -42,12 +51,13 @@ import (
 const (
 	// DefaultTipStreams is how many tip streams may be open at once
 	// (observer-api -tip-streams). Past it a stream is refused with a 503,
-	// its page asks /v1/tip every second as before, and /v1/health's
-	// tip_streams check fails for a while (tipStreamsCheck).
+	// and its page asks /v1/tip every second as before.
 	DefaultTipStreams = 2000
 	// tipStreamKeepAlive is the ping's pace. A page that hears nothing for
 	// 20 s takes its stream for dead and polls.
 	tipStreamKeepAlive = 15 * time.Second
+	// tipStreamLifetime is the longest a stream lives (lifeOf).
+	tipStreamLifetime = time.Hour
 	// tipStreamWriteTimeout bounds one event's write: a reader that has
 	// stopped reading is let go after it, not held.
 	tipStreamWriteTimeout = 10 * time.Second
@@ -55,7 +65,19 @@ const (
 	// is read afresh at most every tipTTL, so a change reaches the streams
 	// within this of the read that found it.
 	tipStreamTick = 50 * time.Millisecond
+	// /v1/health's tip_streams fails while streams were refused at the cap
+	// in tipRefusedMinutes distinct minutes of the last tipRefusedWindow:
+	// the cap is then lower than the readers, where a refusal or a burst of
+	// them is not (tipStreamsCheck).
+	tipRefusedWindow  = 15 * time.Minute
+	tipRefusedMinutes = 5
+	// tipStatsEvery is the pace of the journal's line on the streams
+	// (logTipStats).
+	tipStatsEvery = 10 * time.Minute
 )
+
+// tipRefusedSlots is how many one-minute counts cover tipRefusedWindow.
+const tipRefusedSlots = int(tipRefusedWindow / time.Minute)
 
 // WithTipStreams caps the tip streams open at once (observer-api
 // -tip-streams); 0 opens none, and every page asks /v1/tip as before.
@@ -75,16 +97,25 @@ type tipStreams struct {
 	// every stream returns, and none is opened after.
 	ended bool
 	end   chan struct{}
-	// keepAlive is tipStreamKeepAlive, shorter in tests.
+	// keepAlive, lifetime and read are tipStreamKeepAlive,
+	// tipStreamLifetime and cachedTip (the producer's read), but in tests.
 	keepAlive time.Duration
-	// For /v1/health and the log: the most open at once since the API
-	// started, the streams refused at the cap since then and the last one's
-	// time, and those refused since the log last said so.
-	peak      int
-	refused   int64
-	refusedAt time.Time
-	loggedAt  time.Time
-	unlogged  int64
+	lifetime  time.Duration
+	read      func() (tipResponse, uint64)
+	// For the journal alone (logTipStats, logTipRefusals): the most open at
+	// once since the API started and since the last line on them, the
+	// streams refused at the cap since the API started and since that line,
+	// when it was written, and the refusals not said yet.
+	peak       int
+	recentPeak int
+	refused    int64
+	recent     int64
+	statsAt    time.Time
+	loggedAt   time.Time
+	unlogged   int64
+	// refusedIn is the refusals at the cap by minute over the last
+	// tipRefusedWindow, for /v1/health (tipStreamsCheck).
+	refusedIn [tipRefusedSlots]struct{ minute, n int64 }
 }
 
 // tipEvent is one change of the tip, as the producer hands it to a stream.
@@ -99,11 +130,30 @@ type tipEvent struct {
 	frame []byte
 }
 
+// initTipStreams sets what the options left unset; newServer calls it
+// after them.
+func (s *Server) initTipStreams() {
+	t := &s.streams
+	if t.max < 0 {
+		t.max = DefaultTipStreams
+	}
+	if t.keepAlive == 0 {
+		t.keepAlive = tipStreamKeepAlive
+	}
+	if t.lifetime == 0 {
+		t.lifetime = tipStreamLifetime
+	}
+	if t.read == nil {
+		t.read = s.cachedTip
+	}
+	t.statsAt = s.now()
+}
+
 // EndTipStreams ends every tip stream and refuses new ones. observer-api
 // calls it as its HTTP server begins to shut down
 // (http.Server.RegisterOnShutdown): a stream never falls idle, and the
 // shutdown would otherwise wait out its whole drain for them. Close calls
-// it too.
+// it too, and so does a producer that fails.
 func (s *Server) EndTipStreams() {
 	t := &s.streams
 	t.mu.Lock()
@@ -161,6 +211,8 @@ func (s *Server) handleTipStream(w http.ResponseWriter, r *http.Request) {
 	}
 	keep := time.NewTicker(s.streams.keepAlive)
 	defer keep.Stop()
+	life := time.NewTimer(lifeOf(s.streams.lifetime))
+	defer life.Stop()
 	for {
 		select {
 		case <-r.Context().Done():
@@ -176,11 +228,24 @@ func (s *Server) handleTipStream(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-keep.C:
-			if !send(pingFrame(s.now())) {
+			if !send(timeFrame("ping", s.now())) {
 				return
 			}
+		case <-life.C:
+			// the page opens a new one at once, as it would on connecting
+			send(timeFrame("end", s.now()))
+			return
 		}
 	}
+}
+
+// lifeOf is a stream's life: d, less up to a twelfth of it, so the pages
+// one restart connected at once do not all come back at once.
+func lifeOf(d time.Duration) time.Duration {
+	if j := d / 12; j > 0 {
+		d -= rand.N(j)
+	}
+	return d
 }
 
 // joinTipStream opens a stream: its channel, or false at the cap and once
@@ -195,8 +260,9 @@ func (s *Server) joinTipStream() (chan tipEvent, bool) {
 	}
 	if len(t.subs) >= t.max {
 		t.refused++
+		t.recent++
 		t.unlogged++
-		t.refusedAt = now
+		t.noteRefused(now)
 		s.logTipRefusals(now)
 		return nil, false
 	}
@@ -206,6 +272,7 @@ func (s *Server) joinTipStream() (chan tipEvent, bool) {
 	ch := make(chan tipEvent, 1)
 	t.subs[ch] = struct{}{}
 	t.peak = max(t.peak, len(t.subs))
+	t.recentPeak = max(t.recentPeak, len(t.subs))
 	if !t.running {
 		// Before Close waits for the background work: Close ends the
 		// streams first, under this lock, and none is opened after.
@@ -226,26 +293,36 @@ func (s *Server) leaveTipStream(ch chan tipEvent) {
 // change to every stream: the newest only, in place of one a stream has not
 // taken yet, so a slow reader holds no other up. It ends when it finds no
 // stream open, or the server stopping.
+//
+// A panic of its own is not the API's: it is logged, every stream is ended
+// and refused from then on, and the pages ask /v1/tip every second until
+// the API restarts, as they did before the streams. Every lock it takes is
+// let go on the way out (deferred), cachedTip's too.
 func (s *Server) tipProducer() {
 	defer s.bg.Done()
-	t := &s.streams
+	defer func() {
+		if p := recover(); p != nil {
+			if s.log != nil {
+				s.log.Printf("tip streams: the producer failed: %v; every stream is ended, and the pages ask /v1/tip every second until the API restarts", p)
+			}
+			s.EndTipStreams()
+			s.streams.mu.Lock()
+			s.streams.running = false
+			s.streams.mu.Unlock()
+		}
+	}()
 	tick := time.NewTicker(tipStreamTick)
 	defer tick.Stop()
 	var last tipEvent
 	for {
 		select {
-		case <-t.end:
+		case <-s.streams.end:
 		case <-tick.C:
 		}
-		t.mu.Lock()
-		if len(t.subs) == 0 || t.ended {
-			t.running = false
-			t.mu.Unlock()
+		if !s.tipStreamsWanted() {
 			return
 		}
-		s.logTipRefusals(s.now())
-		t.mu.Unlock()
-		v, gen := s.cachedTip()
+		v, gen := s.streams.read()
 		if gen == last.gen {
 			continue
 		}
@@ -255,11 +332,35 @@ func (s *Server) tipProducer() {
 			continue
 		}
 		last = tipEvent{gen: gen, key: key, frame: frame}
-		t.mu.Lock()
-		for ch := range t.subs {
-			offer(ch, last)
-		}
-		t.mu.Unlock()
+		s.handTipEvent(last)
+	}
+}
+
+// tipStreamsWanted is whether the producer goes on: a stream is open and the
+// server is not stopping. When not, the producer is marked stopped, under
+// the lock a stream joins under, so the next stream starts another. The
+// journal's lines that are due are written on the way.
+func (s *Server) tipStreamsWanted() bool {
+	t := &s.streams
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if len(t.subs) == 0 || t.ended {
+		t.running = false
+		return false
+	}
+	now := s.now()
+	s.logTipRefusals(now)
+	s.logTipStats(now)
+	return true
+}
+
+// handTipEvent offers ev to every open stream.
+func (s *Server) handTipEvent(ev tipEvent) {
+	t := &s.streams
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for ch := range t.subs {
+		offer(ch, ev)
 	}
 }
 
@@ -293,8 +394,37 @@ func tipFrame(v tipResponse) (key, frame []byte) {
 	return key, frame
 }
 
-func pingFrame(now time.Time) []byte {
-	return []byte("event: ping\ndata: {\"server_time\":\"" + now.UTC().Format(time.RFC3339Nano) + "\"}\n\n")
+// timeFrame is an event whose data is the server's time alone: a ping, or
+// the end of a stream's life.
+func timeFrame(name string, now time.Time) []byte {
+	return []byte("event: " + name + "\ndata: {\"server_time\":\"" + now.UTC().Format(time.RFC3339Nano) + "\"}\n\n")
+}
+
+// noteRefused counts a refusal at the cap in its minute. Called with t.mu
+// held.
+func (t *tipStreams) noteRefused(now time.Time) {
+	m := now.Unix() / 60
+	slot := m % int64(len(t.refusedIn))
+	b := &t.refusedIn[slot]
+	if b.minute != m {
+		b.minute, b.n = m, 0
+	}
+	b.n++
+}
+
+// refusedMinutes is how many distinct minutes of the last tipRefusedWindow,
+// this one among them, saw a stream refused at the cap. Called with t.mu
+// held.
+func (t *tipStreams) refusedMinutes(now time.Time) int {
+	m := now.Unix() / 60
+	n := 0
+	for _, b := range t.refusedIn {
+		age := m - b.minute
+		if b.n > 0 && age >= 0 && age < int64(len(t.refusedIn)) {
+			n++
+		}
+	}
+	return n
 }
 
 // logTipRefusals says how many streams were refused at the cap, at most
@@ -311,24 +441,38 @@ func (s *Server) logTipRefusals(now time.Time) {
 	t.loggedAt, t.unlogged = now, 0
 }
 
-// tipStreamsCheck is /v1/health's tip_streams row: the streams open, the
-// most at once since the API started, and the cap. It fails for
-// routeErrorsFailFor after a stream was refused at the cap. No page shows
-// less for it (a refused page asks /v1/tip every second, as every page did
-// before the streams), but the cap is then lower than the readers, and the
-// health watch says so.
+// logTipStats writes the journal's line on the streams every tipStatsEvery
+// while any is open: how many are open, the most at once since the last
+// line and since the API started, the cap, and the refusals at it since the
+// last line. /v1/health publishes none of it. Called with s.streams.mu
+// held.
+func (s *Server) logTipStats(now time.Time) {
+	t := &s.streams
+	if now.Sub(t.statsAt) < tipStatsEvery {
+		return
+	}
+	if s.log != nil {
+		s.log.Printf("tip streams: %d open, at most %d at once in the last %s and %d since the API started, of %d allowed; %d refused at the cap in the last %s",
+			len(t.subs), t.recentPeak, fmtMinutes(now.Sub(t.statsAt)), t.peak, t.max, t.recent, fmtMinutes(now.Sub(t.statsAt)))
+	}
+	t.statsAt, t.recentPeak, t.recent = now, len(t.subs), 0
+}
+
+// tipStreamsCheck is /v1/health's tip_streams row. It fails while streams
+// were refused at the cap in tipRefusedMinutes distinct minutes of the last
+// tipRefusedWindow: no page shows less for it (a refused page asks /v1/tip
+// every second, as every page did before the streams), but the cap is then
+// lower than the readers, and the health watch says so. One refusal, or a
+// burst, does not. /v1/health is public, so the row says that and no more:
+// the streams open, their peak and the cap are in the journal
+// (logTipStats).
 func (s *Server) tipStreamsCheck(now time.Time) healthCheck {
 	t := &s.streams
 	t.mu.Lock()
-	open, limit, peak, refused, at := len(t.subs), t.max, t.peak, t.refused, t.refusedAt
+	n := t.refusedMinutes(now)
 	t.mu.Unlock()
-	if limit == 0 {
-		return healthCheck{"tip_streams", true, "off (observer-api -tip-streams 0): every page asks /v1/tip"}
+	if n >= tipRefusedMinutes {
+		return healthCheck{"tip_streams", false, fmt.Sprintf("refusing streams at the cap in %d of the last %s: their pages ask /v1/tip every second instead", n, fmtMinutes(tipRefusedWindow))}
 	}
-	state := fmt.Sprintf("%d open, at most %d at once since the API started, of %d allowed", open, peak, limit)
-	if refused > 0 && now.Sub(at) <= routeErrorsFailFor {
-		return healthCheck{"tip_streams", false, fmt.Sprintf("%s; %d refused at that cap since the API started, the last %s ago: their pages ask /v1/tip every second instead (raise observer-api -tip-streams)",
-			state, refused, now.Sub(at).Round(time.Second))}
-	}
-	return healthCheck{"tip_streams", true, state}
+	return healthCheck{"tip_streams", true, "ok"}
 }
