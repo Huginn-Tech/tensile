@@ -135,6 +135,9 @@ type Server struct {
 	bg sync.WaitGroup
 	// tip holds the block ticker's answer for a second.
 	tip tipCache
+	// streams is the open /v1/tip/stream connections and their one
+	// producer (tipstream.go).
+	streams tipStreams
 	// stop ends the snapshot keepers; Close closes it once.
 	stop     chan struct{}
 	stopOnce sync.Once
@@ -293,6 +296,7 @@ func NewWithVantage(st *store.Store, info VantageInfo, log *scan.Logger, opts ..
 	s.mux.HandleFunc("GET /v1/avatars/{identity}", s.handleAvatar)
 	s.mux.HandleFunc("GET /v1/health", s.handleHealth)
 	s.mux.HandleFunc("GET /v1/tip", s.handleTip)
+	s.mux.HandleFunc("GET /v1/tip/stream", s.handleTipStream) // tipstream.go
 	s.mux.HandleFunc("GET /v1/market", s.handleMarket)
 	s.mux.HandleFunc("GET /v1/publishers", s.handlePublishers)
 	s.mux.HandleFunc("GET /v1/publishers/{addr}", s.handlePublisher)
@@ -390,9 +394,11 @@ func newServer(st *store.Store, info VantageInfo, log *scan.Logger, opts ...Opti
 		histCacheMB: -1, mergeDays: -1, probeScans: make(chan struct{}, probeScanSlots), blobWork: make(chan struct{}, blobWorkSlots)}
 	s.txSlots = readSlots(st.DB().Stats().MaxOpenConnections)
 	s.feedID = feedServers.Add(1)
+	s.streams.max, s.streams.end = -1, make(chan struct{})
 	for _, o := range opts {
 		o(s)
 	}
+	s.initTipStreams()
 	if s.lanes == (lanes{}) {
 		s.lanes = defaultLanes
 	}
@@ -473,8 +479,10 @@ func (s *Server) keepDerived(ctx context.Context) error {
 // snapshot computations in flight, which it cancels) and waits for it to
 // end, so that nothing still queries the store or writes under the data
 // directory once the caller closes or removes them. It does not stop the
-// HTTP side: the caller shuts its listener down first.
+// HTTP side: the caller shuts its listener down first. Tip streams still
+// open are ended.
 func (s *Server) Close() {
+	s.EndTipStreams()
 	s.stopOnce.Do(func() { close(s.stop) })
 	s.net.stop()
 	s.vals.stop()
@@ -592,6 +600,10 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 	}
 	return w.ResponseWriter.Write(b)
 }
+
+// Unwrap is the connection's own writer, for http.ResponseController: the
+// tip streams flush each event and set their deadlines through it.
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

@@ -255,6 +255,28 @@ function request(ep: Endpoint, vals: Record<string, string>): { url: string; mis
   return { url: qs ? `${path}?${qs}` : path, missing };
 }
 
+/** how long Try it reads a stream (/v1/tip/stream) before it closes it: the tip at once, and a block or two after */
+const STREAM_SHOWN_MS = 8000;
+
+/** what a streamed answer sends in its first ms, then the stream closed */
+async function firstOf(r: Response, ms: number): Promise<string> {
+  const rd = r.body?.getReader();
+  if (!rd) return "";
+  const dec = new TextDecoder();
+  let text = "";
+  const stop = setTimeout(() => { rd.cancel().catch(() => {}); }, ms);
+  try {
+    for (;;) {
+      const { done, value } = await rd.read();
+      if (done) break;
+      text += dec.decode(value, { stream: true });
+    }
+  } catch { /* cancelled */ } finally {
+    clearTimeout(stop);
+  }
+  return text;
+}
+
 function TryIt({ ep }: { ep: Endpoint }) {
   const base = useBase();
   const [vals, setVals] = useState<Record<string, string>>(() => Object.fromEntries(ep.params.map((p) => [p.name, p.example ?? ""])));
@@ -293,7 +315,8 @@ function TryIt({ ep }: { ep: Endpoint }) {
       const r = await fetch(`${API_BASE}${req.url}`, { cache: "no-store" });
       const type = (r.headers.get("content-type") ?? "").split(";")[0].trim();
       if (/json|xml|text/.test(type)) {
-        const body = await r.text();
+        // a stream never ends: what it sends in its first STREAM_SHOWN_MS is shown, and it is closed
+        const body = type === "text/event-stream" ? await firstOf(r, STREAM_SHOWN_MS) : await r.text();
         const ms = Math.round(performance.now() - t0);
         const bytes = new TextEncoder().encode(body).length;
         let shown = body, kind: "json" | "text" = "text";

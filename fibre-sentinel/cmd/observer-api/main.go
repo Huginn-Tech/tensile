@@ -59,6 +59,10 @@ func main() {
 		// its seal file and are read when a window sums the day; the newest
 		// days' are kept in memory up to this bound.
 		partsCache = flag.Int("day-partials-cache-mb", api.DefaultHistCacheMB, "megabytes of the sealed days' service-time and transfer-rate histograms kept in memory, the newest days first; the rest are read from the seal files as the windows sum them; 0 keeps none")
+		// The tip as server-sent events (/v1/tip/stream), which the pages
+		// read in front of their polling of /v1/tip. A page refused past
+		// the cap polls as before, and /v1/health's tip_streams says so.
+		tipStreams = flag.Int("tip-streams", api.DefaultTipStreams, "most /v1/tip/stream connections open at once; past it a page is refused (503) and asks /v1/tip every second, as before; 0 opens none")
 	)
 	flag.Parse()
 	if *partsPace < 0 {
@@ -67,6 +71,10 @@ func main() {
 	}
 	if *partsCache < 0 {
 		os.Stderr.WriteString("-day-partials-cache-mb must be 0 or more\n")
+		os.Exit(2)
+	}
+	if *tipStreams < 0 {
+		os.Stderr.WriteString("-tip-streams must be 0 or more\n")
 		os.Exit(2)
 	}
 	if *check != "" {
@@ -136,7 +144,7 @@ func main() {
 	if len(reg) > 0 {
 		log.Printf("publisher labels: %d from %s", len(reg), *labels)
 	}
-	opts := []api.Option{api.WithPublisherLabels(reg), api.WithDataDir(*dataDir), api.WithSnapshotDir(*snapDir), api.WithDayParts(*dayParts), api.WithSealPace(*partsPace), api.WithHistCache(*partsCache), api.WithTipRPC(*tipRPC)}
+	opts := []api.Option{api.WithPublisherLabels(reg), api.WithDataDir(*dataDir), api.WithSnapshotDir(*snapDir), api.WithDayParts(*dayParts), api.WithSealPace(*partsPace), api.WithHistCache(*partsCache), api.WithTipRPC(*tipRPC), api.WithTipStreams(*tipStreams)}
 	if *warmOnly {
 		// The live API keeps serving meanwhile; this only reads. Every
 		// snapshot depends on the vantage (its heartbeats) and the market
@@ -176,6 +184,10 @@ func main() {
 		WriteTimeout: 0,
 		IdleTimeout:  60 * time.Second,
 	}
+	// A tip stream never falls idle: the shutdown ends them as it begins,
+	// and their pages poll /v1/tip until the API is back, rather than the
+	// drain waiting its whole time for them.
+	srv.RegisterOnShutdown(handler.EndTipStreams)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	drained := make(chan struct{})

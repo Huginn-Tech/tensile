@@ -45,7 +45,7 @@ rewritten by a goroutine of its own, so a stuck loop kept it fresh (on 7
 October 2026 the collector waited on its own store connection and read
 "alive"). The checks that are about the record (`ingest`, `chain_polls`,
 `vantages`) read the store, and those about the API's own answers
-(`api_errors`, `snapshots`, `records`) what the API process saw;
+(`api_errors`, `snapshots`, `records`, `tip_streams`) what the API process saw;
 `deploy/README.md`, "Health and alerting", lists every check.
 
 Every process also appends a `RunEvent` to `runs.jsonl` on start and stop,
@@ -738,6 +738,15 @@ GET /v1/health                machine-readable health (200 / 503): every check b
 GET /v1/tip                   the newest block read, and the newest blob stored (latest_blob);
                               one answer kept for 250 ms, so the node and the store are asked
                               at most four times a second however many pages poll it
+GET /v1/tip/stream            /v1/tip as server-sent events: "tip" (the same JSON) on connecting
+                              and whenever a field but server_time changes, "ping" every 15 s,
+                              "end" before the API closes it, within an hour; one producer reads
+                              /v1/tip's cache while any stream is open and hands each change to
+                              every stream, so a stream asks the node and the store nothing of
+                              its own; at most -tip-streams (2,000) open, a 503 past it
+                              (tip_streams in /v1/health fails on refusals in 5 minutes of 15;
+                              the counts are in the journal, not there); a producer that panics
+                              is logged and ends the streams until a restart
 GET /v1/market                the publisher side, and the network's reading totals over the whole
                               record (readings: available, unavailable, not_read)
 GET /v1/publishers[/{addr}]   incl. the escrow withdrawal queue read from state
@@ -1008,7 +1017,19 @@ publisher and validator pages, the Blobs list's search and the header's
 search do this. Unset, nothing is asked; the site's server lets the pages
 reach that origin (`SITE_CONNECT_SRC`).
 
-Every page's header and footer read `/v1/meta` and `/v1/tip`. The header's
+Every page's header and footer read `/v1/meta` and `/v1/tip`. Every reader
+of the tip on a page reads it through one hook (`useTip`, `lib/tip.ts`):
+one `/v1/tip/stream` for the page, and `/v1/tip` asked every second only
+while that stream is not delivering (opening, refused, cut, a tip it cannot
+read, or nothing for 20 s), so a stream that fails leaves the page as it
+was before the stream. A failed stream is asked for again 2 s later,
+doubling to a minute; one that goes quiet twice without staying live a
+minute is given up for the page's life. A stream's `end` (within the hour)
+opens another at once, with no back-off. A page hidden for a minute closes
+its stream and asks nothing, and asks the tip at once when it is shown.
+Only a page that came over HTTP/2 or 3 opens a stream: one over HTTP/1,
+one whose browser does not say, or one with no EventSource only polls
+(`lib/tipfeed-core.ts`). The header's
 search asks for a blob identifier that found nothing again each time
 `/v1/tip`'s `latest_blob` changes, while its panel is open, for two minutes
 after the identifier was first asked. A hash that names no blob is then
@@ -1131,7 +1152,17 @@ IPv4 address or an IPv6 /64; past 50,000 in ten minutes new ones share one
 allowance) and for the site as a whole (48 requests at the API at once,
 each holding its place only until the API's answer begins, so a slow
 reader costs only its own 16); an answer with no byte moving for 60 s is
-given up, and a client that leaves cancels its request to the API.
+given up, and a client that leaves cancels its request to the API. A tip
+stream passes through unbuffered and uncompressed and holds none of those
+16, but one of the client's 30 streams and of the site's 5,000 (the
+unit's `MemoryMax` is the real ceiling); at a stop it cuts them, opens
+none, and exits within 5 s. A front
+proxy must pass `/api/v1/tip/stream` unbuffered with a read timeout past
+the 15-second ping: Caddy does so as it is (`reverse_proxy` flushes
+`text/event-stream`; the Caddyfiles leave it out of `encode`); nginx needs
+`proxy_buffering off` (the API also sends `X-Accel-Buffering: no`) and a
+long `proxy_read_timeout`, and `http2` so that a page opens a stream at all
+(deploy/README.md, "The tip stream through a front proxy").
 
 ---
 

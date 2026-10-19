@@ -2,7 +2,8 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { API_BASE, useNewestBlob, type Blob, type Validator, type Publisher, type TxAnswer, type TxKind, type FailedTx, int, utcWord } from "@/lib/api";
+import { API_BASE, type Blob, type Validator, type Publisher, type TxAnswer, type TxKind, type FailedTx, int, utcWord } from "@/lib/api";
+import { useNewestBlob } from "@/lib/tip";
 import { blobKey } from "@/lib/blobkey";
 import { useFind } from "@/lib/blobfind";
 import { ALL } from "@/lib/blobfind-core";
@@ -192,7 +193,7 @@ export default function HeaderSearch() {
   // again: Enter or a paste of the same identifier after a lookup that failed asks it once more ("Try again in a
   // moment" said so; the same identifier used to ask nothing until the field was cleared)
   const [again, setAgain] = useState(0);
-  const newest = useNewestBlob(); // the header's tip stream: no request of its own
+  const newest = useNewestBlob(); // the page's one tip: no request of its own
   const blob = asked?.kind === "blob" ? blobKey(asked.id) : null;
   const hit = useFind(blob, { limit: SHOWN, retryOn: on ? newest : null, retryForMs: RETRY_FOR, again });
   // a hash that names no blob may be another Fibre transaction (a deposit, a withdrawal, a timeout, a registration), or

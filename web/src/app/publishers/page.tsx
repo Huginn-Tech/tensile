@@ -2,7 +2,8 @@
 import { Suspense, useCallback, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useApi, type Meta, type Tip, type Window, blobFee, bytes, failedWords, fmtShare, hhmm, int, nsDisplay, tia, utcWord, TIP_MS } from "@/lib/api";
+import { useApi, type Meta, type Window, blobFee, bytes, failedWords, fmtShare, hhmm, int, nsDisplay, tia, utcWord } from "@/lib/api";
+import { useTip } from "@/lib/tip";
 import type { MarketWithQueue, Params, PublisherWithQueue } from "@/lib/withdrawals";
 import { useWindow, WindowSwitch, periodName } from "@/lib/window";
 import { openRow } from "@/lib/row";
@@ -96,7 +97,7 @@ function Page() {
   // the price of a blob, for the low-escrow warning: the parameters' own 5-minute stream (PublishersTop's too), asked
   // again soon after a failure, so one failed first answer does not lose the warning for the life of the page
   const pf = useApi<Params>("/v1/params", 300000).data?.price_formula;
-  const tip = useApi<Tip>("/v1/tip", TIP_MS); // the header's stream: no request of its own
+  const tip = useTip(); // the page's one tip: no request of its own
   const skew = tip.data?.server_time && tip.fetchedAt ? Date.parse(tip.data.server_time) - Date.parse(tip.fetchedAt) : 0;
   const now = Date.now() + skew;
 

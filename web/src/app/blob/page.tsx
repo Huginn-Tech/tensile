@@ -2,8 +2,9 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useApi, askAgain, useNewestBlob, type Blob, type BlobReading, type Meta, type TxCost as Cost, int, bytes, tia, utcWord, hhmm, shortMid, nsDisplay, notFound, pctOf, API_BASE,
+import { useApi, askAgain, type Blob, type BlobReading, type Meta, type TxCost as Cost, int, bytes, tia, utcWord, hhmm, shortMid, nsDisplay, notFound, pctOf, API_BASE,
   endOfWindow, fullReading, ownGap, ownSide, sharedAnswer, rawErrorWords, foreignRows, asksAgain, attemptsOf, judged as judgedBy, askedTimes, FULL_READ_SINCE } from "@/lib/api";
+import { useNewestBlob } from "@/lib/tip";
 import StatusLine from "@/components/StatusLine";
 import { Eye } from "@/components/Metrics";
 import Copy from "@/components/Copy";
@@ -249,7 +250,7 @@ function Page() {
   const named = sp.get("hash") ?? "";
   // the address reads a raw + as a space, which base64 never holds: each goes back before blobKey trims a last one away
   const via = named ? null : viaOf(sp.get("id")?.replace(/ /g, "+") ?? null, sp.get("tx"));
-  // the newest blob on record, from the header's tip stream (no request of its own): a blob not on record yet is
+  // the newest blob on record, from the page's one tip (no request of its own): a blob not on record yet is
   // asked for again each time it changes, and every 30 s besides
   const newest = useNewestBlob();
   // its settlements, asked again while there are none (a blob the scanner has not read yet)

@@ -6,7 +6,10 @@
 # address and the operator's validator are fixed when it is built). Add the
 # second block when the second network exists; delete it if only one is run.
 (observer) {
-	encode gzip
+	# Compressed, but for the tip stream, whose events an encoder would hold
+	# until it had enough of them to compress.
+	@compressible not path /api/v1/tip/stream
+	encode @compressible gzip
 
 	header {
 		X-Content-Type-Options nosniff

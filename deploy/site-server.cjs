@@ -106,19 +106,66 @@ const SECURITY = {
 const RATE = { burst: 120, perSec: 10 };        // token bucket per client
 const TIP_RATE = { burst: 60, perSec: 30 };     // the same, for /v1/tip alone
 const INFLIGHT_PER_CLIENT = 16, INFLIGHT_TOTAL = 48;
+// The tip stream (/v1/tip/stream, server-sent events) is one long request per
+// shown page, in front of its polling of /v1/tip. Opening one spends a
+// TIP_RATE token; an open one holds none of INFLIGHT_PER_CLIENT's places (a
+// page's stream would leave its client 15 for everything else), but one of
+// STREAMS_PER_CLIENT's, TIP_RATE's thirty pages, and of the site's
+// STREAMS_TOTAL (streamsAllowed). A stream refused leaves its page polling
+// /v1/tip, as every page did before.
+const STREAMS_PER_CLIENT = 30;
+const STREAMS_TOTAL = streamsAllowed();
+const streams = new Set();                      // the open streams' responses, cut at shutdown
+let closing = false;                            // set at SIGTERM: no stream is opened after it
 // A client is an IPv4 address or an IPv6 /64 (clientOf). Past CLIENTS_MAX of
 // them in the last ten minutes, which this site's readers do not come near,
 // every new one shares one allowance: a flood of new addresses neither grows
 // the map without end nor gets a burst for each address.
 const CLIENTS_MAX = 50_000;
-const buckets = new Map();                      // client -> { tokens, tips, at, inflight }
-const newBucket = (now) => ({ tokens: RATE.burst, tips: TIP_RATE.burst, at: now, inflight: 0 });
+const buckets = new Map();                      // client -> { tokens, tips, at, inflight, streams }
+const newBucket = (now) => ({ tokens: RATE.burst, tips: TIP_RATE.burst, at: now, inflight: 0, streams: 0 });
 const overflow = newBucket(Date.now());
 let inflight = 0;
 setInterval(() => {
   const now = Date.now();
-  for (const [k, b] of buckets) if (b.inflight === 0 && now - b.at > 10 * 60_000) buckets.delete(k);
+  for (const [k, b] of buckets) if (b.inflight === 0 && b.streams === 0 && now - b.at > 10 * 60_000) buckets.delete(k);
+  sayFull(now);
 }, 60_000).unref();
+
+// The site's streams: at most 5,000, for memory. fibre-site@'s MemoryMax=256M
+// is the real ceiling: a stream holds two sockets, the client's and the
+// API's, some tens of KB with their buffers, beside the compressed files'
+// 64 MB. Within that, at most half the files the process may hold open,
+// less 512 for everything else: Node raises its soft limit to the hard one
+// at start (systemd's 524,288), read here from /proc (Linux), else taken as
+// 1,024. The API's own cap (observer-api -tip-streams, 2,000) is the one a
+// stream meets first.
+function streamsAllowed() {
+  let soft = 1024;
+  try {
+    const m = /^Max open files\s+(\d+|unlimited)/m.exec(fs.readFileSync("/proc/self/limits", "utf8"));
+    if (m) soft = m[1] === "unlimited" ? 1 << 20 : Number(m[1]);
+  } catch { /* not Linux */ }
+  return Math.min(5000, Math.max(0, Math.floor((soft - 512) / 2)));
+}
+
+// Streams refused at STREAMS_TOTAL go to the journal, at most once a minute
+// with the count since the last line: the first at once, the rest at the
+// next refusal or the minute's sweep after a minute has passed.
+let fullSaidAt = 0, fullUnsaid = 0;
+function sayFull(now) {
+  if (fullUnsaid === 0 || now - fullSaidAt < 60_000) return;
+  console.log(`site-server: tip streams: ${fullUnsaid} refused at the site's cap of ${STREAMS_TOTAL}, ${streams.size} open; their pages ask /v1/tip every second instead`);
+  fullSaidAt = now;
+  fullUnsaid = 0;
+}
+function full(res) {
+  fullUnsaid++;
+  sayFull(Date.now());
+  res.writeHead(503, { ...SECURITY, "content-type": "application/json", "retry-after": "60" });
+  res.end('{"error":"too many tip streams open: ask /v1/tip"}');
+  return null;
+}
 
 // The first four groups of an IPv6 address, its /64: one host is given a whole
 // /64 and can send from any address in it. Whatever the spelling: :: and a
@@ -149,11 +196,14 @@ function refuse(res) {
   return null;
 }
 
-// tip: the request is for /v1/tip, and spends TIP_RATE's tokens instead of
-// RATE's. The places it holds are given back through what it returns:
-// answered() when the API's answer begins or the request to it is over (the
-// global place), over() when both halves are (the client's own).
-function admit(req, res, tip) {
+// kind: "data"; "tip", the request is for /v1/tip, and spends TIP_RATE's
+// tokens instead of RATE's; "stream", for /v1/tip/stream, spends one of
+// TIP_RATE's too, and holds a place of STREAMS_PER_CLIENT and STREAMS_TOTAL
+// instead of INFLIGHT_PER_CLIENT. The places it holds are given back through
+// what it returns: answered() when the API's answer begins or the request to
+// it is over (the global place), over() when both halves are (the client's
+// own).
+function admit(req, res, kind) {
   const who = clientOf(req), now = Date.now();
   let b = buckets.get(who);
   if (!b) {
@@ -166,13 +216,17 @@ function admit(req, res, tip) {
   b.tokens = Math.min(RATE.burst, b.tokens + s * RATE.perSec);
   b.tips = Math.min(TIP_RATE.burst, b.tips + s * TIP_RATE.perSec);
   b.at = now;
-  const spend = tip ? "tips" : "tokens";
-  if (b[spend] < 1 || b.inflight >= INFLIGHT_PER_CLIENT || inflight >= INFLIGHT_TOTAL) return refuse(res);
+  const stream = kind === "stream";
+  const spend = kind === "data" ? "tokens" : "tips";
+  const own = stream ? "streams" : "inflight";
+  if (b[spend] < 1 || b[own] >= (stream ? STREAMS_PER_CLIENT : INFLIGHT_PER_CLIENT) || inflight >= INFLIGHT_TOTAL) return refuse(res);
+  if (stream && streams.size >= STREAMS_TOTAL) return full(res);
   b[spend] -= 1;
-  b.inflight++; inflight++;
+  b[own]++; inflight++;
+  if (stream) streams.add(res);
   let working = true, open = true;
   const answered = () => { if (working) { working = false; inflight--; } };
-  const over = () => { answered(); if (open) { open = false; b.inflight--; } };
+  const over = () => { answered(); if (open) { open = false; b[own]--; streams.delete(res); } };
   return { answered, over };
 }
 
@@ -279,7 +333,8 @@ async function warm(dir = ROOT) {
 // SLOW_MS is when an API answer is worth a journal line.
 const SLOW_MS = 1000;
 // IDLE_MS: an answer the client has stopped reading, or the API has stopped
-// sending, is given up after this long without a byte moving.
+// sending, is given up after this long without a byte moving. A tip stream
+// sends a ping every 15 s, so an open one is never idle this long.
 const IDLE_MS = 60_000;
 
 const HOP = new Set(["connection", "keep-alive", "proxy-connection", "transfer-encoding", "upgrade", "te", "trailer", "host"]);
@@ -289,15 +344,25 @@ function proxy(req, res, u) {
     res.writeHead(405, { ...SECURITY, allow: "GET, HEAD" });
     return res.end();
   }
+  // The tip stream passes like any answer, each event as it comes: nothing
+  // here buffers or compresses an API answer.
+  const stream = u.pathname === "/api/v1/tip/stream";
+  // A server that is stopping opens no stream, on a connection still open to
+  // it: the page polls until it is back.
+  if (stream && closing) {
+    res.writeHead(503, { ...SECURITY, "content-type": "application/json", "retry-after": "5" });
+    return res.end('{"error":"the site is restarting: ask /v1/tip"}');
+  }
   const counted = !u.pathname.startsWith("/api/v1/avatars/");
-  const slot = counted ? admit(req, res, u.pathname === "/api/v1/tip") : null;
+  const slot = counted ? admit(req, res, stream ? "stream" : u.pathname === "/api/v1/tip" ? "tip" : "data") : null;
   if (counted && !slot) return;
   // A page waiting on the API is the thing to catch before a visitor does:
-  // every answer slower than SLOW_MS goes to the journal with its time.
+  // every answer slower than SLOW_MS goes to the journal with its time; a
+  // stream is long by design.
   const t0 = Date.now();
   res.on("finish", () => {
     const ms = Date.now() - t0;
-    if (ms >= SLOW_MS) console.log(`site-server: slow ${u.pathname}${u.search} ${res.statusCode} ${ms} ms`);
+    if (ms >= SLOW_MS && !stream) console.log(`site-server: slow ${u.pathname}${u.search} ${res.statusCode} ${ms} ms`);
   });
   const headers = {};
   for (const [k, v] of Object.entries(req.headers)) if (!HOP.has(k)) headers[k] = v;
@@ -374,4 +439,13 @@ server.listen(LISTEN.port, LISTEN.host, () => {
   const t0 = Date.now();
   warm().then(() => console.log(`site-server: ${packed.size} files compressed in ${Date.now() - t0} ms (${Math.round(packedBytes / 1024)} KB kept)`));
 });
-for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => server.close(() => process.exit(0)));
+// A tip stream never ends by itself, so close() would wait on them until
+// systemd killed the process: each is cut, none is opened after (closing),
+// and its page polls until the server is back. Whatever else is still open
+// is given 5 s.
+for (const sig of ["SIGTERM", "SIGINT"]) process.on(sig, () => {
+  closing = true;
+  server.close(() => process.exit(0));
+  for (const r of streams) r.destroy();
+  setTimeout(() => process.exit(0), 5000).unref();
+});
