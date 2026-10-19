@@ -1038,6 +1038,13 @@ site-server, `SITE_CONNECT_SRC` (below); with Caddy, add the origin to
 `NEXT_PUBLIC_OTHER_NETWORK_LABEL=Mocha`); Mocha's names none until mainnet's
 site exists, and can then name it the same way (`Mainnet`).
 
+`NEXT_PUBLIC_ACTIVATION_HEIGHT`, for a site that goes up before Fibre is live
+on its network, is the block Fibre activates at: until the observer reports
+Fibre live (`/v1/tip`'s `fibre_active`), every page shows a countdown to that
+block instead, and the explorer takes its place by itself once it is live, on
+an open page too. Unset, as on Mocha, there is no countdown; a build after the
+activation leaves it out.
+
 `NEXT_PUBLIC_NETWORKS` lists every network's site for the header's switch
 (the current one is marked by origin) and is the same in every build.
 Build one network at a time, since each build replaces `web/out`:

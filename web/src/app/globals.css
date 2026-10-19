@@ -3383,3 +3383,47 @@ button.warn:focus-visible { outline-offset: 0; }
   .ref-kv-line .ref-kv-n { display: inline; }
   .ref-rules > div { grid-template-columns: minmax(0, 1fr); gap: 0; }
 }
+
+/* ---- the countdown to Fibre's activation (components/Launch.tsx): the whole page while Fibre is still to come. The
+   clock is the page; the chain's figures under it in one frame, as the site frames its figures; nothing glows ---- */
+.lc { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-rows: auto 1fr; }
+.lc-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; max-width: var(--page); margin: 0 auto; padding: 22px var(--gutter); }
+.lc-brand { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-weight: 600; font-size: 16px; letter-spacing: -.005em; text-decoration: none; }
+.lc-brand .mark-logo { color: var(--accent); }
+.lc-other { color: var(--text-2); font-size: var(--t-small); text-decoration: none; transition: color var(--dur); }
+.lc-other:hover { color: var(--text); }
+.lc-main { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; padding: 24px var(--gutter) 96px; text-align: center; }
+.lc-eyebrow { display: inline-flex; align-items: center; gap: 8px; margin: 0; color: var(--text-2); font-size: var(--t-small); font-weight: 500; letter-spacing: .14em; text-transform: uppercase; }
+.lc-eyebrow svg { color: var(--celestia); }
+.lc-h { margin: -12px 0 0; font-size: clamp(24px, 3.2vw, 36px); font-weight: 600; line-height: 1.2; letter-spacing: -.015em; color: var(--text); text-wrap: balance; }
+.lc-clock { display: flex; align-items: flex-start; justify-content: center; margin: 8px 0 4px; }
+.lc-unit { display: flex; align-items: flex-start; }
+.lc-cell { display: flex; flex-direction: column; align-items: center; gap: 12px; min-width: 1.3em; font-size: clamp(44px, 10.5vw, 128px); }
+.lc-num { font-family: var(--mono); font-weight: 500; font-size: 1em; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; color: var(--text); }
+.lc-num.wait { letter-spacing: 0; }
+.lc-sep { padding: 0 .12em; font-family: var(--mono); font-weight: 300; font-size: clamp(34px, 8vw, 100px); line-height: 1.12; color: var(--text-3); }
+.lc-lab { font-family: var(--sans); font-size: var(--t-tiny); font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--text-3); }
+.lc-clock.done .lc-num { color: var(--text-3); }
+.lc-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: min(100%, 860px); margin: 8px 0 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: var(--shadow-sm); text-align: left; }
+.lc-facts > div { min-width: 0; padding: 16px 20px; }
+.lc-facts > div + div { border-left: 1px solid var(--border); }
+.lc-facts dt { margin-bottom: 8px; color: var(--text-3); font-size: var(--t-tiny); font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.lc-facts dd { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; color: var(--text); font-size: 17px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.lc-facts dd small { flex-basis: 100%; color: var(--text-3); font-size: var(--t-small); font-weight: 400; }
+.lc-facts .bt-dot { margin: 0; }
+.lc-note { max-width: 58ch; margin: 0; color: var(--text-2); font-size: 15px; line-height: 1.6; text-wrap: pretty; }
+.lc-links { margin: -4px 0 0; }
+.lc-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; border-radius: var(--r-ctl); background: var(--accent-tint); color: var(--seg-on-ink); font-size: var(--t-body); font-weight: 500; text-decoration: none; transition: background var(--dur); }
+.lc-btn:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+@media (max-width: 860px) {
+  .lc-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lc-facts > div:nth-child(3) { border-left: 0; }
+  .lc-facts > div:nth-child(n + 3) { border-top: 1px solid var(--border); }
+}
+@media (max-width: 720px) {
+  .lc-top { padding: 16px var(--gutter); }
+  .lc-main { gap: 22px; padding: 16px var(--gutter) 64px; }
+  .lc-cell { gap: 8px; }
+  .lc-facts > div { padding: 12px 14px; }
+  .lc-facts dd { font-size: 15px; }
+}
