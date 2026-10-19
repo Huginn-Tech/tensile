@@ -1,5 +1,5 @@
 // pillpick.ts (npm test; node --test): who the overview map's pill names. The newest beat's endorsers (the union over
-// its blobs) one at a time, a shuffled order, each once before any repeats; a new beat takes the pill at once with one
+// its blobs) one at a time, a shuffled order, each once, the last staying; a new beat takes the pill at once with one
 // of its own; a beat without known endorsers is named as settled; a new or changed endpoint holds the pill for 12 s and
 // the endorsers come back after. The module is TypeScript with no imports, so the test compiles it with the project's
 // own TypeScript.
@@ -21,7 +21,7 @@ const who = (pk, now = 0) => { const s = pk.show(now); return s && s.kind === "e
 /** n names in a row, ticking between them */
 const run = (pk, n) => { const out = []; for (let i = 0; i < n; i++) { if (i) pk.tick(i * ROTATE_MS); out.push(who(pk)); } return out; };
 
-test("a beat's endorsers are named in a shuffled order, each once, then round again without a repeat at the turn", () => {
+test("a beat's endorsers are named in a shuffled order, each once, and the last stays until the next beat", () => {
   const pk = new PillPicker(seeded(3));
   const es = set("a", 60);
   pk.beat("b1", "2026-10-19T10:00:00Z", es);
@@ -30,10 +30,14 @@ test("a beat's endorsers are named in a shuffled order, each once, then round ag
   assert.deepEqual([...named].sort(), es, "every endorser, and only them");
   assert.notDeepEqual(named, es, "shuffled, not in the record's order");
   assert.deepEqual([...pk.names].sort(), es, "the pill's set, for its width");
+  for (let i = 0; i < 300; i++) pk.tick(i * ROTATE_MS);
+  assert.equal(who(pk), named[59], "one round: the last named stays, minutes on");
+  // an endorser known only later is named next, then stays
+  pk.beat("b1", "2026-10-19T10:00:00Z", [...es, "late"]);
   pk.tick(0);
-  const next = [who(pk), ...run(pk, 60).slice(1)];
-  assert.notEqual(next[0], named[59], "the next round does not start where the last ended");
-  assert.equal(new Set(next).size, 60);
+  assert.equal(who(pk), "late");
+  pk.tick(0);
+  assert.equal(who(pk), "late");
   const s = pk.show(0);
   assert.deepEqual(s, { kind: "endorser", who: s.who, key: "b1", at: "2026-10-19T10:00:00Z" });
 });

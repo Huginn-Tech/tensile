@@ -2,11 +2,11 @@
  * What the overview map's pill names, one validator at a time: an endorser of the newest beat of blobs, "B-Harvest
  * endorsed · 12 s ago". A beat is one block's blobs as the grid takes them in; its endorsers are the
  * union of theirs, the very places that burst on the map (lib/mapflash.ts, endorsersOf on each blob's record). They
- * are named in a shuffled order, each once, a new one every ROTATE_MS, and round again (shuffled anew) until the next
- * beat; a new beat takes the pill at once, with one of its own endorsers picked at random. A beat whose endorsers are
- * not known yet (its records have not answered, or none endorsed) is named plainly as settled; endorsers that become
- * known later join the names still to come. A validator's new or changed endpoint takes the pill for HOLD_MS when it
- * happens; the endorsers come back after, where they were.
+ * are named in a shuffled order, each once, a new one every ROTATE_MS, and the last named stays until the next
+ * beat: one round, never again; a new beat takes the pill at once, with one of its own endorsers picked at random. A
+ * beat whose endorsers are not known yet (its records have not answered, or none endorsed) is named plainly as
+ * settled; endorsers that become known later join the names still to come. A validator's new or changed endpoint
+ * takes the pill for HOLD_MS when it happens; the endorsers come back after, where they were.
  */
 
 /** ms between two endorsers named */
@@ -20,14 +20,13 @@ export type Shown<E> =
   | { kind: "endpoint"; ev: E }
   | null;
 
-/** a fresh order of xs: Fisher-Yates with rand; never starting with `not`, when it can help it */
-function shuffle(xs: string[], rand: () => number, not?: string): string[] {
+/** a fresh order of xs: Fisher-Yates with rand */
+function shuffle(xs: string[], rand: () => number): string[] {
   const a = [...xs];
   for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
     [a[i], a[j]] = [a[j], a[i]];
   }
-  if (a.length > 1 && a[0] === not) [a[0], a[1]] = [a[1], a[0]];
   return a;
 }
 
@@ -74,14 +73,10 @@ export class PillPicker<E> {
     this.epUntil = now + HOLD_MS;
   }
 
-  /** the next endorser (every ROTATE_MS); round again, shuffled anew, after the last; not while an endpoint holds the pill */
+  /** the next endorser (every ROTATE_MS), until the last, which stays; not while an endpoint holds the pill */
   tick(now: number): void {
-    if (now < this.epUntil || !this.order) return;
+    if (now < this.epUntil || !this.order || this.i >= this.order.length - 1) return;
     this.i++;
-    if (this.i >= this.order.length) {
-      this.order = shuffle(this.order, this.rand, this.order[this.order.length - 1]);
-      this.i = 0;
-    }
   }
 
   /** what the pill names now */
