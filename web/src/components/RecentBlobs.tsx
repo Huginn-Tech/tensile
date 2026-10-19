@@ -10,6 +10,7 @@ import { lane } from "@/lib/status";
 import { recheck } from "@/lib/recheck";
 import { announce } from "@/lib/mapflash";
 import { Pacer } from "@/lib/pace";
+import { slide, frames, enters } from "@/lib/conveyor";
 
 /**
  * The overview's recent blobs: the newest settlements as a grid of squares,
@@ -21,16 +22,19 @@ import { Pacer } from "@/lib/pace";
  * The grid reads as text does, newest at the top left, so its reading order
  * is age order. New blobs enter at the top left and everything else moves on
  * by as many places, row by row: each row is a window on one tape, and all
- * five slide together in one 420 ms move per read, the places that leave a
- * row's right end entering the next row's left. The newest is ringed and
- * whatever arrived with it glows for 1.4 s; nothing else moves.
+ * five slide together in one move per read, the places that leave a row's
+ * right end entering the next row's left. A lone blob slides in in 420 ms; a
+ * block's several come in one place at a time, 150 ms apart and within 1 s
+ * however many, the oldest first, each glowing for 1.4 s as it comes into
+ * view (lib/conveyor.ts). The newest is ringed; nothing else moves.
  *
  * A block that comes in alone moves the grid the moment it is read: the
  * tip brings each block as it is committed, already an even beat. Blocks
  * that come in together (after a stall) go on one at a time, half a second
- * apart, and many at once in one move (lib/pace.ts). Each move is told to
- * the overview's map, whose places of the blobs' endorsers burst with it and
- * whose pill names them (lib/mapflash.ts). The list is read with each blob's
+ * apart or once the one before has slid in, and many at once in one move
+ * (lib/pace.ts). Each move is told to the overview's map, whose places of
+ * the blobs' endorsers burst with it and whose pill names them
+ * (lib/mapflash.ts). The list is read with each blob's
  * endorsers (?endorsers=1), so the grid, the latest blob's card, the burst
  * and the pill read one answer, in the same frame. Of the blocks one read
  * brings after a stall, only the newest bursts and is named: the older come
@@ -79,7 +83,6 @@ const COLS = 10, ROWS = 5, CELLS = COLS * ROWS;
 const FALLBACK_MS = 30000;
 /** the least time between two reads of the whole grid for its statuses (recheck), so one that fails is not asked every 5 s */
 const RECHECK_MS = 30000;
-const SLIDE_MS = 420;
 
 /** at: when the read that brought the blob's record was made */
 type Cell = { b: Blob; seq: number; at: number };
@@ -318,19 +321,19 @@ function Age({ at, skew }: { at: string; skew: number }) {
 type Shown = { cells: Cell[]; total: number | null; move: { id: number; n: number; fresh: Set<string> } | null };
 const NO_SHOWN: Shown = { cells: [], total: null, move: null };
 
-type PlaceProps = { c: Cell; i: number; fresh: boolean; on: boolean; tab: boolean; ghost: boolean; onShow: (h: string) => void; onKey: (e: React.KeyboardEvent, i: number) => void; onFocusAt: (i: number) => void; onOpen: (e: React.MouseEvent, href: string) => void };
+type PlaceProps = { c: Cell; i: number; fresh: boolean; enter: number; on: boolean; tab: boolean; ghost: boolean; onShow: (h: string) => void; onKey: (e: React.KeyboardEvent, i: number) => void; onFocusAt: (i: number) => void; onOpen: (e: React.MouseEvent, href: string) => void };
 /**
  * one place on the tape: a real one is the blob's link; a ghost is its copy past a row's end, there
  * only to slide out of view. A place keeps its element from one move to the next and only takes the
  * next blob's attributes; an arrival's glow is the blob's own element, so it is new, and plays once,
- * whenever the blob in the place changes. A plain link, with the
+ * whenever the blob in the place changes, from when its place comes into view (enter, ms). A plain link, with the
  * app's router on a plain click: fifty of Next's links re-rendering on every read were the cost of a
  * move.
  */
-const Place = memo(function Place({ c, i, fresh, on, tab, ghost, onShow, onKey, onFocusAt, onOpen }: PlaceProps) {
+const Place = memo(function Place({ c, i, fresh, enter, on, tab, ghost, onShow, onKey, onFocusAt, onOpen }: PlaceProps) {
   const b = c.b;
   const cls = `rb-c${i === 0 ? " rb-newest" : ""}${fresh ? " rb-new" : ""}${on ? " rb-on" : ""}${ghost ? " rb-ghost" : ""}`;
-  const inner = fresh ? <b key={`g${b.promise_hash}`} className="rb-glow" aria-hidden="true" /> : null;
+  const inner = fresh ? <b key={`g${b.promise_hash}`} className="rb-glow" style={enter ? { animationDelay: `${enter}ms` } : undefined} aria-hidden="true" /> : null;
   if (ghost) return <span className={cls} aria-hidden="true">{inner}</span>;
   const href = `/blob/?hash=${b.promise_hash}`;
   return (
@@ -373,12 +376,17 @@ export default function RecentBlobs() {
   const holdRef = useRef(hold);
   holdRef.current = hold;
   const beatT = useRef<number | undefined>(undefined);
+  // until when the last beat's slide runs: the next beat waits for it (performance.now() ms)
+  const sliding = useRef(0);
+  const motionRef = useRef(motion);
+  motionRef.current = motion;
   // the blobs of a read's older blocks, which come onto the grid without a burst or a name (a stall's catch-up)
   const quiet = useRef(new Set<string>());
   // a beat: these cells come onto the grid, newest first, with the feed's newest word on every cell shown
   const beat = useCallback((out: Cell[]) => {
     if (out.length === 0) return;
     waiting.current -= out.length;
+    if (motionRef.current) sliding.current = performance.now() + slide(out.length, COLS).ms;
     const f = feedRef.current;
     setShown((v) => {
       const byHash = new Map(f.cells.map((c) => [c.b.promise_hash, c]));
@@ -393,11 +401,13 @@ export default function RecentBlobs() {
     const p = pacer.current!;
     const due = p.due();
     if (due === null || holdRef.current) return;
+    // a block that comes while the last one still slides in goes on as it settles, so no slide is cut short
+    const at = Math.max(due, sliding.current);
     beatT.current = window.setTimeout(() => {
       if (holdRef.current) return;
       beat(p.take(performance.now()));
       schedule();
-    }, Math.max(0, due - performance.now()));
+    }, Math.max(0, at - performance.now()));
   }, [beat]);
   useEffect(() => {
     if (!feed.loaded) return;
@@ -455,18 +465,17 @@ export default function RecentBlobs() {
   // ---- the readout's heading on one line, as large as it fits ----
   const headRef = useFitHead();
 
-  // ---- the move: every row's tape slides by the places that came in, once, together ----
+  // ---- the move: every row's tape slides by the places that came in, together, one place at a time (conveyor.ts) ----
   const gridRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const g = gridRef.current, mv = shown.move;
     if (!g || !mv || !motion) return;
     const first = g.querySelectorAll<HTMLElement>(".rb-row:first-child .rb-c");
     const pitch = first.length > 1 ? first[1].offsetLeft - first[0].offsetLeft : 27;
-    const d = Math.min(mv.n, COLS) * pitch;
+    const s = slide(mv.n, COLS), kf = frames(s, pitch);
     g.classList.add("rb-moving");
-    const anims = [...g.querySelectorAll<HTMLElement>(".rb-tape")].map((t) =>
-      t.animate([{ transform: `translateX(${-d}px)` }, { transform: "translateX(0)" }], { duration: SLIDE_MS, easing: "cubic-bezier(.2, .8, .2, 1)" }));
-    const done = window.setTimeout(() => g.classList.remove("rb-moving"), SLIDE_MS + 20);
+    const anims = [...g.querySelectorAll<HTMLElement>(".rb-tape")].map((t) => t.animate(kf, { duration: s.ms }));
+    const done = window.setTimeout(() => g.classList.remove("rb-moving"), s.ms + 20);
     return () => { window.clearTimeout(done); g.classList.remove("rb-moving"); anims.forEach((a) => a.cancel()); };
   }, [shown.move?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -529,6 +538,7 @@ export default function RecentBlobs() {
 
   const rows = Array.from({ length: ROWS }, (_, r) => r);
   const mv = shown.move;
+  const sl = mv && motion ? slide(mv.n, COLS) : null;
   return (
     <>
       <div className="rb" data-state={state}>
@@ -551,7 +561,7 @@ export default function RecentBlobs() {
                   if (!c) return ghost ? null : <span key={`p${k}`} className="rb-c rb-empty" aria-hidden="true" />;
                   return (
                     <Place key={`p${k}`} c={c} i={i} ghost={ghost} onOpen={onOpen}
-                      fresh={!!mv && motion && mv.fresh.has(c.b.promise_hash)} on={sel === c.b.promise_hash}
+                      fresh={!!sl && mv!.fresh.has(c.b.promise_hash)} enter={sl ? enters(i, sl) : 0} on={sel === c.b.promise_hash}
                       tab={!ghost && i === Math.min(focusAt, cells.length - 1)} onShow={onShow} onKey={walk} onFocusAt={setFocusAt} />
                   );
                 })}
