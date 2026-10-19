@@ -3,6 +3,7 @@ import { preload } from "react-dom";
 import "./fonts.css";
 import "./globals.css";
 import { Header, Footer } from "@/components/Chrome";
+import Launch from "@/components/Launch";
 import { PREVIEW_IMAGE_PATH, SITE_NAME, SITE_URL } from "@/lib/site";
 
 // Fonts are served from this site's own origin (fonts.css, public/fonts): a
@@ -45,11 +46,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" data-theme="dark" suppressHydrationWarning>
       <body>
         <script dangerouslySetInnerHTML={{ __html: themeBoot }} />
-        <Header />
-        <main className="wrap">
-          {children}
-          <Footer />
-        </main>
+        {/* on a network whose Fibre is still to come, a countdown to its activation in the site's place (Launch) */}
+        <Launch>
+          <Header />
+          <main className="wrap">
+            {children}
+            <Footer />
+          </main>
+        </Launch>
       </body>
     </html>
   );
