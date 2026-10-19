@@ -42,6 +42,9 @@ const answer = (path, ...q) => answers.set(path, q);
 const count = (path) => asked.filter((p) => p === path).length;
 
 mock.timers.enable({ apis: ["setTimeout", "setInterval", "Date"] });
+// a failure's back-off is lengthened by up to half at random (Math.random); the tests below take none of it, but the
+// one that says so
+Math.random = () => 0;
 const { subscribe, failRetryMs } = await load("./api.ts");
 
 // lets the requests out come back: a few turns of the microtask queue past every await on the way
@@ -77,6 +80,23 @@ test("a failed answer is asked again within seconds, doubling, not at the stream
   await pass(250);
   assert.equal(count(path), 4);
   s.stop();
+});
+
+test("pages refused together ask again apart: up to half the back-off again, at random", async () => {
+  const path = "/v1/fail-late";
+  answer(path, { status: 502, body: { error: "observer API unavailable" } }, ok());
+  Math.random = () => 0.999;
+  try {
+    const s = watch(path, 30000);
+    await settle();
+    await pass(2750);
+    assert.equal(count(path), 1, "2 s and most of half of it again");
+    await pass(250);
+    assert.equal(count(path), 2, "under 3 s");
+    s.stop();
+  } finally {
+    Math.random = () => 0;
+  }
 });
 
 test("a failure keeps what is on screen, with the error beside it", async () => {
