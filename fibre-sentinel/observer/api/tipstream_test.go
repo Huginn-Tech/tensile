@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -119,6 +120,15 @@ func streamState(s *Server) (open int, running bool) {
 	s.streams.mu.Lock()
 	defer s.streams.mu.Unlock()
 	return len(s.streams.subs), s.streams.running
+}
+
+// streamGoroutines counts the goroutines in a tip stream's handler or its
+// producer, in the whole process: the other tests of the package open no
+// stream, and these run one at a time.
+func streamGoroutines() int {
+	buf := make([]byte, 8<<20)
+	all := string(buf[:runtime.Stack(buf, true)])
+	return strings.Count(all, ").handleTipStream(") + strings.Count(all, ").tipProducer(")
 }
 
 func waitFor(t *testing.T, within time.Duration, what string, ok func() bool) {
@@ -266,12 +276,15 @@ func TestTipStreamEndsWithItsReader(t *testing.T) {
 	if n, running := streamState(srv); n != 3 || !running {
 		t.Fatalf("%d open, producer running %v; want 3 and running", n, running)
 	}
+	if n := streamGoroutines(); n != 4 {
+		t.Fatalf("%d goroutines of the streams, want 4: 3 streams and the producer", n)
+	}
 	for _, b := range bodies {
 		b.Close()
 	}
 	waitFor(t, 3*time.Second, "every stream ended and the producer stopped", func() bool {
 		n, running := streamState(srv)
-		return n == 0 && !running
+		return n == 0 && !running && streamGoroutines() == 0
 	})
 	if c := srv.tipStreamsCheck(srv.now()); !c.OK || !strings.Contains(c.Detail, "0 open, at most 3 at once") {
 		t.Errorf("after the readers left: %+v", c)
@@ -302,7 +315,10 @@ func TestTipStreamsEndWithTheServer(t *testing.T) {
 			t.Fatal("a stream outlived the server's shutdown")
 		}
 	}
-	waitFor(t, 3*time.Second, "the producer stopped", func() bool { n, running := streamState(srv); return n == 0 && !running })
+	waitFor(t, 3*time.Second, "the stream and the producer stopped", func() bool {
+		n, running := streamState(srv)
+		return n == 0 && !running && streamGoroutines() == 0
+	})
 	res, err := ts.Client().Get(ts.URL + "/v1/tip/stream")
 	if err != nil {
 		t.Fatal(err)
