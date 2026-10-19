@@ -390,6 +390,8 @@ func (c *Chain) UpgradeSignal(parent context.Context, version uint64) (UpgradeSi
 }
 
 // Escrow is one publisher's x/fibre escrow account as the chain holds it.
+// Its balances are in Denom, the denomination of the account's first
+// deposit: utia only where Denom is "utia" (Payment.AmountUtia).
 type Escrow struct {
 	Signer        string
 	Denom         string

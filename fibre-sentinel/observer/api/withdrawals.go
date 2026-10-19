@@ -46,6 +46,12 @@ import (
 // A withdrawal that left the queue is executed only when exactly one payout
 // of its last-seen amount lands between the two reads that bracket its
 // departure.
+//
+// Every figure here is of utia withdrawals alone (utiaDenom): the market's
+// queue and an account's pending count and sum, their outcomes and delays,
+// and the escrow check. A withdrawal of an escrow held in another
+// denomination is still listed among its account's rows, with its coin
+// (amount) and no utia amount.
 
 // pendingQueue is one account's queue, or the market's, as last read.
 type pendingQueue struct {
@@ -68,11 +74,16 @@ type pendingSummary struct {
 	ReadAt     *string `json:"read_at"`
 }
 
-// withdrawalRow is one withdrawal, queued or gone.
+// withdrawalRow is one withdrawal, queued or gone. One in another
+// denomination than utia (utiaDenom) has Amount, its coin now, and its
+// utia amounts read 0 and no paid_utia: the module never reduces it (a
+// charge on its escrow fails), so the amount first seen and the one paid
+// out, if it was, are that one.
 type withdrawalRow struct {
 	RequestedAt     string  `json:"requested_at"`
 	AvailableAt     string  `json:"available_at"`
 	Denom           string  `json:"denom"`
+	Amount          string  `json:"amount,omitempty"`
 	AmountUtia      int64   `json:"amount_utia"`
 	FirstAmountUtia int64   `json:"first_amount_utia"`
 	ReducedUtia     int64   `json:"reduced_utia"`
@@ -132,7 +143,8 @@ type outcomeSum struct {
 // withdrawalQueue is the "withdrawal_queue" object of /v1/market.
 type withdrawalQueue struct {
 	Pending pendingSummary `json:"pending"`
-	// Publishers is how many accounts have at least one withdrawal queued.
+	// Publishers is how many accounts have at least one utia withdrawal
+	// queued.
 	Publishers int64 `json:"publishers"`
 	// Left the queue in the window (by the block time of the first read
 	// that no longer had it), by outcome. Waiting ones have no outcome
@@ -186,6 +198,10 @@ func scanWithdrawal(rows *sql.Rows) (withdrawalRow, error) {
 		&outcome, &w.OutcomeReason, &paidH, &paidAt, &paidU); err != nil {
 		return w, err
 	}
+	if w.Denom != utiaDenom {
+		w.Amount = coinText(w.AmountUtia, w.Denom)
+		w.AmountUtia, w.FirstAmountUtia, paidU = 0, 0, sql.NullInt64{}
+	}
 	w.ReducedUtia = w.FirstAmountUtia - w.AmountUtia
 	if w.ReducedUtia < 0 {
 		w.ReducedUtia = 0
@@ -234,7 +250,7 @@ func (s *Server) pendingByPublisher(ctx context.Context, only string) (map[strin
 			COUNT(q.requested_at), COALESCE(SUM(q.amount_utia), 0), MIN(q.available_at),
 			COALESCE(SUM(q.first_amount_utia - q.amount_utia), 0)
 		FROM escrow_accounts e
-		LEFT JOIN withdrawal_queue q ON q.publisher = e.publisher AND q.gone_height IS NULL
+		LEFT JOIN withdrawal_queue q ON q.publisher = e.publisher AND q.gone_height IS NULL AND q.denom = 'utia'
 		WHERE e.withdrawals_height IS NOT NULL`+filter+`
 		GROUP BY e.publisher, e.withdrawals_height, e.withdrawals_at`, args...)
 	if err != nil {
@@ -294,12 +310,14 @@ func (s *Server) publisherWithdrawalDetail(ctx context.Context, addr string) (*p
 		return nil, err
 	}
 	var found, bal, avail, h, wh, pending sql.NullInt64
-	err = s.st.DB().QueryRowContext(ctx, `SELECT found, balance_utia, available_utia, height, withdrawals_height, pending_utia
-		FROM escrow_accounts WHERE publisher = ?`, addr).Scan(&found, &bal, &avail, &h, &wh, &pending)
+	var denom string
+	err = s.st.DB().QueryRowContext(ctx, `SELECT found, balance_utia, available_utia, height, withdrawals_height, pending_utia, denom
+		FROM escrow_accounts WHERE publisher = ?`, addr).Scan(&found, &bal, &avail, &h, &wh, &pending, &denom)
 	if err != nil && err != sql.ErrNoRows {
 		return nil, err
 	}
-	if err == nil && found.Int64 == 1 && h.Valid && wh.Valid && h.Int64 == wh.Int64 {
+	// An escrow held in another denomination has no utia figure to check.
+	if err == nil && found.Int64 == 1 && denom == utiaDenom && h.Valid && wh.Valid && h.Int64 == wh.Int64 {
 		diff := bal.Int64 - avail.Int64
 		out.Check = &queueCheck{Height: h.Int64, BalanceMinusAvailableUtia: diff, PendingUtia: pending.Int64, Consistent: diff == pending.Int64}
 	}
@@ -314,7 +332,7 @@ func (s *Server) withdrawalQueueSummary(ctx context.Context, win Window) (*withd
 	var next sql.NullString
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(amount_utia), 0), MIN(available_at),
 			COALESCE(SUM(first_amount_utia - amount_utia), 0), COUNT(DISTINCT publisher)
-		FROM withdrawal_queue WHERE gone_height IS NULL`).
+		FROM withdrawal_queue WHERE gone_height IS NULL AND denom = 'utia'`).
 		Scan(&q.Pending.Count, &q.Pending.Utia, &next, &q.Pending.ReducedUtia, &q.Publishers); err != nil {
 		return nil, fmt.Errorf("pending: %w", err)
 	}
@@ -330,7 +348,7 @@ func (s *Server) withdrawalQueueSummary(ctx context.Context, win Window) (*withd
 
 	start, end := win.startArg(), win.endArg()
 	rows, err := db.QueryContext(ctx, `SELECT COALESCE(outcome, ''), COUNT(*), COALESCE(SUM(COALESCE(paid_utia, amount_utia)), 0)
-		FROM withdrawal_queue WHERE gone_height IS NOT NULL AND gone_at >= ? AND gone_at <= ?
+		FROM withdrawal_queue WHERE gone_height IS NOT NULL AND gone_at >= ? AND gone_at <= ? AND denom = 'utia'
 		GROUP BY COALESCE(outcome, '')`, start, end)
 	if err != nil {
 		return nil, fmt.Errorf("outcomes: %w", err)
@@ -360,7 +378,7 @@ func (s *Server) withdrawalQueueSummary(ctx context.Context, win Window) (*withd
 
 	// Delays of the payouts in the window, by payout time.
 	drows, err := db.QueryContext(ctx, `SELECT requested_at, available_at, paid_at FROM withdrawal_queue
-		WHERE outcome = ? AND paid_at IS NOT NULL AND paid_at >= ? AND paid_at <= ?`, store.WithdrawalExecuted, start, end)
+		WHERE outcome = ? AND paid_at IS NOT NULL AND paid_at >= ? AND paid_at <= ? AND denom = 'utia'`, store.WithdrawalExecuted, start, end)
 	if err != nil {
 		return nil, fmt.Errorf("payout delay: %w", err)
 	}

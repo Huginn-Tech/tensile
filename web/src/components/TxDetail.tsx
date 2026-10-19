@@ -182,9 +182,11 @@ function Page({ t, HEX, meta, metaErr, at }: { t: TxAnswer; HEX: string; meta: M
   };
   const unchanged = () => add("esc", "Escrow", <><b>Unchanged</b><em>nothing moved</em></>);
   const exact = (u?: number) => (u != null ? `${(u / 1e6).toLocaleString("en-US", { minimumFractionDigits: 6 })} TIA` : undefined);
-  // what a movement that took effect moved, signed as the escrow saw it; not recorded when no payment row holds it
+  // what a movement that took effect moved, signed as the escrow saw it; a coin of another denomination as the chain
+  // wrote it, in no TIA figure; not recorded when no payment row holds it
   const amount = (sign: string, note: string) => add("amt", "Amount", x.amount_utia != null
     ? <><b>{unit(`${sign}${tia(x.amount_utia)}`)}</b><em>{note}</em></>
+    : x.amount ? <><span className="rq">{exactCoin(x.amount)}</span><em>{note} · not TIA</em></>
     : <em>not recorded</em>, exact(x.amount_utia));
   switch (t.kind) {
     case "settlement":

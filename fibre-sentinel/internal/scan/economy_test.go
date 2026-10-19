@@ -1,6 +1,7 @@
 package scan
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -139,6 +140,36 @@ func TestPaymentsInTx_EveryKind(t *testing.T) {
 	}
 }
 
+// otherDenom is an IBC denomination. x/fibre at the pinned v10 takes an
+// escrow deposit in it (no denom check until celestia-app PR #8143, in v11).
+const otherDenom = "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2"
+
+// A deposit and a withdrawal request in another denomination are recorded
+// as the chain wrote them, denom and amount: the record keeps the fact, and
+// a reader counts AmountUtia only where Denom is utia.
+func TestPaymentsInTx_OtherDenomAsWritten(t *testing.T) {
+	owner := "celestia1d3mmg652pxj776dyqwlsrc93y64088g6ux8deq"
+	raw := rawTx(t,
+		depositMsg{&fibretypes.MsgDepositToEscrow{Signer: owner, Amount: sdk.NewInt64Coin(otherDenom, 5_000_000)}},
+		withdrawMsg{&fibretypes.MsgRequestWithdrawal{Signer: owner, Amount: sdk.NewInt64Coin(otherDenom, 2_000_000)}},
+	)
+	ps, err := paymentsInTx(raw, &Block{Height: 100, Time: time.Date(2026, 10, 20, 4, 0, 0, 0, time.UTC)}, 0, "abcd", time.Now())
+	if err != nil {
+		t.Fatalf("paymentsInTx: %v", err)
+	}
+	if len(ps) != 2 {
+		t.Fatalf("want 2 payments, got %d: %+v", len(ps), ps)
+	}
+	for i, want := range []struct {
+		kind   string
+		amount uint64
+	}{{PaymentDeposit, 5_000_000}, {PaymentWithdrawalRequest, 2_000_000}} {
+		if p := ps[i]; p.Kind != want.kind || p.Denom != otherDenom || p.AmountUtia != want.amount || p.Publisher != owner {
+			t.Errorf("payment %d: %+v, want a %s of %d %s", i, p, want.kind, want.amount, otherDenom)
+		}
+	}
+}
+
 func TestPaymentsInTx_NotAnSDKTx(t *testing.T) {
 	ps, err := paymentsInTx([]byte("garbage"), &Block{Height: 1}, 0, "x", time.Now())
 	if err != nil || len(ps) != 0 {
@@ -183,6 +214,37 @@ func TestWithdrawalsExecuted(t *testing.T) {
 		{Key: "signer", Value: `"celestia1abc"`}, {Key: "amount", Value: `not json`}}}}
 	if _, err := withdrawalsExecuted(bad, blk, time.Now()); err == nil {
 		t.Error("malformed amount must error")
+	}
+}
+
+// A payout of another denomination past uint64 is kept at uint64's maximum,
+// as coinAmount keeps a deposit's, with its denom; the payouts after it in
+// the block are still read, where an error used to drop them, the utia one
+// included. A figure that is no number is still refused.
+func TestWithdrawalsExecutedPastUint64(t *testing.T) {
+	blk := &Block{Height: 8, Time: time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)}
+	payout := func(signer, coin string) abci.Event {
+		return abci.Event{Type: eventWithdrawExecutedType, Attributes: []abci.EventAttribute{
+			{Key: "signer", Value: `"` + signer + `"`}, {Key: "amount", Value: coin}}}
+	}
+	ps, err := withdrawalsExecuted([]abci.Event{
+		payout("celestia1abc", `{"denom":"`+otherDenom+`","amount":"25000000000000000000"}`),
+		payout("celestia1def", `{"denom":"utia","amount":"123"}`),
+	}, blk, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ps) != 2 {
+		t.Fatalf("want 2 payouts, got %d: %+v", len(ps), ps)
+	}
+	if ps[0].Denom != otherDenom || ps[0].AmountUtia != math.MaxUint64 || ps[0].Publisher != "celestia1abc" {
+		t.Errorf("past uint64: %+v", ps[0])
+	}
+	if ps[1].Denom != "utia" || ps[1].AmountUtia != 123 || ps[1].Publisher != "celestia1def" {
+		t.Errorf("the utia payout after it: %+v", ps[1])
+	}
+	if _, err := withdrawalsExecuted([]abci.Event{payout("celestia1abc", `{"denom":"utia","amount":"12x"}`)}, blk, time.Now()); err == nil {
+		t.Error("an amount that is no number must error")
 	}
 }
 

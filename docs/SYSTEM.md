@@ -793,6 +793,22 @@ close on the escrow's balance once the escrow read and the scanner stand at
 the same block. No schema change: every statement seeks an index the store
 already has.
 
+**Escrow in another denomination.** x/fibre at the pinned v10 takes a
+deposit in any denomination (no denom check in `MsgDepositToEscrow` until
+celestia-app PR #8143, in v11) and creates the escrow in its first
+deposit's; that account's later deposits, withdrawals and payouts are in
+the same one, and a charge on it fails on chain (the module compares two
+denominations, which panics), so it never settles a blob. The record keeps
+each amount with its `denom` as the chain wrote it, in the `amount_utia`,
+`balance_utia` and queue columns it always had (`payments.jsonl` is
+unchanged), and the API counts a row only where its denom is `utia`: the
+market's deposits, escrow held and accounts, the withdrawal queue's counts,
+sums, outcomes and delays, a publisher's escrow, pending withdrawals,
+check and statement. A row in another denomination stays in its lists with
+`amount`, its coin as the chain wrote it, and no utia amount; an escrow
+held in one names it (`escrow.denom`) and reads 0. The module balance
+(`escrow_total_utia`) was already read in utia alone.
+
 **Validator addresses.** Every row is keyed by the consensus address in
 lower-case hex, and the answers keep naming validators by it (`address`,
 `validator_address`), which is what the site keys on. A reader knows a

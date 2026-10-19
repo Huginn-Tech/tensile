@@ -572,8 +572,9 @@ export type TxAnswer = {
     // a blob payment
     promise_hash?: string; commitment?: string; blob_version?: number; namespace?: string; blob_size?: number;
     fee_paid_utia?: number; settled?: boolean; timed_out?: boolean;
-    // a movement of the escrow that took effect
-    amount_utia?: number;
+    // a movement of the escrow that took effect: in utia, or in another denomination as the chain wrote the coin, in no
+    // TIA figure
+    amount_utia?: number; amount?: string;
     withdrawal?: { available_at?: string; outcome?: "pending" | "paid" | "consumed"; paid_height?: number; paid_at?: string; payout_delay_s?: number; reduced_utia?: number };
     // what a failed deposit or withdrawal asked for, as the chain printed it, and in utia when exact in a number
     requested?: string; requested_utia?: number;
@@ -622,7 +623,7 @@ export type EndpointEvent = {
   reason?: string;
 };
 
-export { coins, feeTia, exactCoin } from "./amounts";
+export { coins, feeTia, exactCoin, shortCoin } from "./amounts";
 
 /** one validator's reading of a blob, as the blob page lists them */
 export type BlobReading = {
@@ -822,7 +823,8 @@ export type Market = {
 /** every blob on record by Tensile's reading: available, unavailable, and not read (its window closed with no reading) */
 export type ReadingTotals = { available: number; unavailable: number; not_read: number };
 
-export type Escrow = { found: boolean; balance_utia: number; available_utia: number; height: number; updated_at: string };
+/** denom: an escrow held in another denomination than utia, whose balances, not TIA, read 0 */
+export type Escrow = { found: boolean; denom?: string; balance_utia: number; available_utia: number; height: number; updated_at: string };
 
 export type Publisher = {
   publisher: string;
@@ -864,7 +866,9 @@ export type Payment = {
   time: string;
   tx_hash?: string;
   promise_hash?: string;
-  amount_utia: number;
+  /** in utia; a movement in another denomination has amount, its coin as the chain wrote it, instead */
+  amount_utia?: number;
+  amount?: string;
   available_at?: string;
 };
 

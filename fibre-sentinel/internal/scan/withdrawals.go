@@ -35,7 +35,9 @@ import (
 // in the same block (msg_server.go:91-95), so (signer, RequestedAt) names
 // one withdrawal for its whole life. AvailableAt is RequestedAt plus the
 // withdrawal_delay in force when it was requested (msg_server.go:97): a
-// later params change does not move it.
+// later params change does not move it. Its amount is in Denom, the
+// escrow's denomination: utia only where Denom is "utia"
+// (Payment.AmountUtia).
 type PendingWithdrawal struct {
 	Signer      string
 	Denom       string

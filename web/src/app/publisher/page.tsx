@@ -249,10 +249,10 @@ function Publisher({ addr }: { addr: string }) {
 
   // Escrow's statement under its last page: what went in, what the blobs and any timed-out promise cost, what was paid
   // out, and the escrow that leaves, over the whole record; shown only when it closes exactly on the balance, a line
-  // only when something moved
+  // only when something moved, and never for an escrow held in another denomination, which has no TIA to state
   const foot: Foot = [];
   const sums = txsHere?.sums;
-  if (e && sums && sums.deposited_utia - sums.fees_utia - sums.charged_utia - sums.withdrawn_utia === e.balance_utia) {
+  if (e && !e.denom && sums && sums.deposited_utia - sums.fees_utia - sums.charged_utia - sums.withdrawn_utia === e.balance_utia) {
     foot.push({ label: "Deposited", utia: sums.deposited_utia, sign: "+" });
     if (sums.fees_utia) foot.push({ label: `Fees paid for ${plural(sums.settlements, "settlement")}`, utia: sums.fees_utia, sign: "−" });
     if (sums.charged_utia) foot.push({ label: "Charged for timed-out promises", utia: sums.charged_utia, sign: "−" });
@@ -267,6 +267,7 @@ function Publisher({ addr }: { addr: string }) {
   const escTitle = e ? [
     queued ? `${tia(queued.utia)} queued to withdraw${queued.next_available_at ? `, payable from ${utcWord(queued.next_available_at)}` : ""}; balance ${tia(e.balance_utia)}` : "",
     `${queued ? "as" : "As"} of block #${int(e.height)}, ${utcWord(e.updated_at)}`,
+    e.denom ? `held in ${e.denom}, not TIA` : "",
   ].filter(Boolean).join("; ") : p.escrow ? "No escrow account on the chain" : "Not read yet";
   const escVal = e ? <>{unit(tia(e.available_utia))}{escWarn && <Warn text={escWarn} />}</> : <span className="na">—</span>;
   const settledTitle = posted && newest ? [first ? `First ${utcWord(first)}` : "", `last ${utcWord(newest)}`].filter(Boolean).join("; ") : undefined;

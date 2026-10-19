@@ -195,6 +195,7 @@ function Page() {
                     ? `Not enough for one more ${bytes(Math.round(avg!))} blob, its average size (${tia(need)}).`
                     : `As of block #${int(e.height)}, ${utcWord(e.updated_at)}.`;
                   if (e.balance_utia !== e.available_utia) escTitle += ` Balance ${tia(e.balance_utia)}; ${tia(e.balance_utia - e.available_utia)} is queued to withdraw.`;
+                  if (e.denom) escTitle += ` Held in ${e.denom}, not TIA.`;
                 }
                 const toTitle = p.timeouts > 0 ? `${plural(p.timeouts, "payment promise")} timed out in the period; ${tia(p.timed_out_utia)} charged` : undefined;
                 return (

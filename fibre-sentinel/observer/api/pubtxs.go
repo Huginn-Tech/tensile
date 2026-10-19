@@ -75,7 +75,10 @@ import (
 // the account over its whole record: what it deposited, what its blobs'
 // fees and its timed-out promises were charged, and what was paid out to
 // it. Deposited − fees − charged − withdrawn is the balance the chain holds,
-// once the escrow read and the scanner stand at the same block.
+// once the escrow read and the scanner stand at the same block. Every sum
+// is in utia alone (utiaDenom): a deposit, request or payout in another
+// denomination is listed with its coin (amount) and is in none, as its
+// escrow's balance is in no utia figure.
 
 // The views, by the kinds of payments rows each lists, and the failures.
 const (
@@ -106,14 +109,15 @@ const (
 // the plan test reads what the route runs.
 const (
 	// the account's counts and sums over its whole record, in one walk of
-	// its payments_publisher_time range
+	// its payments_publisher_time range: the counts, which page the list,
+	// of every row, the sums in utia alone (utiaDenom)
 	pubTxSumsSQL = `SELECT
 			COALESCE(SUM(CASE WHEN kind = 'settlement' THEN 1 ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN kind = 'settlement' THEN amount_utia ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN kind = 'deposit' THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN kind = 'deposit' THEN amount_utia ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN kind = 'deposit' AND denom = 'utia' THEN amount_utia ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN kind = 'withdrawal_request' THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(CASE WHEN kind = 'withdrawal_executed' THEN amount_utia ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN kind = 'withdrawal_executed' AND denom = 'utia' THEN amount_utia ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN kind = 'timeout' THEN 1 ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN kind = 'timeout' THEN amount_utia ELSE 0 END), 0)
 		FROM payments WHERE publisher = ?`
@@ -125,7 +129,7 @@ const (
 		WHERE m.account = ? AND m.type_url IN (?, ?)
 		ORDER BY m.height DESC, m.tx_index DESC, m.msg_index DESC`
 	// a withdrawal request's queue row, by its primary key
-	pubTxQueueSQL = `SELECT available_at, gone_height, outcome, paid_height, paid_at, paid_utia
+	pubTxQueueSQL = `SELECT available_at, gone_height, outcome, paid_height, paid_at, paid_utia, denom
 		FROM withdrawal_queue WHERE publisher = ? AND requested_at = ?`
 )
 
@@ -134,7 +138,7 @@ const (
 // and a block's rows share its time), so payments_publisher_time gives the
 // order and only the rows of one block are sorted among themselves.
 func pubTxPageSQL(kinds string) string {
-	return `SELECT kind, height, tx_index, msg_index, time, tx_hash, promise_hash, amount_utia
+	return `SELECT kind, height, tx_index, msg_index, time, tx_hash, promise_hash, amount_utia, denom
 		FROM payments WHERE publisher = ? AND +kind IN (` + kinds + `)
 		ORDER BY time DESC, height DESC, tx_index DESC, msg_index DESC LIMIT ? OFFSET ?`
 }
@@ -157,7 +161,8 @@ type pubTxPayout struct {
 	// request's block time plus the withdrawal delay in force then.
 	AvailableAt string `json:"available_at"`
 	// paid only: the payout on record, and how long after the request it
-	// came (whole seconds)
+	// came (whole seconds); no paid_utia for a withdrawal in another
+	// denomination (utiaDenom)
 	PaidHeight   *int64  `json:"paid_height,omitempty"`
 	PaidAt       *string `json:"paid_at,omitempty"`
 	PaidUtia     *int64  `json:"paid_utia,omitempty"`
@@ -177,8 +182,11 @@ type pubTx struct {
 	// AmountUtia is what a success moved: a blob's fee, a timed-out
 	// promise's charge, a deposit, the amount a withdrawal requested
 	// (moved from available into the queue; only its payout leaves the
-	// balance). Absent on a failure, which moved nothing.
+	// balance). Absent on a failure, which moved nothing, and on a deposit
+	// or request in another denomination (utiaDenom), which has Amount,
+	// its coin, instead.
 	AmountUtia  *int64 `json:"amount_utia,omitempty"`
+	Amount      string `json:"amount,omitempty"`
 	PromiseHash string `json:"promise_hash,omitempty"`
 	// a failure's: the chain's code, failedtx.Explain's reason where it has
 	// one, and whether it is final (/v1/txs/{hash}'s final)
@@ -192,7 +200,7 @@ type pubTx struct {
 }
 
 // pubTxSums is the escrow's statement over the account's whole record: its
-// successful movements alone.
+// successful movements alone, in utia alone (utiaDenom).
 type pubTxSums struct {
 	DepositedUtia int64 `json:"deposited_utia"`
 	Settlements   int64 `json:"settlements"`
@@ -322,12 +330,17 @@ func (s *Server) pubTxSuccesses(ctx context.Context, addr, kinds string, limit, 
 	for rows.Next() {
 		t := pubTx{Status: "success"}
 		var amount int64
-		if err := rows.Scan(&t.Kind, &t.Height, &t.TxIndex, &t.MsgIndex, &t.Time, &t.TxHash, &t.PromiseHash, &amount); err != nil {
+		var denom string
+		if err := rows.Scan(&t.Kind, &t.Height, &t.TxIndex, &t.MsgIndex, &t.Time, &t.TxHash, &t.PromiseHash, &amount, &denom); err != nil {
 			rows.Close()
 			return nil, err
 		}
 		t.TxHash = strings.ToLower(t.TxHash)
-		t.AmountUtia = &amount
+		if denom == utiaDenom {
+			t.AmountUtia = &amount
+		} else {
+			t.Amount = coinText(amount, denom)
+		}
 		out = append(out, t)
 	}
 	rows.Close()
@@ -351,7 +364,8 @@ func (s *Server) pubTxPayoutOf(ctx context.Context, addr, at string) (*pubTxPayo
 	var p pubTxPayout
 	var gone, paidH, paidU sql.NullInt64
 	var outcome, paidAt sql.NullString
-	err := s.st.DB().QueryRowContext(ctx, pubTxQueueSQL, addr, at).Scan(&p.AvailableAt, &gone, &outcome, &paidH, &paidAt, &paidU)
+	var denom string
+	err := s.st.DB().QueryRowContext(ctx, pubTxQueueSQL, addr, at).Scan(&p.AvailableAt, &gone, &outcome, &paidH, &paidAt, &paidU, &denom)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -364,7 +378,10 @@ func (s *Server) pubTxPayoutOf(ctx context.Context, addr, at string) (*pubTxPayo
 		// still queued at the last read
 	case outcome.String == store.WithdrawalExecuted && paidH.Valid && paidAt.Valid && paidU.Valid:
 		p.State = payoutPaid
-		p.PaidHeight, p.PaidAt, p.PaidUtia = nullInt(paidH), &paidAt.String, nullInt(paidU)
+		p.PaidHeight, p.PaidAt = nullInt(paidH), &paidAt.String
+		if denom == utiaDenom {
+			p.PaidUtia = nullInt(paidU)
+		}
 		if d, ok := secondsBetween(at, paidAt.String); ok {
 			p.PayoutDelayS = &d
 		}
