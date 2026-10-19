@@ -354,7 +354,9 @@ function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost, motion, skew }: {
     onBlur: (e: React.FocusEvent<HTMLElement>) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHeld(false); },
   };
   const ago = (t: string) => secondsAgo(t, now + skew());
-  if (!s) return <p className="cm-ev"><span className="cm-ev-t wait">{" "}</span></p>;
+  // nothing to name yet: a placeholder until the tip answers; once it has, and names no blob and no endpoint, no pill
+  // (a network whose Fibre has just gone live)
+  if (!s) return ev === undefined ? <p className="cm-ev"><span className="cm-ev-t wait">{" "}</span></p> : null;
   if (s.kind === "endpoint") return <EventPill key={eventId(s.ev)} ev={s.ev} pulse={epAt > 0 && now - epAt < HOLD_MS} v={evVal} place={evHost} />;
   const many = (b?.blobs ?? 1) > 1, at = b ? ` at height ${int(b.height)}` : "";
   if (s.kind === "settled") {
