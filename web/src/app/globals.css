@@ -463,7 +463,7 @@ td a.plain:hover, td a.fault:hover { text-decoration: underline; }
 /* the validators list: under the share, centred, a thin bar of it, as wide on every row; out of the flow, so the row and
    the column keep their size */
 .vt td .rate.share { position: relative; }
-.vt td .rate.share .eb { position: absolute; left: 50%; top: calc(100% + 4px); width: 53px; height: 4.8px; transform: translateX(-50%); border-radius: 2px; background: var(--line-soft); overflow: hidden; pointer-events: none; }
+.vt td .rate.share .eb { position: absolute; left: 50%; top: calc(100% + 4px); width: 58px; height: 4px; transform: translateX(-50%); border-radius: 2px; background: var(--line-soft); overflow: hidden; pointer-events: none; }
 .vt td .rate.share .eb i { display: block; height: 100%; border-radius: 2px; background: var(--accent); opacity: .85; }
 :root[data-theme="dark"] .vt td .rate.share .eb { background: rgb(255 255 255 / .1); }
 /* the validators table's rows are set in DM Sans in three steps, as explorer tables are: the name that says whose
