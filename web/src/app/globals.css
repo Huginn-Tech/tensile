@@ -754,6 +754,9 @@ button.rowlink:hover { color: var(--accent-ink); text-decoration: underline; }
 .hostingband .ctry .soft { margin-left: 0; }
 /* ------------------------------------------------ validator: the checks filter --- */
 /* the filter's counts sit in the button, quieter than its word */
+/* the validator page's tabs and their list at least a screen tall, so a shorter list (Endpoint history after Latest
+   checks) never shortens the page under the reader: the tabs stay where they are and only the list below them changes */
+#evidence { min-height: 100vh; }
 #evidence .seg { margin-top: 0; }
 #evidence .seg .n { color: var(--text-3); font-variant-numeric: tabular-nums; margin-left: 4px; }
 
@@ -2051,12 +2054,13 @@ button.pp-params[aria-expanded="true"] .pp-i { color: var(--paper); background: 
 }
 
 /* the namespaces view, in the Blobs list's way: the name at the inset, then six columns of one width, so each figure
-   stands as far from the one before it; the figures right-aligned in the list's weight, the two times centred under
-   their heads */
+   stands as far from the one before it; the figures right-aligned in the list's weight, the publishers and settlements
+   counts and the two times centred under their heads */
 .lg-nss th.n-nm { width: 30%; }
 .lg-nss td.n-pub, .lg-nss td.n-n, .lg-nss td.n-sz, .lg-nss td.n-24 { font-weight: 500; }
 @media (min-width: 1081px) {
   .lg-nss th.n-first, .lg-nss td.n-first, .lg-nss th.n-last, .lg-nss td.n-last { text-align: center; }
+  .lg-nss th.n-pub, .lg-nss td.n-pub, .lg-nss th.n-n, .lg-nss td.n-n { text-align: center; }
 }
 /* the namespaces list's scope, on the tabs line */
 .lg-scope { margin: 0 0 0 auto; font-size: var(--t-small); color: var(--text-3); }
@@ -2403,6 +2407,8 @@ button.warn:focus-visible { outline-offset: 0; }
    a figure and its unit stay together */
 .pbd-v .u, .pbd-v .beside { white-space: nowrap; }
 .pbd-v .u { margin-left: 2px; font-size: var(--t-cell); line-height: 1; font-weight: 400; letter-spacing: 0; color: var(--text-3); }
+/* the account's amounts (Escrow available, Total paid): their unit, TIA, in Celestia's purple, as on every list */
+.pbd-acct .pbd-v .u { color: var(--celestia); }
 .pbd-v .beside { margin-left: 8px; font-family: var(--sans); font-size: var(--t-cell); line-height: 1; font-weight: 400; letter-spacing: 0; color: var(--text-3); }
 .pbd-v .na { color: var(--text-3); }
 .pbd-v.words { font-family: var(--sans); font-size: var(--t-cell); font-weight: 400; letter-spacing: 0; color: var(--text-3); }
