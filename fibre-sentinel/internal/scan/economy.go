@@ -3,6 +3,7 @@ package scan
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -80,6 +81,14 @@ type Payment struct {
 	BlobSize    uint32 `json:"blob_size,omitempty"`
 	GasUnits    uint64 `json:"gas_units,omitempty"`
 
+	// Denom and AmountUtia are the coin as the chain moved it. A settlement
+	// or a timeout is the module's charge, always utia. A deposit, a
+	// withdrawal request and a payout are in the escrow's own denomination:
+	// x/fibre at the pinned v10 takes a deposit in any denomination (no
+	// denom check until celestia-app PR #8143, in v11) and creates the
+	// escrow in its first deposit's, so AmountUtia is an amount of utia
+	// only where Denom is "utia", and every reader counts it only there.
+	// The name stays so the record keeps its format.
 	Denom      string `json:"denom"`
 	AmountUtia uint64 `json:"amount_utia"`
 
@@ -268,8 +277,13 @@ func withdrawalsExecuted(evs []abci.Event, blk *Block, now time.Time) ([]Payment
 					return out, fmt.Errorf("event %d: amount %q: %w", n, a.Value, err)
 				}
 				p.Denom = c.Denom
+				// An amount past uint64 is kept as its maximum, as
+				// coinAmount keeps a deposit's. Only another denomination
+				// can reach it (all utia is far below), and as an error it
+				// dropped every payout after it in the block, utia ones
+				// included.
 				v, err := strconv.ParseUint(c.Amount, 10, 64)
-				if err != nil {
+				if err != nil && !errors.Is(err, strconv.ErrRange) {
 					return out, fmt.Errorf("event %d: amount %q: %w", n, c.Amount, err)
 				}
 				p.AmountUtia = v

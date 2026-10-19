@@ -32,3 +32,10 @@ export function exactCoin(c: string): string {
   const frac = s.padStart(6, "0").slice(-6).replace(/0+$/, "");
   return `${grouped(whole)}${frac ? `.${frac}` : ""} TIA`;
 }
+
+/**
+ * a coin of another denomination in a list's amount column, which an escrow can be held in: as coins() writes it, a long
+ * hash in its denomination cut to its first and last four ("5,000,000 ibc/2739…5EB2"); the whole coin goes on hover
+ */
+export const shortCoin = (c: string) =>
+  coins(c).replace(/\/(0x)?([0-9a-f]{4})[0-9a-f]{8,}([0-9a-f]{4})\b/gi, (_, x: string | undefined, a: string, b: string) => `/${x ?? ""}${a}…${b}`);

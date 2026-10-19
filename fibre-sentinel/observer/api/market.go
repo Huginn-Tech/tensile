@@ -62,6 +62,30 @@ type sum struct {
 	Utia  int64 `json:"utia"`
 }
 
+// utiaDenom is the one denomination a utia figure counts. x/fibre at the
+// pinned v10 takes an escrow deposit in any denomination (no denom check in
+// MsgDepositToEscrow until celestia-app PR #8143, in v11) and creates the
+// escrow in its first deposit's; the account's later deposits, its
+// withdrawals and its payouts are in that one. The record keeps every
+// amount beside its denom (payments, escrow_accounts and withdrawal_queue,
+// each in its *_utia columns), so every count and sum here of deposits,
+// withdrawals, payouts and escrow balances takes a row only where its denom
+// is utia (spelt 'utia' in the SQL), and a row in another denomination is
+// published with its coin as the chain writes it (coinText) and no utia
+// amount. Settlements and timeouts are the module's charge, utia by
+// construction (scan.chargePayment); on an escrow of another denomination
+// the charge compares two denominations, which panics, so the transaction
+// fails and is not recorded.
+const utiaDenom = "utia"
+
+// coinText is an amount of another denomination as the chain writes a
+// coin, "5000000ibc/27394F…". The amounts are stored in int64 columns a
+// uint64 was written to, so one past int64's range reads back negative; it
+// is read as the uint64 it was.
+func coinText(amount int64, denom string) string {
+	return strconv.FormatUint(uint64(amount), 10) + denom
+}
+
 type dayBucket struct {
 	Day          string `json:"day"` // YYYY-MM-DD, UTC
 	FeesUtia     int64  `json:"fees_utia"`
@@ -110,12 +134,14 @@ type marketResponse struct {
 	Timeouts     int64 `json:"timeouts"`
 	TimedOutUtia int64 `json:"timed_out_utia"`
 
+	// Deposits are the window's deposits in utia (utiaDenom).
 	Deposits sum `json:"deposits"`
 	// EscrowHeldUtia is the sum of every known publisher's current balance,
-	// from state queries; EscrowAccounts how many were polled.
+	// from state queries; EscrowAccounts how many accounts it sums. An
+	// escrow held in another denomination is in neither (utiaDenom).
 	EscrowHeldUtia int64 `json:"escrow_held_utia"`
 	EscrowAccounts int64 `json:"escrow_accounts"`
-	// EscrowTotalUtia is the x/fibre module account's balance: every
+	// EscrowTotalUtia is the x/fibre module account's utia balance: every
 	// escrow on the chain, whether or not its owner ever published, read
 	// at EscrowTotalAt. Absent until the collector has read it once.
 	EscrowTotalUtia *int64  `json:"escrow_total_utia,omitempty"`
@@ -161,14 +187,19 @@ type marketResponse struct {
 
 // publisherRowsVersion is the shape of the publisher rows computePublishing
 // fills: 1 added namespaces, namespaces_total, first_settlement_at,
-// last_settlement_at and readings. A file from before them would publish
-// every row with no namespace, no settlement and no reading until its
+// last_settlement_at and readings; 2 counts an escrow, a deposit and a
+// withdrawal only in utia (utiaDenom, escrow.denom). A file from before
+// them would publish every row with no namespace, no settlement and no
+// reading, or an escrow of another denomination as utia, until its
 // window's first refresh, so it is not served (marketSnapshotCurrent).
-const publisherRowsVersion = 1
+const publisherRowsVersion = 2
 
-// escrowInfo is a publisher's current escrow as the chain holds it.
+// escrowInfo is a publisher's current escrow as the chain holds it. One
+// held in another denomination (utiaDenom) names it in Denom, and its
+// balances, which are not utia, read 0.
 type escrowInfo struct {
 	Found         bool   `json:"found"`
+	Denom         string `json:"denom,omitempty"`
 	BalanceUtia   int64  `json:"balance_utia"`
 	AvailableUtia int64  `json:"available_utia"`
 	Height        int64  `json:"height"`
@@ -459,11 +490,12 @@ func (s *Server) computeMarket(ctx context.Context, win Window) (*marketResponse
 		Scan(&r.Timeouts, &r.TimedOutUtia); err != nil {
 		return nil, fmt.Errorf("timeouts: %w", err)
 	}
-	if err := db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(amount_utia),0) FROM payments WHERE kind = 'deposit' AND time >= ? AND time <= ?`, start, end).
+	// Deposits and escrow balances in utia alone (utiaDenom).
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(amount_utia),0) FROM payments WHERE kind = 'deposit' AND denom = 'utia' AND time >= ? AND time <= ?`, start, end).
 		Scan(&r.Deposits.Count, &r.Deposits.Utia); err != nil {
 		return nil, fmt.Errorf("deposit: %w", err)
 	}
-	if err := db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(balance_utia),0) FROM escrow_accounts WHERE found = 1`).
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(balance_utia),0) FROM escrow_accounts WHERE found = 1 AND denom = 'utia'`).
 		Scan(&r.EscrowAccounts, &r.EscrowHeldUtia); err != nil {
 		return nil, fmt.Errorf("escrow: %w", err)
 	}
@@ -632,9 +664,9 @@ func (s *Server) publisherRows(ctx context.Context, win Window, only string) ([]
 		var p publisherRow
 		var inWindow int64
 		var found, bal, avail, height sql.NullInt64
-		var updated, firstSettled, lastSettled sql.NullString
+		var updated, denom, firstSettled, lastSettled sql.NullString
 		if err := rows.Scan(&p.Publisher, &p.Settlements, &p.Bytes, &p.FeesUtia, &p.LargestBlob, &p.Timeouts, &p.TimedOut,
-			&p.FirstSeen, &p.LastSeen, &firstSettled, &lastSettled, &inWindow, &found, &bal, &avail, &height, &updated); err != nil {
+			&p.FirstSeen, &p.LastSeen, &firstSettled, &lastSettled, &inWindow, &found, &bal, &avail, &height, &updated, &denom); err != nil {
 			return nil, err
 		}
 		if firstSettled.Valid {
@@ -653,6 +685,9 @@ func (s *Server) publisherRows(ctx context.Context, win Window, only string) ([]
 		}
 		if updated.Valid {
 			p.Escrow = &escrowInfo{Found: found.Int64 == 1, BalanceUtia: bal.Int64, AvailableUtia: avail.Int64, Height: height.Int64, UpdatedAt: updated.String}
+			if p.Escrow.Found && denom.String != utiaDenom {
+				p.Escrow.Denom, p.Escrow.BalanceUtia, p.Escrow.AvailableUtia = denom.String, 0, 0
+			}
 		}
 		out = append(out, p)
 	}
@@ -709,12 +744,15 @@ type paymentRow struct {
 	Time        string `json:"time"`
 	TxHash      string `json:"tx_hash,omitempty"`
 	PromiseHash string `json:"promise_hash,omitempty"`
-	AmountUtia  int64  `json:"amount_utia"`
+	// AmountUtia is what it moved in utia; a movement in another
+	// denomination (utiaDenom) has Amount, its coin, instead.
+	AmountUtia  *int64 `json:"amount_utia,omitempty"`
+	Amount      string `json:"amount,omitempty"`
 	AvailableAt string `json:"available_at,omitempty"`
 }
 
 func (s *Server) paymentRows(ctx context.Context, where string, limit int, args ...any) ([]paymentRow, error) {
-	q := `SELECT kind, height, time, tx_hash, promise_hash, amount_utia, COALESCE(available_at, '')
+	q := `SELECT kind, height, time, tx_hash, promise_hash, amount_utia, COALESCE(available_at, ''), denom
 		FROM payments`
 	if where != "" {
 		q += " WHERE " + where
@@ -728,8 +766,15 @@ func (s *Server) paymentRows(ctx context.Context, where string, limit int, args 
 	out := []paymentRow{}
 	for rows.Next() {
 		var p paymentRow
-		if err := rows.Scan(&p.Kind, &p.Height, &p.Time, &p.TxHash, &p.PromiseHash, &p.AmountUtia, &p.AvailableAt); err != nil {
+		var amount int64
+		var denom string
+		if err := rows.Scan(&p.Kind, &p.Height, &p.Time, &p.TxHash, &p.PromiseHash, &amount, &p.AvailableAt, &denom); err != nil {
 			return nil, err
+		}
+		if denom == utiaDenom {
+			p.AmountUtia = &amount
+		} else {
+			p.Amount = coinText(amount, denom)
 		}
 		out = append(out, p)
 	}
@@ -1126,7 +1171,7 @@ func publisherRowsSQL(filter string) string {
 			(SELECT x.time FROM payments x WHERE x.publisher = w.publisher AND +x.kind = 'settlement' ORDER BY x.time LIMIT 1),
 			(SELECT x.time FROM payments x WHERE x.publisher = w.publisher AND +x.kind = 'settlement' ORDER BY x.time DESC LIMIT 1),
 			w.in_window,
-			e.found, e.balance_utia, e.available_utia, e.height, e.updated_at
+			e.found, e.balance_utia, e.available_utia, e.height, e.updated_at, e.denom
 		FROM w
 		LEFT JOIN escrow_accounts e ON e.publisher = w.publisher
 		ORDER BY 4 DESC, 3 DESC, w.publisher`

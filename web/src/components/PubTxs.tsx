@@ -2,7 +2,7 @@
 import { memo, useCallback, useLayoutEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { int, span, tia, utcWord, failedTitle } from "@/lib/api";
+import { coins, int, shortCoin, span, tia, utcWord, failedTitle } from "@/lib/api";
 import { KIND_WORD } from "@/lib/txkind";
 import { openRow } from "@/lib/row";
 import { CopyMark, Signed, decimals } from "@/components/Ledger";
@@ -37,6 +37,8 @@ export type PubTx = {
   height: number; tx_index: number; msg_index: number; time: string; tx_hash: string;
   /** what a success moved: a blob's fee, a timed-out promise's charge, a deposit, the amount a withdrawal asked for; none on a failure */
   amount_utia?: number;
+  /** a deposit or withdrawal request in another denomination than utia, as the chain wrote the coin: in no TIA figure */
+  amount?: string;
   promise_hash?: string;
   /** a failure's: the chain's code, the reason in plain words where Tensile has one, and whether it can never land */
   code?: number; codespace?: string; reason?: string; final?: boolean;
@@ -104,10 +106,15 @@ const Row = memo(function Row({ t, dec, now, onOpen }: { t: PubTx; dec: number; 
   const wr = !failed && t.kind === "withdrawal_request";
   const po = wr && t.payout ? payoutLine(t.payout, t.amount_utia) : null;
   const ag = now ? age(now - Date.parse(t.time)) : "";
-  const nil = failed || t.amount_utia == null;
+  const sign = t.kind === "deposit" ? "+" : wr ? "" : "−";
+  // a coin of another denomination: as the chain wrote it, in no TIA figure on the page
+  const other = !failed && t.amount_utia == null && t.amount ? t.amount : null;
+  const nil = failed || (t.amount_utia == null && !other);
   const amount = nil
     ? <span className="na" title={NOTHING}>—</span>
-    : <Signed sign={t.kind === "deposit" ? "+" : wr ? "" : "−"} utia={t.amount_utia!} dec={dec} />;
+    : other
+      ? <span title={`${coins(other)}: not TIA, so in no TIA figure`}>{`${sign}${shortCoin(other)}`}</span>
+      : <Signed sign={sign} utia={t.amount_utia!} dec={dec} />;
   const tone = failed ? " xf" : wr ? " wr" : t.kind === "timeout" ? " to" : "";
   return (
     // The whole row opens the transaction; the hash's link and copy mark keep their own.

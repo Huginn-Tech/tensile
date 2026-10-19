@@ -50,7 +50,7 @@ const (
 	// the cost line at a settlement's position, for the blob page
 	txCostAtSQL = `SELECT raw_json FROM tx_costs WHERE height = ? AND tx_index = ?`
 	// a transaction's escrow movements, in message order (payments_tx)
-	paymentsByTxSQL = `SELECT kind, height, tx_index, msg_index, time, publisher, processor, promise_hash, namespace, blob_size, amount_utia, COALESCE(available_at, '')
+	paymentsByTxSQL = `SELECT kind, height, tx_index, msg_index, time, publisher, processor, promise_hash, namespace, blob_size, amount_utia, COALESCE(available_at, ''), denom
 		FROM payments WHERE tx_hash = ? ORDER BY msg_index`
 	// the endpoint registrations a transaction wrote, one per validator it
 	// registered for (host_events_at; from_tx_index is the tx index + 1)
@@ -197,6 +197,7 @@ type txPayment struct {
 	BlobSize    int64
 	AmountUtia  int64
 	AvailableAt string
+	Denom       string // AmountUtia's: utia only where it is utiaDenom
 }
 
 func (s *Server) handleTx(w http.ResponseWriter, r *http.Request) {
@@ -367,7 +368,7 @@ func (s *Server) txPayments(ctx context.Context, hash string) ([]txPayment, erro
 	for rows.Next() {
 		var p txPayment
 		if err := rows.Scan(&p.Kind, &p.Height, &p.TxIndex, &p.MsgIndex, &p.Time, &p.Publisher, &p.Processor, &p.PromiseHash, &p.Namespace,
-			&p.BlobSize, &p.AmountUtia, &p.AvailableAt); err != nil {
+			&p.BlobSize, &p.AmountUtia, &p.AvailableAt, &p.Denom); err != nil {
 			return nil, err
 		}
 		if kindTypeURL[p.Kind] == "" {
@@ -531,9 +532,13 @@ func (s *Server) txSuccess(ctx context.Context, a *txAnswer, pays []txPayment) e
 		}
 	case failedtx.KindDeposit, failedtx.KindWithdrawalRequest, failedtx.KindTimeout:
 		// A successful movement is a top-level message, so it has its row
-		// (a MsgExec cannot carry one); with none, nothing is said.
+		// (a MsgExec cannot carry one); with none, nothing is said. The
+		// utia ones are summed; one in another denomination (utiaDenom) is
+		// given as its coin, never in amount_utia.
 		var first *txPayment
 		var sum int64
+		var utia bool
+		var other []string
 		for i := range pays {
 			if pays[i].Kind != a.Kind {
 				continue
@@ -541,12 +546,22 @@ func (s *Server) txSuccess(ctx context.Context, a *txAnswer, pays []txPayment) e
 			if first == nil {
 				first = &pays[i]
 			}
-			sum += pays[i].AmountUtia
+			if pays[i].Denom == utiaDenom {
+				sum += pays[i].AmountUtia
+				utia = true
+			} else {
+				other = append(other, coinText(pays[i].AmountUtia, pays[i].Denom))
+			}
 		}
 		if first == nil {
 			return nil
 		}
-		a.Effect["amount_utia"] = sum
+		if utia {
+			a.Effect["amount_utia"] = sum
+		}
+		if len(other) > 0 {
+			a.Effect["amount"] = strings.Join(other, ",")
+		}
 		a.Related.Publisher = first.Publisher
 		switch a.Kind {
 		case failedtx.KindTimeout:
@@ -686,8 +701,8 @@ func (s *Server) txWithdrawal(ctx context.Context, publisher, at string) (*txWit
 		case w.Outcome != nil && *w.Outcome == store.WithdrawalConsumed:
 			out.Outcome = "consumed"
 		}
-		if w.ReducedUtia > 0 {
-			out.ReducedUtia = w.ReducedUtia
+		if w.ReducedUtia != nil && *w.ReducedUtia > 0 {
+			out.ReducedUtia = *w.ReducedUtia
 		}
 		return out, nil
 	}

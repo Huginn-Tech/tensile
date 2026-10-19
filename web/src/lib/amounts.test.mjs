@@ -12,7 +12,7 @@ const load = (file) => {
   const js = ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 } }).outputText;
   return import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
 };
-const { coins, feeTia, exactCoin } = await load("./amounts.ts");
+const { coins, feeTia, exactCoin, shortCoin } = await load("./amounts.ts");
 
 test("feeTia writes a transaction fee in TIA down to the utia", () => {
   assert.equal(feeTia("8000utia"), "0.008 TIA");
@@ -50,4 +50,12 @@ test("exactCoin writes a requested amount exact, its trailing zeros trimmed", ()
   assert.equal(exactCoin("1500000utia"), "1.5 TIA");
   assert.equal(exactCoin("123456789utia"), "123.456789 TIA");
   assert.equal(exactCoin("5ufoo"), "5 ufoo");
+});
+
+test("shortCoin cuts a long hash in a denomination to its first and last four, and leaves the rest as coins() writes it", () => {
+  const ibc = "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2";
+  assert.equal(shortCoin(`5000000${ibc}`), "5,000,000 ibc/2739…5EB2");
+  assert.equal(shortCoin("18446744073709551615hyperlane/0x726f757465725f61707000000000000000000000000000010000000000000000"), "18,446,744,073,709,551,615 hyperlane/0x726f…0000");
+  assert.equal(shortCoin("1500ufoo"), coins("1500ufoo"));
+  assert.equal(shortCoin("7ibc/ABCD1234"), "7 ibc/ABCD1234");
 });

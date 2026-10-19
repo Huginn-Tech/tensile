@@ -31,9 +31,11 @@ export type WithdrawalRow = {
   requested_at: string;
   available_at: string;
   denom: string;
-  amount_utia: number;
-  first_amount_utia: number;
-  reduced_utia: number;
+  /** a withdrawal in another denomination than utia: its coin as the chain wrote it, and none of the utia amounts */
+  amount?: string;
+  amount_utia?: number;
+  first_amount_utia?: number;
+  reduced_utia?: number;
   first_seen_height: number;
   first_seen_at: string;
   last_seen_height: number;
