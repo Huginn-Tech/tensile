@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { API_BASE, TIP_MS, subscribe, type Fetch, type Tip } from "@/lib/api";
+import { API_BASE, TIP_MS, subscribe, type Fetch, type Tip, type TipEndpointEvent } from "@/lib/api";
 import { createTipFeed, streamsOver, type Feed } from "@/lib/tipfeed-core";
 
 /**
@@ -59,4 +59,32 @@ export function useNewestBlob(): string | null {
   const [newest, setNewest] = useState<string | null>(null);
   useEffect(() => tipFeed().subscribe((f) => setNewest(f.data?.latest_blob?.promise_hash ?? null)), []);
   return newest;
+}
+
+/**
+ * The page's tip as each answer comes, without a render: for a reader that only acts on what changed (the overview
+ * map's burst, which asks for a newly named blob's record at once). Returns the unsubscribe.
+ */
+export function onTip(fn: (f: Fetch<Tip>) => void): () => void {
+  return tipFeed().subscribe(fn);
+}
+
+/**
+ * The newest endpoint registration or change of any validator (/v1/tip's latest_endpoint_event): undefined until the
+ * tip has answered, null while it names none. Like useNewestBlob it reads the page's tip and renders its page only when
+ * the event changes; a failed answer keeps the last one.
+ */
+export function useEndpointEvent(): TipEndpointEvent | null | undefined {
+  const [ev, setEv] = useState<TipEndpointEvent | null | undefined>(undefined);
+  useEffect(() => tipFeed().subscribe((f) => {
+    if (!f.data) return;
+    const next = f.data.latest_endpoint_event ?? null;
+    setEv((cur) => (cur !== undefined && endpointEventKey(cur) === endpointEventKey(next) ? cur : next));
+  }), []);
+  return ev;
+}
+
+/** what tells two endpoint events apart: the validator, its block, what it did, the host, and the name it goes by */
+export function endpointEventKey(e: TipEndpointEvent | null | undefined): string {
+  return e ? [e.address, e.height, e.outcome, e.host, e.moniker ?? ""].join("|") : "";
 }

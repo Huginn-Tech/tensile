@@ -735,9 +735,12 @@ GET /v1/health                machine-readable health (200 / 503): every check b
                               detail, and each process as present / alive / ok and its age; no
                               error text, path, disk size or build (deploy/README.md, "Health
                               and alerting")
-GET /v1/tip                   the newest block read, and the newest blob stored (latest_blob);
-                              one answer kept for 250 ms, so the node and the store are asked
-                              at most four times a second however many pages poll it
+GET /v1/tip                   the newest block read, the newest blob stored (latest_blob), and
+                              the newest endpoint registration or change of any validator
+                              (latest_endpoint_event); one answer kept for 250 ms, so the node
+                              and the store are asked at most four times a second however many
+                              pages poll it, and the registrations walked only when host_events
+                              gains a row (its highest rowid) or a minute on
 GET /v1/tip/stream            /v1/tip as server-sent events: "tip" (the same JSON) on connecting
                               and whenever a field but server_time changes, "ping" every 15 s,
                               "end" before the API closes it, within an hour; one producer reads
@@ -1040,7 +1043,7 @@ without that second request.
 
 | route | reads |
 |---|---|
-| `/` | `/v1/validators` (the table, the map, and the notice when the API does not answer; the map's "served last" line is the rows' `last_served_at`), `/v1/market?window=all` (Available: the network's reading totals, `readings`, available over available plus unavailable), `/v1/blobs` (the recent blobs: as soon as `/v1/tip`'s `latest_blob` names a blob the grid does not hold, and every 30 s besides) |
+| `/` | `/v1/validators` (the table, the map, and the notice when the API does not answer; the map's places and counts), `/v1/blobs/{hash}` (each blob that comes into the recent blobs while the page is open, once, often as soon as `latest_blob` names it: its endorsers, whose places on the map burst with the grid's move, and whom the pill under the map names, one a second), `/v1/tip`'s `latest_endpoint_event` (a validator's new or changed endpoint, which holds that pill for 12 s), `/v1/market?window=all` (Available: the network's reading totals, `readings`, available over available plus unavailable), `/v1/blobs` (the recent blobs: as soon as `/v1/tip`'s `latest_blob` names a blob the grid does not hold, and every 30 s besides; a block that comes in alone moves the grid at once, and blocks that come in together go on one at a time, half a second apart) |
 | `/validator/?addr=` | `/v1/validators/{addr}`; its history area is two tabs when the answer carries `endpoint_history`, Latest checks and Endpoint history (`?tab=endpoints`), each registration's row opening `/tx/` when its transaction is on record |
 | `/blobs/` | `/v1/blobs?include_failed=1` (the first page again as the chain moves; a failed payment's row opens `/tx/`), `/v1/namespaces`, `/v1/market` (the period), `/v1/publishers` (once its filter opens); its search (`?blob=`) asks 64 hex as `/v1/blobs/{hash}`, `?commitment=` and `?tx=`, and a blob ID as `?commitment=` |
 | `/blob/?hash=`, `?id=`, `?tx=` | `/v1/blobs/{hash}`; a blob ID (`?id=`) or a settlement transaction (`?tx=`) is found first with `/v1/blobs?commitment=` or `?tx=`, and several matches open the Blobs list of them; a blob not on record yet is asked for again each time `/v1/tip`'s `latest_blob` changes, and every 30 s. A `?tx=` answer with a `failed_tx` renders the transaction page (`/v1/txs/{hash}`, below; with an API before that route, the `failed_tx` itself) and stops asking: it is the answer, final or not. The blob's Gas and Transaction fee are its `tx_cost`, and the transaction hash in its mast opens `/tx/` |

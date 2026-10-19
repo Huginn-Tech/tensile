@@ -1073,9 +1073,9 @@ body { background: var(--canvas); }
   --cm-open: var(--accent);
   --cm-open-ink: #ffffff;
   --cm-badge-hold-ink: #ffffff;
-  /* the newest event's ring, and the floating plates' shadow */
+  /* the bursts' rings (setting out in --cm-burst-hi) and the places' warmth, and the floating plates' shadow */
   --cm-live: #2b9aa4;
-  --cm-live-hold: var(--hold);
+  --cm-burst-hi: #0b5d66;
   --cm-float: 0 8px 22px -10px rgb(16 32 40 / .28);
   --cp-rest: rgb(var(--ink) / .13);
   --cp-on: var(--accent);
@@ -1117,7 +1117,7 @@ body { background: var(--canvas); }
   --cm-open-ink: #04171a;
   --cm-badge-hold-ink: #1f1500;
   --cm-live: #8fe3ea;
-  --cm-live-hold: #d9a032;
+  --cm-burst-hi: #ffffff;
   --cm-float: 0 10px 26px -10px rgb(0 0 0 / .8);
   --cp-rest: rgb(255 255 255 / .11);
   --cp-on: #2ea4af;
@@ -1228,17 +1228,14 @@ body { background: var(--canvas); }
 .cm-pip { position: absolute; width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--cm-badge-body); pointer-events: none; }
 .cm-pip.hold { background: var(--hold); }
 .cm-atlas.has-open .cm-pin:not(.open) .cm-pip { background: color-mix(in srgb, var(--hold) 50%, var(--paper)); }
-/* the bar's event at its place: as it arrives one 1px ring goes out, then one rests 4.5px clear of the place until the
-   next; on the land under every badge, cut clear of a neighbouring one, amber for a host gone unreachable. The circles
-   scale with the line held at 1px */
-.cm-live { position: absolute; z-index: 4; overflow: visible; pointer-events: none; color: var(--cm-live); transition: opacity 180ms ease-out; }
-.cm-live[data-tone="hold"] { color: var(--cm-live-hold); }
-.cm-live circle { fill: none; stroke: currentColor; stroke-width: 1; vector-effect: non-scaling-stroke; transform-box: fill-box; transform-origin: center; }
-.cm-live .go { opacity: 0; animation: cm-go 1.5s cubic-bezier(.22, .61, .36, 1) 1 both; }
-.cm-live .rest { animation: cm-in .5s ease-out 1.05s 1 both; }
-.cm-live.open .rest { visibility: hidden; }
-.cm-atlas.has-open .cm-live { opacity: .42; }
-@keyframes cm-go { 0% { transform: scale(1); opacity: 0; } 8% { opacity: .9; } 100% { transform: scale(2.6); opacity: 0; } }
+/* the bursts (HostMap.tsx, lib/mapburst.ts): the rings on one canvas under the badges, drawn only while one is out; and
+   each place's warmth under its badge, a soft teal whose opacity alone animates, on the compositor. Neither touches the
+   land's material layer */
+.cm-fx { position: absolute; inset: 0; z-index: 4; width: 100%; height: 100%; pointer-events: none; }
+.cm-trace {
+  position: absolute; border-radius: 50%; pointer-events: none; opacity: 0;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--cm-live) 38%, transparent), color-mix(in srgb, var(--cm-live) 10%, transparent) 62%, transparent);
+}
 
 /* a place's hosts: the charts' tooltip surface */
 .cm-pop {
@@ -1276,14 +1273,17 @@ body { background: var(--canvas); }
 }
 .cm-ev { grid-column: 1; justify-self: start; display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; margin: 0; padding: 0 14px 0 13px; font-size: 12.5px; color: var(--text-2); animation: cm-in .35s ease-out; }
 .cm-ev-dot { position: relative; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
-.cm-ev-dot[data-tone="hold"] { background: var(--hold); box-shadow: 0 0 0 3px var(--hold-tint); }
-/* with each new event the dot sends one ring of its own, as its place on the map does */
-.cm-ev-dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 1px solid var(--accent); opacity: 0; animation: cm-dot 1.5s cubic-bezier(.22, .61, .36, 1) 1 both; }
-.cm-ev-dot[data-tone="hold"]::after { border-color: var(--hold); }
-@keyframes cm-dot { 0% { inset: 0; opacity: 0; } 8% { opacity: .9; } 100% { inset: -9px; opacity: 0; } }
+/* a beat that bursts on the map, or an endpoint that comes while the page is open: the dot pops as the badges do */
+.cm-ev-dot.pop { animation: cm-dot-pop 420ms ease-out 1 both; }
+@keyframes cm-dot-pop { 0% { transform: scale(1); } 10% { transform: scale(.9); } 40% { transform: scale(1.6); filter: brightness(1.5); } 100% { transform: scale(1); } }
 .cm-ev-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cm-ev-t a { color: var(--text); font-weight: 600; }
-.cm-ev-ago { flex: none; color: var(--text-3); }
+/* the beat's endorsers, named one a second: every name stacked in one cell, so the pill keeps the longest's width,
+   the one named shown and the last one fading out under it */
+.cm-ev-who { display: inline-grid; vertical-align: bottom; }
+.cm-ev-who > span { grid-area: 1 / 1; font-weight: 600; color: var(--text); white-space: nowrap; opacity: 0; transition: opacity 150ms ease-out; pointer-events: none; }
+.cm-ev-who > span.on { opacity: 1; pointer-events: auto; }
+.cm-ev-ago { flex: none; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .cm-ev-ago::before { content: "·"; margin-right: 8px; }
 .cm-counts { grid-column: 2; display: flex; align-items: center; margin: 0; padding: 0 3px; list-style: none; }
 .cm-counts li { display: flex; align-items: baseline; gap: 5px; padding: 0 12px; font-size: 12.5px; line-height: 16px; color: var(--text-2); white-space: nowrap; }
@@ -1609,7 +1609,7 @@ a.rb-c:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; z-
     border: 1px solid var(--border); box-shadow: var(--shadow-pop);
   }
   .cm-ev, .cm-counts { height: auto; border: 0; border-radius: 0; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
-  /* the event wraps to two lines rather than stopping mid-word, in a line that keeps room for two, so the rotation never moves the page */
+  /* the event wraps to two lines rather than stopping mid-word, in a line that keeps room for two, so a new one never moves the page */
   .cm-ev { display: flex; align-items: center; max-width: none; height: 56px; padding: 0 12px; border-top: 1px solid var(--border); font-size: var(--t-small); }
   .cm-ev-t { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; white-space: normal; line-height: 18px; }
   .cm-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 10px 0; }
@@ -1642,10 +1642,11 @@ a.rb-c:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; z-
   .deck-row > .rb { padding: 16px 10px 18px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cm-badge, .cm-mat, .cm-live, .cm-tools button, .rb-c, .ov-links a span { transition: none; }
-  .cm-pop, .cm-ev, .cm-mat, .cm-live .rest { animation: none; }
-  /* the newest event keeps only its ring at rest */
-  .cm-live .go, .cm-ev-dot::after { display: none; }
+  .cm-badge, .cm-mat, .cm-tools button, .rb-c, .ov-links a span { transition: none; }
+  .cm-pop, .cm-ev, .cm-mat, .cm-ev-dot.pop { animation: none; }
+  .cm-ev-who > span { transition: none; }
+  /* no bursts: the pill says each beat, the map holds still */
+  .cm-fx, .cm-trace { display: none; }
   .cp-ring.on, .rb-glow, .bt-dot.beat, .bt-ic.beat, .rn-roll .rn-in, .rn-roll .rn-out { animation: none; }
   .rn-roll .rn-out { display: none; }
 }

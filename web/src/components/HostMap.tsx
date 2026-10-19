@@ -1,13 +1,17 @@
 "use client";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { type Validator, API_BASE, ago, utcWord, int } from "@/lib/api";
+import { type Validator, type TipEndpointEvent, API_BASE, ago, utcWord, int } from "@/lib/api";
+import { onTip, useEndpointEvent } from "@/lib/tip";
 import { validatorHref } from "@/lib/addr";
 import type { Hosting } from "@/lib/hosting";
 import { FRAME, COUNTRIES, project, countryPoint } from "@/lib/map/project";
 import { countryName } from "@/components/Flag";
 import { Eye } from "@/components/Metrics";
 import { type EndpointState, endpointState, readiness } from "@/components/Readiness";
+import { Flasher, endorsersOf, onArrival, onPrepare, placesOf, type Arrival, type Flash } from "@/lib/mapflash";
+import { Burst, type BurstPlace, type Where } from "@/lib/mapburst";
+import { PillPicker, HOLD_MS, ROTATE_MS } from "@/lib/pillpick";
 
 /**
  * The overview's host map: every registered Fibre host of the bonded set,
@@ -29,9 +33,13 @@ import { type EndpointState, endpointState, readiness } from "@/components/Readi
  * corner buttons, a double click, a pinch on a trackpad and a drag (once
  * zoomed) move the view, each in one eased flight.
  *
- * Across the map's foot, two small pills: the newest event at the left, the
- * three counts in the centre; the newest event's place carries a thin ring on
- * the map. The map has no heading of its own: the counts say what
+ * Across the map's foot, two small pills: the stream at the left, the three
+ * counts in the centre. With each beat of the recent blobs (a block's blobs,
+ * as they come: lib/pace.ts) the places of the validators that endorsed
+ * them burst on the map (lib/mapflash.ts, lib/mapburst.ts), and the pill
+ * names them, one a second (lib/pillpick.ts); a validator's new or changed
+ * endpoint (/v1/tip) takes the pill for 12 s, and its place bursts. The map has no heading
+ * of its own: the counts say what
  * it shows, and the panel's one heading on the subject is "Current Fibre
  * providers" under it. The box (its shape set in the stylesheet) and the bar
  * are in the prerendered page and the land is drawn as soon as the box is
@@ -224,40 +232,195 @@ function reducedMotion(): boolean {
   try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; }
 }
 
-// ---- the network feed: host registrations, for the event line before any blob settles ----
-type FeedEvent = { addr: string; term: string; at: string };
-function useFeedEvents(enabled: boolean): FeedEvent[] {
-  const [events, setEvents] = useState<FeedEvent[]>([]);
-  useEffect(() => {
-    if (!enabled) return;
-    let dead = false;
-    const load = async () => {
-      try {
-        const r = await fetch(`${API_BASE}/v1/feed.atom`, { cache: "no-store" });
-        if (!r.ok) return;
-        const doc = new DOMParser().parseFromString(await r.text(), "application/xml");
-        const out: FeedEvent[] = [];
-        for (const e of Array.from(doc.getElementsByTagName("entry"))) {
-          const term = e.getElementsByTagName("category")[0]?.getAttribute("term") ?? "";
-          const href = e.getElementsByTagName("link")[0]?.getAttribute("href") ?? "";
-          const addr = /[?&]addr=([^&]+)/.exec(href)?.[1];
-          const at = e.getElementsByTagName("published")[0]?.textContent ?? e.getElementsByTagName("updated")[0]?.textContent ?? "";
-          if (addr && at) out.push({ addr: decodeURIComponent(addr).toLowerCase(), term, at });
-        }
-        if (!dead) setEvents(out);
-      } catch { /* no feed, no events */ }
-    };
-    load();
-    // not while the tab is hidden, as every stream of the site (lib/api.ts)
-    const t = window.setInterval(() => { if (!document.hidden) load(); }, 120000);
-    return () => { dead = true; window.clearInterval(t); };
-  }, [enabled]);
-  return events;
-}
-
-const EVENT_WORD: Record<string, string> = { registered: "new Fibre provider", "host-changed": "changed its Fibre host" };
 /** "22 h ago" for "22 h 52 min ago": the pill's clock needs the hour, not the minute */
 const shortAgo = (t: string) => ago(t).replace(/(\d+ h) \d+ min/, "$1");
+
+/** what tells one endpoint event from the next: the validator, its block, what it did and the host */
+const eventId = (e: TipEndpointEvent) => `${e.address}|${e.height}|${e.outcome}|${e.host}`;
+
+/** re-renders every ms, for an age on screen */
+function useEvery(ms: number) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const t = window.setInterval(() => tick((n) => n + 1), ms);
+    return () => window.clearInterval(t);
+  }, [ms]);
+}
+
+/**
+ * The pill's endpoint event: the validator, what it did and how long ago. One that comes while the page is open pops
+ * its dot (pulse); the one the page opened with is simply there.
+ */
+function EventPill({ ev, pulse, v, place }: { ev: TipEndpointEvent; pulse: boolean; v?: Validator; place?: Host }) {
+  useEvery(30000);
+  const who = v ? name(v) : ev.moniker || ev.operator_address || ev.address;
+  const did = ev.outcome === "changed" ? "changed its endpoint" : "registered its endpoint";
+  return (
+    <p className="cm-ev">
+      <i className={`cm-ev-dot${pulse ? " pop" : ""}`} aria-hidden="true" />
+      <span className="cm-ev-t" title={`${who} ${did}${place?.cc ? ` · ${countryName(place.cc)}` : ""}${place?.provider ? ` · ${place.provider}` : ""} · ${utcWord(ev.time)}`}>
+        <Link href={v ? valLink(v) : validatorHref(ev.operator_address, ev.address)}>{who}</Link> {did}
+      </span>
+      <span className="cm-ev-ago">{shortAgo(ev.time)}</span>
+    </p>
+  );
+}
+
+/** a beat of the recent blobs as the pill names it: its newest blob, its block's time, its blobs, their endorsers so far, and whether it came while the page is open (live) or is what the grid opened with */
+type PillBeat = { key: string; at: string; height: number; blobs: number; endorsers: string[] | null; live: boolean };
+
+/** "12 s ago" under a minute, the pill's clock after */
+function secondsAgo(t: string, now: number): string {
+  const s = Math.floor((now - Date.parse(t)) / 1000);
+  if (!Number.isFinite(s)) return "";
+  if (s < 1) return "just now";
+  return s < 60 ? `${s} s ago` : shortAgo(t);
+}
+
+/**
+ * The pill: an endorser of the newest beat at a time, "B-Harvest endorsed the latest blob · 12 s ago", a new one each
+ * ROTATE_MS in a shuffled order, each once (lib/pillpick.ts). The names cross-fade in place, every name of the beat
+ * stacked in one cell, so the pill keeps the width of the longest and does not jump with each. A new beat takes the
+ * pill in the frame the grid moves, and its dot pops (not for what the grid opened with); a validator's new or
+ * changed endpoint takes it for HOLD_MS (ev, at epAt) and pops it too. A beat whose endorsers are not known yet is
+ * named plainly as settled.
+ */
+function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost }: {
+  beat: PillBeat | null; ev: TipEndpointEvent | null | undefined; epAt: number;
+  nameOf: (addr: string) => { name: string; href: string }; evVal?: Validator; evHost?: Host;
+}) {
+  const pick = useRef<PillPicker<TipEndpointEvent> | null>(null);
+  if (!pick.current) pick.current = new PillPicker<TipEndpointEvent>();
+  const pk = pick.current;
+  const [, render] = useState(0);
+  // fed before the paint, so a new beat is named in the frame the grid moves
+  useLayoutEffect(() => {
+    if (beat) { pk.beat(beat.key, beat.at, beat.endorsers); render((n) => n + 1); }
+  }, [beat, pk]);
+  useLayoutEffect(() => {
+    if (ev && epAt) { pk.endpoint(ev, epAt); render((n) => n + 1); }
+  }, [epAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const t = window.setInterval(() => { pk.tick(Date.now()); render((n) => n + 1); }, ROTATE_MS);
+    return () => window.clearInterval(t);
+  }, [pk]);
+  const now = Date.now();
+  const s = pk.show(now) ?? (ev ? { kind: "endpoint" as const, ev } : null);
+  if (!s) return <p className="cm-ev"><span className="cm-ev-t wait">{"\u00a0"}</span></p>;
+  if (s.kind === "endpoint") return <EventPill key={eventId(s.ev)} ev={s.ev} pulse={epAt > 0 && now - epAt < HOLD_MS} v={evVal} place={evHost} />;
+  const many = (beat?.blobs ?? 1) > 1, at = beat ? ` at height ${int(beat.height)}` : "";
+  if (s.kind === "settled") {
+    return (
+      <p className="cm-ev">
+        <i key={s.key} className={`cm-ev-dot${beat?.live ? " pop" : ""}`} aria-hidden="true" />
+        <span className="cm-ev-t" title={`${many ? `${beat!.blobs} blobs` : "A blob"} settled${at} · ${utcWord(s.at)}`}>
+          <Link href={`/blob/?hash=${s.key}`}>{many ? `${beat!.blobs} blobs` : "The latest blob"}</Link> settled
+        </span>
+        <span className="cm-ev-ago">{secondsAgo(s.at, now)}</span>
+      </p>
+    );
+  }
+  const who = nameOf(s.who);
+  return (
+    <p className="cm-ev">
+      <i key={s.key} className={`cm-ev-dot${beat?.live ? " pop" : ""}`} aria-hidden="true" />
+      <span className="cm-ev-t" title={`${who.name} endorsed ${many ? "blobs" : "the blob"}${at} · settled ${utcWord(s.at)}`}>
+        <span className="cm-ev-who">
+          {pk.names.map((w) => (w === s.who
+            ? <span key={w} className="on"><Link href={who.href}>{who.name}</Link></span>
+            : <span key={w} aria-hidden="true">{nameOf(w).name}</span>))}
+        </span>
+        {" "}endorsed the latest blob{many ? "s" : ""}
+      </span>
+      <span className="cm-ev-ago">{secondsAgo(s.at, now)}</span>
+    </p>
+  );
+}
+
+/**
+ * The map's bursts (lib/mapburst.ts on the canvas fx), driven by the recent blobs' moves (lib/mapflash.ts): each move
+ * is heard (onMove, for the pill, every time), and its blobs' endorsers, read from each blob's record (/v1/blobs/{hash})
+ * once, as soon as the tip names the blob or the grid has read it (the grid waits for them a moment), burst their
+ * places with the move. Every record read is told (onEndorsers, for the pill's names), the grid's newest when the page
+ * opens too. Nothing bursts with reduced motion, while the page is hidden, or for what it missed meanwhile once it is
+ * shown again. Returns a ref whose fire() bursts other places (a new endpoint's).
+ */
+function useBurst(fx: React.RefObject<HTMLCanvasElement | null>, where: Where, owners: () => Map<string, string>, onMove: (a: Arrival) => void, onEndorsers: (hash: string, endorsers: string[] | null) => void) {
+  const api = useRef<{ fire: (places: BurstPlace[]) => void; burst: Burst | null }>({ fire: () => {}, burst: null });
+  const latest = useRef({ where, owners, onMove, onEndorsers });
+  latest.current = { where, owners, onMove, onEndorsers };
+  useEffect(() => {
+    const motion = !reducedMotion() && !!fx.current;
+    const burst = motion ? new Burst(fx.current!, (id) => latest.current.where(id)) : null;
+    api.current = { burst, fire: (places) => { if (burst && !document.hidden) burst.fire(places); } };
+    const f = new Flasher();
+    let dead = false, newest: string | null = null, backAt = 0;
+    const show = (fl: Flash | null) => {
+      if (!fl || dead || !burst || document.hidden || fl.endorsers.length === 0) return;
+      const { places } = placesOf(fl.endorsers, latest.current.owners());
+      burst.fire([...places].map(([id, n]) => ({ id, n })));
+    };
+    // a blob's record, once: its endorsers, or null when it does not answer within 10 s; out, the records still to come
+    const out = new Map<string, Promise<void>>();
+    const ask = (hash: string) => {
+      const ctl = new AbortController();
+      const t = window.setTimeout(() => ctl.abort(), 10000);
+      out.set(hash, fetch(`${API_BASE}/v1/blobs/${hash}`, { cache: "no-store", signal: ctl.signal })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((j) => (j && Array.isArray(j.assignments) ? endorsersOf(j.assignments) : null), () => null)
+        .then((es) => {
+          window.clearTimeout(t);
+          out.delete(hash);
+          if (dead) return;
+          latest.current.onEndorsers(hash, es);
+          show(f.record(hash, es));
+        }));
+    };
+    const off = onArrival((a) => {
+      latest.current.onMove(a);
+      // what the grid opened with: its newest blob's record, for the pill's names
+      if (!a.live) { for (const b of a.blobs) if (!out.has(b.promise_hash)) ask(b.promise_hash); return; }
+      const { ask: need, flash: fl } = f.arrive(a, !document.hidden);
+      need.forEach(ask);
+      show(fl);
+    });
+    // the grid has read blobs it is about to show: their records, and an answer once every one of them is in
+    const offPrep = onPrepare((blobs) => {
+      if (document.hidden) return Promise.resolve();
+      for (const b of blobs) if (f.ahead(b.promise_hash, b.settlement_height)) ask(b.promise_hash);
+      return Promise.all(blobs.map((b) => out.get(b.promise_hash)));
+    });
+    // the page's tip (lib/tip.ts), without a render of its own: the newest blob, whose record is asked for as soon as
+    // the tip names it (not the one the page opened with), and the chain's height once the page is shown again
+    const offTip = onTip((fr) => {
+      const tip = fr.data;
+      if (!tip) return;
+      if (backAt && fr.fetchedAt && Date.parse(fr.fetchedAt) >= backAt) {
+        f.back(tip.height);
+        backAt = 0;
+      }
+      const lb = tip.latest_blob;
+      if (!lb || lb.promise_hash === newest) return;
+      const first = newest === null;
+      newest = lb.promise_hash;
+      if (!first && !document.hidden && f.ahead(lb.promise_hash, lb.settlement_height)) ask(lb.promise_hash);
+    });
+    const onVis = () => {
+      if (document.hidden) { f.hidden(); burst?.stop(); }
+      else backAt = Date.now();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      dead = true;
+      off();
+      offPrep();
+      offTip();
+      burst?.stop();
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, [fx]);
+  return api;
+}
 
 export default function HostMap({ rows }: { rows: Validator[] | null }) {
   const loading = !rows;
@@ -437,48 +600,57 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
     } else openNow(c.id);
   };
 
-  // ---- the event on the bar: who served most recently, or else the newest host events ----
-  const blobs = (rows ?? []).some((v) => (v.obligations?.total ?? 0) > 0);
-  type Live = { v: Validator; host?: Host; event?: string; at: string };
-  const served: Live[] = useMemo(() => {
-    if (!blobs) return [];
-    return hosts.filter((h) => !!h.v.last_served_at)
-      .sort((a, b) => b.v.last_served_at!.localeCompare(a.v.last_served_at!))
-      .slice(0, 5)
-      .map((h) => ({ v: h.v, host: h, at: h.v.last_served_at! }));
-  }, [hosts, blobs]);
-  const feed = useFeedEvents(!loading && served.length === 0);
-  const live: Live[] = useMemo(() => {
-    if (served.length) return served;
-    const byAddr = new Map<string, Validator>();
-    for (const v of rows ?? []) {
-      byAddr.set(v.address.toLowerCase(), v);
-      if (v.operator_address) byAddr.set(v.operator_address.toLowerCase(), v);
-    }
-    const hostOf = new Map(hosts.map((h) => [h.v.address, h]));
-    const ev: Live[] = [];
-    for (const e of feed) {
-      const v = byAddr.get(e.addr);
-      if (v && EVENT_WORD[e.term]) ev.push({ v, host: hostOf.get(v.address), event: EVENT_WORD[e.term], at: e.at });
-    }
-    for (const h of hosts) {
-      const v = h.v;
-      if (h.state === "unreachable" && v.last_reachable_at) ev.push({ v, host: h, event: "last reachable", at: v.last_reachable_at });
-    }
-    ev.sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
-    const seen = new Set<string>();
-    return ev.filter((e) => { const k = e.v.address + e.event; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 5);
-  }, [served, feed, rows, hosts]);
+  // ---- the pill: the endorsers of each beat of the recent blobs, as it comes (the grid's newest when the page opens),
+  // their union over the beat's blobs from each blob's record (endorsersBy, as the burst reads them); and a validator's
+  // new or changed endpoint (/v1/tip), which holds the pill for 12 s when it comes while the page is open ----
+  const [beatNow, setBeatNow] = useState<(PillBeat & { hashes: string[] }) | null>(null);
+  const endorsersBy = useRef(new Map<string, string[] | null>());
+  const unionOf = (hashes: string[]): string[] | null => {
+    const known = hashes.map((h) => endorsersBy.current.get(h)).filter((e): e is string[] => !!e);
+    return known.length ? [...new Set(known.flat())] : null;
+  };
+  const ev = useEndpointEvent();
+  const evKey = ev ? eventId(ev) : "";
+  const firstEv = useRef<string | null>(null);
+  if (ev !== undefined && firstEv.current === null) firstEv.current = evKey;
+  const evFresh = !!ev && evKey !== firstEv.current;
+  const evVal = ev ? (rows ?? []).find((v) => v.address.toLowerCase() === ev.address) : undefined;
+  const evHost = ev ? hosts.find((h) => h.v.address.toLowerCase() === ev.address) : undefined;
 
-  const [li, setLi] = useState(0);
-  const [, tick] = useState(0);
+  // ---- the burst: where each place is now, for the canvas; which place each validator's host is in ----
+  const fx = useRef<HTMLCanvasElement>(null);
+  const pinEls = useRef(new Map<string, HTMLLIElement>());
+  const spots = useRef(new Map<string, { x: number; y: number; r: number; one: boolean }>());
+  const owners = useRef(new Map<string, string>());
+  const where: Where = (id) => {
+    const sp = spots.current.get(id), el = pinEls.current.get(id);
+    if (!sp) return null;
+    return { ...sp, badge: el?.querySelector<HTMLElement>(".cm-badge") ?? null, trace: el?.querySelector<HTMLElement>(".cm-trace") ?? null };
+  };
+  const burst = useBurst(fx, where, () => owners.current,
+    (a) => {
+      if (a.blobs.length === 0) return;
+      const nb = a.blobs.reduce((m, b) => (b.settlement_height > m.settlement_height || (b.settlement_height === m.settlement_height && (b.settlement_tx_index ?? 0) > (m.settlement_tx_index ?? 0)) ? b : m));
+      const hashes = a.blobs.map((b) => b.promise_hash);
+      setBeatNow({ key: nb.promise_hash, at: nb.settlement_time ?? "", height: nb.settlement_height, blobs: hashes.length, hashes, endorsers: unionOf(hashes), live: a.live });
+    },
+    (hash, es) => {
+      endorsersBy.current.set(hash, es);
+      if (endorsersBy.current.size > 200) endorsersBy.current.delete(endorsersBy.current.keys().next().value as string);
+      setBeatNow((p) => (p && p.hashes.includes(hash) ? { ...p, endorsers: unionOf(p.hashes) } : p));
+    });
+  const nameOf = (addr: string) => {
+    const v = (rows ?? []).find((x) => x.address.toLowerCase() === addr);
+    return v ? { name: name(v), href: valLink(v) } : { name: `${addr.slice(0, 8)}…`, href: validatorHref(undefined, addr) };
+  };
+  // a new or changed endpoint that comes while the page is open: the pill for 12 s, and its place bursts
+  const [epAt, setEpAt] = useState(0);
   useEffect(() => {
-    if (live.length < 2 || reducedMotion()) { const t = window.setInterval(() => tick((n) => n + 1), 30000); return () => window.clearInterval(t); }
-    const t = window.setInterval(() => setLi((i) => i + 1), 5000);
-    return () => window.clearInterval(t);
-  }, [live.length]);
-  const cur = live.length ? live[li % live.length] : null;
-  const liveCluster = cur?.host ? clusters.find((c) => c.hosts.includes(cur.host!))?.id : undefined;
+    if (!evFresh || !ev) return;
+    setEpAt(Date.now());
+    const id = owners.current.get(ev.address);
+    if (id) burst.current.fire([{ id, n: 1 }]);
+  }, [evKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- the countries hosting someone, for the counts; and whether any host is still to be checked, for the key ----
   const hosted = useMemo(() => new Set(hosts.map((h) => h.cc)), [hosts]);
@@ -548,30 +720,12 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
     );
   }
 
-  // ---- the bar's event at its place: one ring goes out, one rests (the stylesheet), cut clear of a neighbouring badge ----
-  let liveRing: React.ReactNode = null;
-  const at = cur && placed.find((p) => p.c.id === liveCluster);
-  if (cur && at) {
-    const r = at.c.hosts.length === 1 ? 10 : Math.max(at.bw, at.bh) / 2 + 4.5, side = Math.ceil(r * 5.2 + 4), m = side / 2;
-    const dpr = window.devicePixelRatio || 1, snap = (v: number) => Math.round(v * dpr) / dpr;
-    const cuts = placed.filter((p) => p !== at).flatMap((p) => {
-      const dx = p.x - at.x, dy = p.y - at.y, pr = Math.max(p.bw, p.bh) / 2 + 3;
-      return Math.abs(Math.hypot(dx, dy) - r) < pr ? [<circle key={p.c.id} cx={m + dx} cy={m + dy} r={pr} fill="#000" />] : [];
-    });
-    liveRing = (
-      <svg key={`${cur.v.address}|${cur.at}|${cur.event ?? ""}`} className={`cm-live${open === at.c.id ? " open" : ""}`} data-tone={cur.event === "last reachable" ? "hold" : "ok"}
-        width={side} height={side} viewBox={`0 0 ${side} ${side}`} style={{ left: snap(at.x) - m, top: snap(at.y) - m }} aria-hidden="true" focusable="false">
-        {cuts.length > 0 && (
-          <mask id="cm-live-cut" maskUnits="userSpaceOnUse" x={0} y={0} width={side} height={side}>
-            <rect width={side} height={side} fill="#fff" />
-            {cuts}
-          </mask>
-        )}
-        <circle className="go" cx={m} cy={m} r={r} />
-        <circle className="rest" cx={m} cy={m} r={r} mask={cuts.length > 0 ? "url(#cm-live-cut)" : undefined} />
-      </svg>
-    );
-  }
+  // ---- the burst's places as drawn now: each badge's centre and radius, and the place each validator's host is in ----
+  spots.current = new Map(placed.map((p) => [p.c.id, { x: p.x, y: p.y, r: Math.max(p.bw, p.bh) / 2, one: p.c.hosts.length === 1 }]));
+  owners.current = new Map(placed.flatMap((p) => p.c.hosts.map((h) => [h.v.address.toLowerCase(), p.c.id] as [string, string])));
+  useEffect(() => {
+    burst.current.burst?.size(width, height, window.devicePixelRatio || 1);
+  }, [width, height, burst]);
 
   return (
     <section className="cm" aria-label="Map of Fibre providers">
@@ -596,7 +750,8 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
             {unchecked && <span><i className="k-none" />not checked yet</span>}
           </p>
         </div>
-        {liveRing}
+        {/* the bursts' rings, under the badges: drawn only while one is out (lib/mapburst.ts) */}
+        <canvas className="cm-fx" ref={fx} aria-hidden="true" />
         <ul className="cm-pins" aria-label="Fibre providers by location">
           {placed.map(({ c, x, y, bw, bh, hit }) => {
             const isOpen = open === c.id;
@@ -628,9 +783,11 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
               pop = { [s.hz === "right" ? "left" : "right"]: bw / 2 + 12, [s.vt === "below" ? "top" : "bottom"]: -edge, width: 300, maxHeight: s.maxHeight };
             }
             return (
-              <li key={c.id} className={`cm-pin${one ? " one" : ""}${isOpen ? " open" : ""}`}
+              <li key={c.id} className={`cm-pin${one ? " one" : ""}${isOpen ? " open" : ""}`} ref={(el) => { if (el) pinEls.current.set(c.id, el); else pinEls.current.delete(c.id); }}
                 style={{ transform: `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`, zIndex: isOpen ? 30 : undefined }}
                 onMouseEnter={() => openNow(c.id)} onMouseLeave={closeSoon}>
+                {/* the place's warmth from its bursts, under its badge (lib/mapburst.ts) */}
+                <i className="cm-trace" aria-hidden="true" style={{ width: Math.max(bw, bh) + (narrow ? 12 : 18), height: Math.max(bw, bh) + (narrow ? 12 : 18), left: -(Math.max(bw, bh) + (narrow ? 12 : 18)) / 2, top: -(Math.max(bw, bh) + (narrow ? 12 : 18)) / 2 }} />
                 <button type="button" className="cm-b" aria-expanded={split ? undefined : isOpen} aria-describedby="cm-pins-keys"
                   aria-label={`${place}${cities.length ? ` (${cities.map(([k, m]) => (m > 1 ? `${k} ${m}` : k)).join(", ")})` : ""}: ${n} Fibre provider${one ? "" : "s"}, ${tally.map(([s, k]) => `${k} ${STATE_WORD[s]}`).join(", ")}${split ? ". Zoom in" : ""}`}
                   style={{ width: hit, height: hit }}
@@ -679,20 +836,10 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
         </div>
       </div>
 
-      {/* two pills across the map's foot: the newest event at the left, the three counts in the centre */}
+      {/* two pills across the map's foot: the stream at the left (the blobs' beats, or a validator's endpoint), the three
+          counts in the centre */}
       <div className="cm-bar" ref={bar}>
-        <p className="cm-ev" key={cur ? `${cur.v.address}|${cur.at}|${cur.event ?? ""}` : "none"}>
-          {cur ? (
-            <>
-              <i className="cm-ev-dot" data-tone={cur.event === "last reachable" ? "hold" : "ok"} aria-hidden="true" />
-              <span className="cm-ev-t" title={`${name(cur.v)}${cur.event ? ` · ${cur.event}` : " served its rows"}${cur.host?.cc ? ` · ${countryName(cur.host.cc)}` : ""}${cur.host?.provider ? ` · ${cur.host.provider}` : ""} · ${utcWord(cur.at)}`}>
-                <Link href={valLink(cur.v)}>{name(cur.v)}</Link>
-                {cur.event ? <> · {cur.event}</> : <> served its rows</>}
-              </span>
-              <span className="cm-ev-ago">{shortAgo(cur.at)}</span>
-            </>
-          ) : <span className="cm-ev-t wait">{" "}</span>}
-        </p>
+        <StreamPill beat={beatNow} ev={ev} epAt={epAt} nameOf={nameOf} evVal={evVal} evHost={evHost} />
         <ul className="cm-counts" aria-busy={loading || undefined}>
           {counts.map(([n, many, one]) => (
             <li key={many}><b className={loading ? "wait" : undefined}>{loading ? "00" : int(n)}</b><span>{n === 1 && !loading ? one : many}</span></li>
