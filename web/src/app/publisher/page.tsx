@@ -106,6 +106,8 @@ function Publisher({ addr }: { addr: string }) {
   // the widest count the Transactions head has held, in characters: its chip keeps that width, so the tabs beside it stay
   // put when All, Blobs and Escrow count differently
   const countChars = useRef(0);
+  // the last count shown: kept, quieted, while the next tab's count loads, so the chip never leaves and comes back
+  const lastCount = useRef<number | null>(null);
   // a new page opens at the list's top when the reader had scrolled past it
   const setPage = useCallback((p: number) => {
     setPageRaw(p);
@@ -251,6 +253,8 @@ function Publisher({ addr }: { addr: string }) {
   const txsHere = txs.data && txs.data.view === kind ? txs.data : null;
   const listN = blobs ? (feed.loaded ? feed.total : ns ? null : p.settlements) : txsHere ? txsHere.total : null;
   countChars.current = Math.max(countChars.current, int(p.settlements).length, listN != null ? int(listN).length : 0);
+  if (listN != null) lastCount.current = listN;
+  const shownN = listN ?? lastCount.current;
 
   // Escrow's statement under its last page: what went in, what the blobs and any timed-out promise cost, what was paid
   // out, and the escrow that leaves, over the whole record; shown only when it closes exactly on the balance, a line
@@ -359,7 +363,7 @@ function Publisher({ addr }: { addr: string }) {
       <section id="list" className="listing lg-list pb-list">
         <div className="list-head">
           <div className="pb-lh">
-            <h2 className="pb-th">Transactions{listN != null && <span className="n" style={{ minWidth: `calc(${countChars.current}ch + 16px)` }}>{int(listN)}</span>}</h2>
+            <h2 className="pb-th">Transactions{shownN != null && <span className={`n${listN == null ? " wait" : ""}`} style={{ minWidth: `calc(${countChars.current}ch + 16px)` }}>{int(shownN)}</span>}</h2>
             {posted && (
               <div className="seg pb-kinds" role="group" aria-label="kind">
                 {KINDS.map(([k, label]) => (
