@@ -276,7 +276,7 @@ button { font: inherit; color: inherit; }
 .net.menu summary::-webkit-details-marker { display: none; }
 .net.menu summary::after { content: ""; width: 6px; height: 6px; border-right: 1.5px solid var(--text-2); border-bottom: 1.5px solid var(--text-2); transform: translateY(-2px) rotate(45deg); margin-left: 2px; }
 .net.menu .list { position: absolute; right: 0; top: 36px; z-index: 30; min-width: 160px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px; display: grid; gap: 2px; box-shadow: 0 8px 24px rgb(0 0 0 / .12); }
-.net.menu .list a, .net.menu .list span { display: block; padding: 6px 10px; border-radius: 6px; color: var(--text); font-weight: 400; }
+.net.menu .list a, .net.menu .list span { display: block; padding: 6px 10px; border-radius: 6px; color: var(--text); font-weight: 400; text-align: left; }
 .net.menu .list a:hover { background: var(--wash); text-decoration: none; }
 .net.menu .list span { color: var(--text); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .net.menu .list span.soon { color: var(--text-3); cursor: default; }
