@@ -168,6 +168,11 @@ function useBlobFeed(mark: string | undefined) {
   const whole = useRef(false);
   const lastWhole = useRef(0);
   const markRef = useRef(mark);
+  // refusals in a row, and the read that asks again after one; the read the tip's newest blob set off
+  const refused = useRef(0);
+  const retryT = useRef<number | undefined>(undefined);
+  const markT = useRef<number | undefined>(undefined);
+  const self = useRef<() => void>(() => {});
 
   const apply = useCallback((f: Feed) => { cur.current = f; setFeed(f); }, []);
 
@@ -206,12 +211,19 @@ function useBlobFeed(mark: string | undefined) {
           const extra = before.loaded && allNew(page) ? Math.max(0, delta - page.blobs.length) : 0;
           const { feed: f, fresh } = merge(before, page, at, extra);
           apply(f);
+          refused.current = 0;
           // ask next time for about as many as this time brought
           const came = before.loaded ? Math.max(fresh, delta) : 0;
           limit.current = Math.min(CELLS, Math.max(2, Math.ceil(came * 1.5) + 2));
         } catch (e) {
-          apply({ ...cur.current, error: e instanceof Error ? e.message : String(e) });
-          // a failed read is not retried at once: the next blob the tip names, or the slow read, asks again
+          const msg = e instanceof Error ? e.message : String(e);
+          // A refusal (429: the site's proxy turned away more pages than it lets through at once) is asked again in
+          // 1 to 3 s, at a time of the page's own, and only the third in a row says the API is not answering. Any
+          // other failed read is not retried at once: the next blob the tip names, or the slow read, asks again.
+          if (msg === "429" && ++refused.current < 3) {
+            window.clearTimeout(retryT.current);
+            retryT.current = window.setTimeout(() => self.current(), 1000 + Math.random() * 2000);
+          } else apply({ ...cur.current, error: msg });
           break;
         }
       } while (again.current && !document.hidden && markRef.current !== undefined && !holds(cur.current, markRef.current));
@@ -219,13 +231,21 @@ function useBlobFeed(mark: string | undefined) {
       busy.current = false;
     }
   }, [apply]);
+  self.current = read;
 
   // the first read
-  useEffect(() => { read(); }, [read]);
-  // a read as soon as the tip names a newest blob the feed does not hold
+  useEffect(() => {
+    read();
+    return () => { window.clearTimeout(retryT.current); window.clearTimeout(markT.current); };
+  }, [read]);
+  // a read as soon as the tip names a newest blob the feed does not hold, within half a second at a time of the
+  // page's own: the stream tells every open page of a blob in the same instant, and all their reads at once would
+  // be more than the site's proxy lets through together
   useEffect(() => {
     markRef.current = mark;
-    if (mark !== undefined && !holds(cur.current, mark)) read();
+    if (mark === undefined || holds(cur.current, mark)) return;
+    window.clearTimeout(markT.current);
+    markT.current = window.setTimeout(read, Math.random() * 500);
   }, [mark, read]);
   // the slow read, and one when the page comes back into view if a blob came while it was hidden or the slow
   // read fell due; and a read of the whole grid when a square's status may have moved on since its read (stale)
@@ -369,7 +389,10 @@ export default function RecentBlobs() {
   const [shown, setShown] = useState<Shown>(NO_SHOWN);
   const pacer = useRef<Pacer<Cell> | null>(null);
   if (!pacer.current) pacer.current = new Pacer<Cell>();
-  const offered = useRef(-1); // the newest arrival handed to the pacer, by seq; -1 before the first read
+  const offered = useRef(-1); // the newest arrival handed to the pacer, by seq
+  // the first read is on the grid: an empty one too, so the first blobs after it, as on a network whose Fibre has just
+  // gone live, come in as arrivals and not as an opening
+  const opened = useRef(false);
   const waiting = useRef(0); // blobs in the pacer, not yet on the grid
   const feedRef = useRef(feed);
   feedRef.current = feed;
@@ -412,8 +435,9 @@ export default function RecentBlobs() {
   useEffect(() => {
     if (!feed.loaded) return;
     const p = pacer.current!;
-    if (offered.current < 0) {
+    if (!opened.current) {
       // the first read is on the grid at once, without a move
+      opened.current = true;
       offered.current = feed.next - 1;
       setShown({ cells: feed.cells, total: feed.total, move: null });
       return;

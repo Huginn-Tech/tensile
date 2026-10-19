@@ -648,7 +648,8 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
   const where: Where = (id) => spots.current.get(id) ?? null;
   const els: Els = (id) => {
     const li = pinEls.current.get(id);
-    if (!li) return null;
+    // a place gone from the map takes its parts with it, so a page left open for days keeps no element it dropped
+    if (!li) { pinParts.current.delete(id); return null; }
     let parts = pinParts.current.get(id);
     if (!parts || parts.li !== li) {
       parts = { li, badge: li.querySelector<HTMLElement>(".cm-badge"), pop: li.querySelector<HTMLElement>(".cm-badge-pop"), trace: li.querySelector<HTMLElement>(".cm-trace") };
