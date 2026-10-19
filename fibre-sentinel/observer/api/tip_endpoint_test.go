@@ -114,4 +114,12 @@ func TestTipNamesTheNewestEndpointEvent(t *testing.T) {
 	if ev := ask(); ev == nil || *ev != wantC {
 		t.Fatalf("after C's same endpoint: %+v, want %+v", ev, wantC)
 	}
+
+	// and again, more times than a page of the walk holds: it walks on to C's registration
+	for h := int64(100); h < 100+endpointWalkPage+6; h++ {
+		reg(h, 1, valC, "10.0.0.4:7980", "event")
+	}
+	if ev := ask(); ev == nil || *ev != wantC {
+		t.Fatalf("past a page of the same endpoint: %+v, want %+v", ev, wantC)
+	}
 }

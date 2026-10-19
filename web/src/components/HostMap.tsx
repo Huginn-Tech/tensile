@@ -9,8 +9,8 @@ import { FRAME, COUNTRIES, project, countryPoint } from "@/lib/map/project";
 import { countryName } from "@/components/Flag";
 import { Eye } from "@/components/Metrics";
 import { type EndpointState, endpointState, readiness } from "@/components/Readiness";
-import { Flasher, endorsersOf, onArrival, onPrepare, placesOf, type Arrival, type Flash } from "@/lib/mapflash";
-import { Burst, type BurstPlace, type Where } from "@/lib/mapburst";
+import { Flasher, onArrival, placesOf, type Arrival, type ArrivedBlob, type Flash } from "@/lib/mapflash";
+import { Burst, type BurstPlace, type Where, type Els } from "@/lib/mapburst";
 import { PillPicker, HOLD_MS, ROTATE_MS } from "@/lib/pillpick";
 
 /**
@@ -266,33 +266,62 @@ function EventPill({ ev, pulse, v, place }: { ev: TipEndpointEvent; pulse: boole
   );
 }
 
-/** a beat of the recent blobs as the pill names it: its newest blob, its block's time, its blobs, their endorsers so far, and whether it came while the page is open (live) or is what the grid opened with */
+/** a beat of the recent blobs as the pill names it: its newest blob, its block's time, its blobs, their endorsers (null while unknown), and whether it came while the page is open (live) or is what the grid opened with */
 type PillBeat = { key: string; at: string; height: number; blobs: number; endorsers: string[] | null; live: boolean };
 
-/** "12 s ago" under a minute, the pill's clock after */
+/** "12 s ago" under a minute, the pill's clock after, by the observer's clock (now: the reader's, corrected by the tip's skew) */
 function secondsAgo(t: string, now: number): string {
   const s = Math.floor((now - Date.parse(t)) / 1000);
   if (!Number.isFinite(s)) return "";
   if (s < 1) return "just now";
-  return s < 60 ? `${s} s ago` : shortAgo(t);
+  if (s < 60) return `${s} s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h} h ago` : `${Math.floor(h / 24)} d ago`;
+}
+
+/** whether the reader asks for less motion, and again whenever that changes */
+function useReducedMotion(): boolean {
+  const [still, setStill] = useState(false);
+  useEffect(() => {
+    let mq: MediaQueryList;
+    try { mq = window.matchMedia("(prefers-reduced-motion: reduce)"); } catch { return; }
+    const on = () => setStill(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return still;
 }
 
 /**
  * The pill: an endorser of the newest beat at a time, "B-Harvest endorsed the latest blob · 12 s ago", a new one each
- * ROTATE_MS in a shuffled order, each once (lib/pillpick.ts). The names cross-fade in place, every name of the beat
- * stacked in one cell, so the pill keeps the width of the longest and does not jump with each. A new beat takes the
- * pill in the frame the grid moves, and its dot pops (not for what the grid opened with); a validator's new or
- * changed endpoint takes it for HOLD_MS (ev, at epAt) and pops it too. A beat whose endorsers are not known yet is
- * named plainly as settled.
+ * ROTATE_MS in a shuffled order, each once (lib/pillpick.ts); with reduced motion one name a beat. The names
+ * cross-fade in place, every name of the beat stacked in one cell, the cell easing to the width of the name shown. A
+ * new beat takes the pill in the frame the grid moves, and its dot pops (not for what the grid opened with); a
+ * validator's new or changed endpoint takes it for HOLD_MS (ev, at epAt) and pops it too. A beat whose endorsers are
+ * not known is named plainly as settled.
+ *
+ * Under the pointer or with focus in it, the pill holds still, its beat and its name as they were, so the name can be
+ * read, clicked or kept focused; let go, it shows the newest. Ages are by the observer's clock (skew, the tip's).
+ *
+ * For a block of several blobs the latest blob's card is the newest of them, its own endorsements; the burst and the
+ * pill are the block's, the union of its blobs' endorsers. The pill counts nothing, so the two never disagree.
  */
-function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost }: {
+function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost, motion, skew }: {
   beat: PillBeat | null; ev: TipEndpointEvent | null | undefined; epAt: number;
-  nameOf: (addr: string) => { name: string; href: string }; evVal?: Validator; evHost?: Host;
+  nameOf: (addr: string) => { name: string; href: string }; evVal?: Validator; evHost?: Host; motion: boolean; skew: () => number;
 }) {
   const pick = useRef<PillPicker<TipEndpointEvent> | null>(null);
   if (!pick.current) pick.current = new PillPicker<TipEndpointEvent>();
   const pk = pick.current;
   const [, render] = useState(0);
+  // held under the pointer or the focus: what it showed then, names and all
+  const [held, setHeld] = useState(false);
+  const shown = useRef<{ s: ReturnType<PillPicker<TipEndpointEvent>["show"]>; names: string[]; beat: PillBeat | null } | null>(null);
+  const heldRef = useRef(held);
+  heldRef.current = held;
   // fed before the paint, so a new beat is named in the frame the grid moves
   useLayoutEffect(() => {
     if (beat) { pk.beat(beat.key, beat.at, beat.endorsers); render((n) => n + 1); }
@@ -300,10 +329,14 @@ function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost }: {
   useLayoutEffect(() => {
     if (ev && epAt) { pk.endpoint(ev, epAt); render((n) => n + 1); }
   }, [epAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a name a second, with motion and while not held; the age on screen moves with it, or every 15 s without
   useEffect(() => {
-    const t = window.setInterval(() => { pk.tick(Date.now()); render((n) => n + 1); }, ROTATE_MS);
+    const t = window.setInterval(() => {
+      if (motion && !heldRef.current) pk.tick(Date.now());
+      render((n) => n + 1);
+    }, motion ? ROTATE_MS : 15000);
     return () => window.clearInterval(t);
-  }, [pk]);
+  }, [pk, motion]);
   // the names' cell as wide as the name shown, after every render: one measure a second
   const whoRef = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
@@ -311,120 +344,102 @@ function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost }: {
     if (el && on) el.style.width = `${Math.ceil(on.getBoundingClientRect().width)}px`;
   });
   const now = Date.now();
-  const s = pk.show(now) ?? (ev ? { kind: "endpoint" as const, ev } : null);
-  if (!s) return <p className="cm-ev"><span className="cm-ev-t wait">{"\u00a0"}</span></p>;
+  const live = { s: pk.show(now) ?? (ev ? { kind: "endpoint" as const, ev } : null), names: [...pk.names], beat };
+  if (!held || !shown.current) shown.current = live;
+  const { s, names, beat: b } = held && shown.current ? shown.current : live;
+  const hold = {
+    onPointerEnter: () => setHeld(true),
+    onPointerLeave: (e: React.PointerEvent<HTMLElement>) => { if (!e.currentTarget.contains(document.activeElement)) setHeld(false); },
+    onFocus: () => setHeld(true),
+    onBlur: (e: React.FocusEvent<HTMLElement>) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHeld(false); },
+  };
+  const ago = (t: string) => secondsAgo(t, now + skew());
+  if (!s) return <p className="cm-ev"><span className="cm-ev-t wait">{" "}</span></p>;
   if (s.kind === "endpoint") return <EventPill key={eventId(s.ev)} ev={s.ev} pulse={epAt > 0 && now - epAt < HOLD_MS} v={evVal} place={evHost} />;
-  const many = (beat?.blobs ?? 1) > 1, at = beat ? ` at height ${int(beat.height)}` : "";
+  const many = (b?.blobs ?? 1) > 1, at = b ? ` at height ${int(b.height)}` : "";
   if (s.kind === "settled") {
     return (
-      <p className="cm-ev">
-        <i key={s.key} className={`cm-ev-dot${beat?.live ? " pop" : ""}`} aria-hidden="true" />
-        <span className="cm-ev-t" title={`${many ? `${beat!.blobs} blobs` : "A blob"} settled${at} · ${utcWord(s.at)}`}>
-          <Link href={`/blob/?hash=${s.key}`}>{many ? `${beat!.blobs} blobs` : "The latest blob"}</Link> settled
+      <p className="cm-ev" {...hold}>
+        <i key={s.key} className={`cm-ev-dot${b?.live ? " pop" : ""}`} aria-hidden="true" />
+        <span className="cm-ev-t" title={`${many ? `${b!.blobs} blobs` : "A blob"} settled${at} · ${utcWord(s.at)}`}>
+          <Link href={`/blob/?hash=${s.key}`}>{many ? `${b!.blobs} blobs` : "The latest blob"}</Link> settled
         </span>
-        <span className="cm-ev-ago">{secondsAgo(s.at, now)}</span>
+        <span className="cm-ev-ago">{ago(s.at)}</span>
       </p>
     );
   }
   const who = nameOf(s.who);
   return (
-    <p className="cm-ev">
-      <i key={s.key} className={`cm-ev-dot${beat?.live ? " pop" : ""}`} aria-hidden="true" />
+    <p className="cm-ev" {...hold}>
+      <i key={s.key} className={`cm-ev-dot${b?.live ? " pop" : ""}`} aria-hidden="true" />
       <span className="cm-ev-t" title={`${who.name} endorsed ${many ? "blobs" : "the blob"}${at} · settled ${utcWord(s.at)}`}>
         <span className="cm-ev-who" ref={whoRef}>
-          {pk.names.map((w) => (w === s.who
+          {names.map((w) => (w === s.who
             ? <span key={w} className="on"><Link href={who.href}>{who.name}</Link></span>
             : <span key={w} aria-hidden="true">{nameOf(w).name}</span>))}
         </span>
         {" "}endorsed the latest blob{many ? "s" : ""}
       </span>
-      <span className="cm-ev-ago">{secondsAgo(s.at, now)}</span>
+      <span className="cm-ev-ago">{ago(s.at)}</span>
     </p>
   );
 }
 
 /**
  * The map's bursts (lib/mapburst.ts on the canvas fx), driven by the recent blobs' moves (lib/mapflash.ts): each move
- * is heard (onMove, for the pill, every time), and its blobs' endorsers, read from each blob's record (/v1/blobs/{hash})
- * once, as soon as the tip names the blob or the grid has read it (the grid waits for them a moment), burst their
- * places with the move. Every record read is told (onEndorsers, for the pill's names), the grid's newest when the page
- * opens too. Nothing bursts with reduced motion, while the page is hidden, or for what it missed meanwhile once it is
- * shown again. Returns a ref whose fire() bursts other places (a new endpoint's).
+ * is heard (onMove, for the pill, every time), and the endorsers of the blobs it brought in, which the grid's own read
+ * carries (/v1/blobs?endorsers=1), burst their places with the move. Of a move that brings several blocks (a stall's
+ * catch-up) only the newest block bursts; the older are marked seen. Nothing bursts with reduced motion (motion
+ * false; it is heard again when that changes), while the page is hidden, or for what it missed meanwhile once it is
+ * shown again (the tip's height then, from the page's one tip). Returns a ref whose fire() bursts other places (a new
+ * endpoint's).
  */
-function useBurst(fx: React.RefObject<HTMLCanvasElement | null>, where: Where, owners: () => Map<string, string>, onMove: (a: Arrival) => void, onEndorsers: (hash: string, endorsers: string[] | null) => void) {
+function useBurst(fx: React.RefObject<HTMLCanvasElement | null>, motion: boolean, where: Where, els: Els, owners: () => Map<string, string>, onMove: (a: Arrival) => void) {
   const api = useRef<{ fire: (places: BurstPlace[]) => void; burst: Burst | null }>({ fire: () => {}, burst: null });
-  const latest = useRef({ where, owners, onMove, onEndorsers });
-  latest.current = { where, owners, onMove, onEndorsers };
+  const latest = useRef({ where, els, owners, onMove });
+  latest.current = { where, els, owners, onMove };
   useEffect(() => {
-    const motion = !reducedMotion() && !!fx.current;
-    const burst = motion ? new Burst(fx.current!, (id) => latest.current.where(id)) : null;
+    const burst = motion && fx.current ? new Burst(fx.current, (id) => latest.current.where(id), (id) => latest.current.els(id)) : null;
     api.current = { burst, fire: (places) => { if (burst && !document.hidden) burst.fire(places); } };
+    if (burst && fx.current) burst.size(fx.current.clientWidth, fx.current.clientHeight, window.devicePixelRatio || 1);
     const f = new Flasher();
-    let dead = false, newest: string | null = null, backAt = 0;
+    let backAt = 0;
     const show = (fl: Flash | null) => {
-      if (!fl || dead || !burst || document.hidden || fl.endorsers.length === 0) return;
+      if (!fl || !burst || document.hidden || fl.endorsers.length === 0) return;
       const { places } = placesOf(fl.endorsers, latest.current.owners());
       burst.fire([...places].map(([id, n]) => ({ id, n })));
     };
-    // a blob's record, once: its endorsers, or null when it does not answer within 10 s; out, the records still to come
-    const out = new Map<string, Promise<void>>();
-    const ask = (hash: string) => {
-      const ctl = new AbortController();
-      const t = window.setTimeout(() => ctl.abort(), 10000);
-      out.set(hash, fetch(`${API_BASE}/v1/blobs/${hash}`, { cache: "no-store", signal: ctl.signal })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((j) => (j && Array.isArray(j.assignments) ? endorsersOf(j.assignments) : null), () => null)
-        .then((es) => {
-          window.clearTimeout(t);
-          out.delete(hash);
-          if (dead) return;
-          latest.current.onEndorsers(hash, es);
-          show(f.record(hash, es));
-        }));
-    };
     const off = onArrival((a) => {
       latest.current.onMove(a);
-      // what the grid opened with: its newest blob's record, for the pill's names
-      if (!a.live) { for (const b of a.blobs) if (!out.has(b.promise_hash)) ask(b.promise_hash); return; }
-      const { ask: need, flash: fl } = f.arrive(a, !document.hidden);
-      need.forEach(ask);
+      if (a.blobs.length === 0) return;
+      const top = a.blobs.reduce((m, b) => Math.max(m, b.settlement_height), 0);
+      const older = a.blobs.filter((b) => b.settlement_height < top), block = a.blobs.filter((b) => b.settlement_height === top);
+      if (older.length) f.arrive({ id: a.id, blobs: older, live: false }, false);
+      const { ask, flash } = f.arrive({ id: a.id, blobs: block, live: a.live }, a.live && !document.hidden);
+      // the grid's read brought each blob's endorsers: recorded at once, so the move flashes in its own frame
+      let fl = flash;
+      for (const h of ask) fl = f.record(h, block.find((b) => b.promise_hash === h)?.endorsers ?? null) ?? fl;
       show(fl);
     });
-    // the grid has read blobs it is about to show: their records, and an answer once every one of them is in
-    const offPrep = onPrepare((blobs) => {
-      if (document.hidden) return Promise.resolve();
-      for (const b of blobs) if (f.ahead(b.promise_hash, b.settlement_height)) ask(b.promise_hash);
-      return Promise.all(blobs.map((b) => out.get(b.promise_hash)));
-    });
-    // the page's tip (lib/tip.ts), without a render of its own: the newest blob, whose record is asked for as soon as
-    // the tip names it (not the one the page opened with), and the chain's height once the page is shown again
+    // the page's tip (lib/tip.ts), without a render of its own: the chain's height once the page is shown again
     const offTip = onTip((fr) => {
-      const tip = fr.data;
-      if (!tip) return;
-      if (backAt && fr.fetchedAt && Date.parse(fr.fetchedAt) >= backAt) {
-        f.back(tip.height);
+      if (backAt && fr.data && fr.fetchedAt && Date.parse(fr.fetchedAt) >= backAt) {
+        f.back(fr.data.height);
         backAt = 0;
       }
-      const lb = tip.latest_blob;
-      if (!lb || lb.promise_hash === newest) return;
-      const first = newest === null;
-      newest = lb.promise_hash;
-      if (!first && !document.hidden && f.ahead(lb.promise_hash, lb.settlement_height)) ask(lb.promise_hash);
     });
     const onVis = () => {
       if (document.hidden) { f.hidden(); burst?.stop(); }
-      else backAt = Date.now();
+      else { backAt = Date.now(); burst?.wake(); }
     };
     document.addEventListener("visibilitychange", onVis);
     return () => {
-      dead = true;
       off();
-      offPrep();
       offTip();
       burst?.stop();
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [fx]);
+  }, [fx, motion]);
   return api;
 }
 
@@ -606,15 +621,16 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
     } else openNow(c.id);
   };
 
-  // ---- the pill: the endorsers of each beat of the recent blobs, as it comes (the grid's newest when the page opens),
-  // their union over the beat's blobs from each blob's record (endorsersBy, as the burst reads them); and a validator's
-  // new or changed endpoint (/v1/tip), which holds the pill for 12 s when it comes while the page is open ----
-  const [beatNow, setBeatNow] = useState<(PillBeat & { hashes: string[] }) | null>(null);
-  const endorsersBy = useRef(new Map<string, string[] | null>());
-  const unionOf = (hashes: string[]): string[] | null => {
-    const known = hashes.map((h) => endorsersBy.current.get(h)).filter((e): e is string[] => !!e);
-    return known.length ? [...new Set(known.flat())] : null;
-  };
+  // ---- the pill: the endorsers of each beat of the recent blobs, as it comes (the grid's newest block when the page
+  // opens), their union over the block's blobs as the grid's read gave them; and a validator's new or changed endpoint
+  // (/v1/tip), which holds the pill for 12 s when it comes while the page is open and is under 30 s old ----
+  const calm = useReducedMotion();
+  const [beatNow, setBeatNow] = useState<PillBeat | null>(null);
+  // the observer's clock against the reader's (the tip's server_time), for the pill's ages and an endpoint's
+  const skew = useRef(0);
+  useEffect(() => onTip((f) => {
+    if (f.data?.server_time && f.fetchedAt) skew.current = Date.parse(f.data.server_time) - Date.parse(f.fetchedAt);
+  }), []);
   const ev = useEndpointEvent();
   const evKey = ev ? eventId(ev) : "";
   const firstEv = useRef<string | null>(null);
@@ -623,36 +639,56 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
   const evVal = ev ? (rows ?? []).find((v) => v.address.toLowerCase() === ev.address) : undefined;
   const evHost = ev ? hosts.find((h) => h.v.address.toLowerCase() === ev.address) : undefined;
 
-  // ---- the burst: where each place is now, for the canvas; which place each validator's host is in ----
+  // ---- the burst: where each place is now, for the canvas; its elements, kept; which place each validator's host is in ----
   const fx = useRef<HTMLCanvasElement>(null);
   const pinEls = useRef(new Map<string, HTMLLIElement>());
+  const pinParts = useRef(new Map<string, { li: HTMLLIElement; badge: HTMLElement | null; pop: HTMLElement | null; trace: HTMLElement | null }>());
   const spots = useRef(new Map<string, { x: number; y: number; r: number; one: boolean }>());
   const owners = useRef(new Map<string, string>());
-  const where: Where = (id) => {
-    const sp = spots.current.get(id), el = pinEls.current.get(id);
-    if (!sp) return null;
-    return { ...sp, badge: el?.querySelector<HTMLElement>(".cm-badge") ?? null, trace: el?.querySelector<HTMLElement>(".cm-trace") ?? null };
+  const where: Where = (id) => spots.current.get(id) ?? null;
+  const els: Els = (id) => {
+    const li = pinEls.current.get(id);
+    if (!li) return null;
+    let parts = pinParts.current.get(id);
+    if (!parts || parts.li !== li) {
+      parts = { li, badge: li.querySelector<HTMLElement>(".cm-badge"), pop: li.querySelector<HTMLElement>(".cm-badge-pop"), trace: li.querySelector<HTMLElement>(".cm-trace") };
+      pinParts.current.set(id, parts);
+    }
+    return parts;
   };
-  const burst = useBurst(fx, where, () => owners.current,
-    (a) => {
-      if (a.blobs.length === 0) return;
-      const nb = a.blobs.reduce((m, b) => (b.settlement_height > m.settlement_height || (b.settlement_height === m.settlement_height && (b.settlement_tx_index ?? 0) > (m.settlement_tx_index ?? 0)) ? b : m));
-      const hashes = a.blobs.map((b) => b.promise_hash);
-      setBeatNow({ key: nb.promise_hash, at: nb.settlement_time ?? "", height: nb.settlement_height, blobs: hashes.length, hashes, endorsers: unionOf(hashes), live: a.live });
-    },
-    (hash, es) => {
-      endorsersBy.current.set(hash, es);
-      if (endorsersBy.current.size > 200) endorsersBy.current.delete(endorsersBy.current.keys().next().value as string);
-      setBeatNow((p) => (p && p.hashes.includes(hash) ? { ...p, endorsers: unionOf(p.hashes) } : p));
-    });
+  const unionOf = (blobs: ArrivedBlob[]): string[] | null => {
+    const lists = blobs.map((b) => b.endorsers).filter((e): e is string[] => Array.isArray(e));
+    return lists.length ? [...new Set(lists.flat())] : null;
+  };
+  const burst = useBurst(fx, !calm, where, els, () => owners.current, (a) => {
+    // a stall's older blocks come onto the grid unnamed; the pill names the newest block of a move
+    if (a.blobs.length === 0 || (!a.live && a.id !== 0)) return;
+    const top = a.blobs.reduce((m, b) => Math.max(m, b.settlement_height), 0);
+    const block = a.blobs.filter((b) => b.settlement_height === top);
+    const nb = block.reduce((m, b) => ((b.settlement_tx_index ?? 0) > (m.settlement_tx_index ?? 0) ? b : m));
+    const beat: PillBeat = { key: nb.promise_hash, at: nb.settlement_time ?? "", height: top, blobs: block.length, endorsers: unionOf(block), live: a.live };
+    setBeatNow(beat);
+    // what the grid opened with was read without its endorsers: its newest block's, once
+    if (a.id === 0 && beat.endorsers === null) {
+      fetch(`${API_BASE}/v1/blobs?before_height=${top + 1}&limit=20&endorsers=1`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((j) => {
+          const list = Array.isArray(j?.blobs) ? (j.blobs as ArrivedBlob[]).filter((b) => b.settlement_height === top) : [];
+          const es = unionOf(list);
+          if (es) setBeatNow((p) => (p && p.key === beat.key ? { ...p, endorsers: es } : p));
+        }, () => {});
+    }
+  });
   const nameOf = (addr: string) => {
     const v = (rows ?? []).find((x) => x.address.toLowerCase() === addr);
     return v ? { name: name(v), href: valLink(v) } : { name: `${addr.slice(0, 8)}…`, href: validatorHref(undefined, addr) };
   };
-  // a new or changed endpoint that comes while the page is open: the pill for 12 s, and its place bursts
+  // a new or changed endpoint that comes while the page is open: the pill for 12 s, and its place bursts; one older
+  // than 30 s when seen (the page was hidden, or the observer caught up) is not news, and only waits its turn
   const [epAt, setEpAt] = useState(0);
   useEffect(() => {
     if (!evFresh || !ev) return;
+    if (Date.now() + skew.current - Date.parse(ev.time) > 30000) return;
     setEpAt(Date.now());
     const id = owners.current.get(ev.address);
     if (id) burst.current.fire([{ id, n: 1 }]);
@@ -799,7 +835,7 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
                   style={{ width: hit, height: hit }}
                   tabIndex={c.id === (placed.some((q) => q.c.id === roving) ? roving : placed[0]?.c.id) ? 0 : -1}
                   onFocus={() => { setRoving(c.id); openNow(c.id); }} onKeyDown={walk} onClick={() => activate(c)}>
-                  <span className="cm-badge" data-tone={tone} style={{ width: bw, height: bh }}>{one ? null : n}</span>
+                  <span className="cm-badge" data-tone={tone} style={{ width: bw, height: bh }}><i className="cm-badge-pop" aria-hidden="true" />{one ? null : n}</span>
                   {unreach > 0 && tone !== "hold" && <i className="cm-pip hold" aria-hidden="true" style={{ left: `calc(50% + ${(bw * 0.3536 - 3.5).toFixed(1)}px)`, top: `calc(50% - ${(bh * 0.3536 + 3.5).toFixed(1)}px)` }} />}
                 </button>
                 {pop && (
@@ -845,7 +881,7 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
       {/* two pills across the map's foot: the stream at the left (the blobs' beats, or a validator's endpoint), the three
           counts in the centre */}
       <div className="cm-bar" ref={bar}>
-        <StreamPill beat={beatNow} ev={ev} epAt={epAt} nameOf={nameOf} evVal={evVal} evHost={evHost} />
+        <StreamPill beat={beatNow} ev={ev} epAt={epAt} nameOf={nameOf} evVal={evVal} evHost={evHost} motion={!calm} skew={() => skew.current} />
         <ul className="cm-counts" aria-busy={loading || undefined}>
           {counts.map(([n, many, one]) => (
             <li key={many}><b className={loading ? "wait" : undefined}>{loading ? "00" : int(n)}</b><span>{n === 1 && !loading ? one : many}</span></li>

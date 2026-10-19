@@ -760,8 +760,9 @@ export const GROUPS: Group[] = [
           { name: "before_tx_index", in: "query", type: "integer", range: "0 or more", default: "0", desc: "With `before_height`: pass `next_before_tx_index`." },
           { name: "offset", in: "query", type: "integer", range: "0–100000", default: "0", desc: "Blobs to skip, for numbered pages." },
           { name: "include_failed", in: "query", type: "string", values: ["0", "1"], default: "0", desc: "1 lists the blob payments that failed in a block among the blobs, in the same order and pages, each with `status` failed: the failed transaction's `settlement_height`, `settlement_tx_index`, `settlement_tx_hash` and `settlement_time`, its promise's `promise_hash`, `namespace` and `publisher`, the chain's `code`, `codespace` and `reason`, and `final`. Blobs then carry `status` success; `total` counts both and `failed_total` the failed ones. A failure that was not `final` and has since landed is left out: its blob is listed. Ignored with `commitment` or `tx`; a page holding a failure that is not `final` is not cached." },
+          { name: "endorsers", in: "query", type: "string", values: ["0", "1"], default: "0", desc: "1 adds each blob's `endorsers`: the consensus addresses, in lower-case hex, of the validators with rows whose signature on the settlement verified, the ones `attested_with_rows` counts; an empty list for a blob none endorsed or recorded before signatures were verified. Ignored with `include_failed`." },
         ],
-        errors: "400 when `include_failed` is not 0 or 1.",
+        errors: "400 when `include_failed` or `endorsers` is not 0 or 1.",
         example: EX_BLOBS,
       },
       {

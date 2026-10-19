@@ -3521,6 +3521,9 @@ type blobRow struct {
 	// signature over the promise: the endorsements MsgPayForFibre settled
 	// with. Absent, like AttestedPower, before signatures were verified.
 	AttestedWithRows *int `json:"attested_with_rows,omitempty"`
+	// Endorsers are the validators attested_with_rows counts, by consensus
+	// address (lower-case hex): on /v1/blobs?endorsers=1 alone (blobEndorsers).
+	Endorsers *[]string `json:"endorsers,omitempty"`
 	// ProbeCount and Classes tally the blob's reading rows, the validators
 	// the reading never needed to ask included; kept with the verdict, not
 	// published.
@@ -3532,6 +3535,47 @@ type blobRow struct {
 	// for a publication whose payment was not recorded (ingested before the
 	// scanner wrote payments).
 	Charge *blobCharge `json:"charge"`
+}
+
+// blobEndorsersSQL is the endorsers of a page's blobs: the assignments with
+// rows whose signature on the settlement verified, sought by promise hash
+// through assignments_attested. %s is the page's placeholders.
+const blobEndorsersSQL = `SELECT promise_hash, lower(validator_address) AS v FROM assignments
+	WHERE promise_hash IN (%s) AND attested = 1 AND row_count > 0
+	ORDER BY promise_hash, v`
+
+// blobEndorsers sets each blob's Endorsers, in one query for the page: the
+// validators attested_with_rows counts, which the overview's map bursts and
+// its pill names. A blob none endorsed, or recorded before signatures were
+// verified, has an empty list.
+func (s *Server) blobEndorsers(ctx context.Context, blobs []blobRow) error {
+	if len(blobs) == 0 {
+		return nil
+	}
+	at := make(map[string]int, len(blobs))
+	args := make([]any, len(blobs))
+	for i := range blobs {
+		at[blobs[i].PromiseHash] = i
+		args[i] = blobs[i].PromiseHash
+		es := []string{}
+		blobs[i].Endorsers = &es
+	}
+	q := fmt.Sprintf(blobEndorsersSQL, strings.TrimSuffix(strings.Repeat("?,", len(blobs)), ","))
+	rows, err := s.st.DB().QueryContext(ctx, q, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var hash, addr string
+		if err := rows.Scan(&hash, &addr); err != nil {
+			return err
+		}
+		if i, ok := at[hash]; ok {
+			*blobs[i].Endorsers = append(*blobs[i].Endorsers, addr)
+		}
+	}
+	return rows.Err()
 }
 
 // reconstruct is a blob's status as Tensile's one reading of it left it
@@ -4140,6 +4184,17 @@ func (s *Server) handleBlobs(w http.ResponseWriter, r *http.Request) {
 		}
 		offset = o
 	}
+	// endorsers: each blob's endorsers on the list (blobEndorsers), for the
+	// overview, whose grid, card, map and pill then read one answer.
+	withEndorsers := false
+	switch q.Get("endorsers") {
+	case "", "0":
+	case "1":
+		withEndorsers = true
+	default:
+		writeErr(w, 400, "endorsers must be 0 or 1")
+		return
+	}
 	// include_failed: the failed blob payments among the blobs, in their
 	// order (failedblobs.go). A lookup by commitment or transaction answers
 	// as it does without it.
@@ -4166,6 +4221,12 @@ func (s *Server) handleBlobs(w http.ResponseWriter, r *http.Request) {
 	blobs, truncated := trim(blobs, limit)
 	for i := range blobs {
 		blobs[i].CreationTimestamp = ""
+	}
+	if withEndorsers {
+		if err := s.blobEndorsers(r.Context(), blobs); err != nil {
+			s.writeInternal(w, r.URL.Path, err)
+			return
+		}
 	}
 	var total int64
 	countQ := `SELECT COUNT(*) FROM publications`
