@@ -6,7 +6,7 @@ import PreLive from "@/components/PreLive";
 import { useApi, type Meta, type Market, type Blob, type NamespaceRow, type Publisher, type Tip, int, bytes, failedWords, hhmm, isBlob, nsDisplay, nsName, shortMid, utcWord, TIP_MS } from "@/lib/api";
 import Pager, { usePage } from "@/components/Pager";
 import { useWindow, WindowSwitch } from "@/lib/window";
-import BlobsDeck, { age, dayTime } from "@/components/BlobsDeck";
+import BlobsDeck, { age, monthDayTime } from "@/components/BlobsDeck";
 import Ledger, { useLedger, type Feed } from "@/components/Ledger";
 import Picker, { type Choice } from "@/components/Picker";
 import Ident from "@/components/Ident";
@@ -158,7 +158,7 @@ function Namespaces({ rows, truncated, failed, onPick }: { rows: NamespaceRow[] 
                   <td className="n-n num">{int(n.blobs)}</td>
                   <td className="n-sz num">{bytes(n.bytes)}</td>
                   <td className="n-24 num">{n.blobs_24h > 0 ? <>{int(n.blobs_24h)}<span className="sub">{bytes(n.bytes_24h)}</span></> : <span className="u">—</span>}</td>
-                  <td className="n-first" title={utcWord(n.first_seen)}>{dayTime(n.first_seen).slice(0, -7)}</td>
+                  <td className="n-first" title={utcWord(n.first_seen)}>{monthDayTime(n.first_seen).slice(0, -3)}</td>
                   <td className="n-last" title={utcWord(n.last_blob)}>{age(now - Date.parse(n.last_blob))} ago</td>
                 </tr>
               );

@@ -310,7 +310,7 @@ const Row = memo(function Row({ b, age: ag, fresh, one, dec, status, onNs, onOpe
       <td className="c-m">
         <span className="nm">{name}</span><span className="sz"><span className="sep">·</span>{bytes(b.blob_size)}</span>
         {/* one publisher's list names the fee where the others name the publisher */}
-        {one ? b.charge && <span className="fe"><span className="sep">·</span>−{tiaAt(b.charge.fee_utia, dec)}</span> : who && <><span className="sep">·</span><Who addr={who} /></>}
+        {one ? b.charge && <span className="fe"><span className="sep">·</span>{unit(`−${tiaAt(b.charge.fee_utia, dec)}`)}</span> : who && <><span className="sep">·</span><Who addr={who} /></>}
       </td>
     </tr>
   );
