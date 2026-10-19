@@ -1957,8 +1957,9 @@ button.pp-params[aria-expanded="true"] .pp-i { color: var(--paper); background: 
 .ident .ident-bg { fill: var(--accent-tint); }
 .ident path { fill: var(--accent); }
 .lg-t .c-sz, .lg-t .c-fee { font-weight: 500; }
-/* the fee in TIA in Celestia's purple, its unit with it: the Blobs list's Fee paid, and a publisher's list's on a phone */
-.lg-t tbody td.c-fee, .lg-t tbody td.c-fee .u, .lg-t .c-m .fe { color: var(--celestia); }
+/* the fee's unit, TIA, in Celestia's purple, the figure in the text's colour: the Blobs list's Fee paid, and a
+   publisher's list's on a phone */
+.lg-t tbody td.c-fee .u, .lg-t .c-m .fe .u { color: var(--celestia); }
 
 /* Endorsed: the share of voting power, and a short meter whose tick is the ⅔ a settlement needs */
 .lg-t th .ov-frac { margin-left: 3px; font-size: 12px; color: var(--text-2); }
@@ -2021,14 +2022,19 @@ button.pp-params[aria-expanded="true"] .pp-i { color: var(--paper); background: 
    Fee paid 80 · Status 86 · Endorsed 105 · gap 10 · Tensile 114. Below, the type and the columns stay as they were,
    since the time was as narrow there already */
 @media (min-width: 1161px) {
+  /* the rest of the freed width goes to the gaps between the columns, evenly (each column 4px wider for its wider
+     padding), not to the namespace alone */
+  .lg-t.lg-st th, .lg-t.lg-st td { padding-left: 10px; padding-right: 10px; }
+  .lg-t.lg-st th:first-child, .lg-t.lg-st td:first-child { padding-left: 18px; }
+  .lg-t.lg-st .gap { padding: 0; }
   .lg-t.lg-st td:not(.tn) { font-size: 14px; }
   .lg-t.lg-st .c-b a, .lg-t.lg-st .lg-who .hd, .lg-t.lg-st .lg-who .tl, .lg-t.lg-st .nsb .mono { font-size: 13px; }
   .lg-t.lg-st td.c-t .ag { font-size: 12.5px; }
-  .lg-t.lg-st th.c-h { width: 90px; } .lg-t.lg-st th.c-t { width: 126px; } .lg-t.lg-st th.c-b { width: 122px; } .lg-t.lg-st th.c-p { width: 161px; }
-  .lg-t.lg-st th.c-sz { width: 82px; } .lg-t.lg-st th.c-fee { width: 80px; } .lg-t.lg-st th.c-st { width: 86px; } .lg-t.lg-st th.c-e { width: 105px; }
+  .lg-t.lg-st th.c-h { width: 94px; } .lg-t.lg-st th.c-t { width: 130px; } .lg-t.lg-st th.c-b { width: 126px; } .lg-t.lg-st th.c-p { width: 165px; }
+  .lg-t.lg-st th.c-sz { width: 86px; } .lg-t.lg-st th.c-fee { width: 84px; } .lg-t.lg-st th.c-st { width: 90px; } .lg-t.lg-st th.c-e { width: 109px; }
 }
 @media (min-width: 1161px) and (max-width: 1220px) {
-  .lg-t.lg-st th.c-p { width: 98px; }
+  .lg-t.lg-st th.c-p { width: 102px; }
 }
 /* a phone's card of a failed payment: Failed where a blob's endorsement stands, its dot beside it, no longer hung */
 @media (max-width: 1080px) {
@@ -2202,10 +2208,9 @@ button.pp-params[aria-expanded="true"] .pp-i { color: var(--paper); background: 
 .pl-t .low .u { color: inherit; opacity: .78; }
 .pl-t .low::before { content: ""; position: absolute; right: 100%; top: 50%; width: 6px; height: 6px; margin: -3px 7px 0 0; border-radius: 50%; background: var(--hold); }
 .pl-t .tox { color: var(--fault); }
-/* Fees paid and Escrow available in Celestia's purple, their unit with them; an escrow too low for one more blob keeps
-   its amber */
-.pl-t td.c-fee, .pl-t td.c-fee .u, .pl-t .c-m .tia,
-.pl-t td.c-esc > span:not(.kp):not(.low):not(.none), .pl-t td.c-esc > span:not(.kp):not(.low):not(.none) .u { color: var(--celestia); }
+/* Fees paid and Escrow available: their unit, TIA, in Celestia's purple; an escrow too low for one more blob keeps its
+   amber */
+.pl-t td.c-fee .u, .pl-t .c-m .tia .u, .pl-t td.c-esc > span:not(.kp):not(.low):not(.none) .u { color: var(--celestia); }
 .pl-t td .kp { display: none; }
 
 /* With the Namespaces column (has-ns: an API that gives namespaces and the newest blob). The chip, the namespace
@@ -2538,8 +2543,8 @@ button.warn:focus-visible { outline-offset: 0; }
    statement draws it; a timed-out promise's charge red */
 .ptx-t tr.wr td.c-am { color: var(--text-2); font-weight: 400; }
 .ptx-t tr.to td.c-am { color: var(--fault); }
-/* every other amount in TIA in Celestia's purple, its unit with it */
-.ptx-t tbody tr:not(.wr):not(.to) td.c-am, .ptx-t tbody tr:not(.wr):not(.to) td.c-am .u { color: var(--celestia); }
+/* every other amount's unit, TIA, in Celestia's purple */
+.ptx-t tbody tr:not(.wr):not(.to) td.c-am .u { color: var(--celestia); }
 /* the amounts right-aligned in one box as wide as the widest on the page, the box centred: the digits stack; a failed
    one's dash is no figure, centred under the head */
 .ptx-t .amb { display: inline-block; min-width: var(--am-w, 0px); text-align: right; }
@@ -2932,8 +2937,8 @@ button.warn:focus-visible { outline-offset: 0; }
 /* a figure that went wrong, in red in its row of facts; a transaction that failed in a block (components/TxDetail): the
    error in the endorsements' frame, as the node returned it, scrolling past a few lines */
 .bd-meta b.bad { color: var(--fault); }
-/* a fee in TIA, in Celestia's purple, its unit with it */
-.bd-meta b.tia, .bd-meta b.tia .u { color: var(--celestia); }
+/* a fee's unit, TIA, in Celestia's purple */
+.bd-meta b.tia .u { color: var(--celestia); }
 .bd-err-a { display: inline-flex; align-items: center; gap: 8px; }
 .bd-log { margin: 0; padding: 12px 16px; font-family: var(--mono); font-size: var(--t-cell); line-height: 18px; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 16em; overflow: auto; }
 

@@ -223,7 +223,7 @@ function Page() {
                     </td>
                     <td className="c-m">
                       {has
-                        ? <><span className="n-set">{plural(p.settlements, "settlement")}<span className="sep">·</span></span><span className="n-sz">{bytes(p.bytes)}<span className="sep">·</span></span><span className="tia">{tia(p.fees_utia)}</span><span className="w">paid</span></>
+                        ? <><span className="n-set">{plural(p.settlements, "settlement")}<span className="sep">·</span></span><span className="n-sz">{bytes(p.bytes)}<span className="sep">·</span></span><span className="tia">{unit(tia(p.fees_utia))}</span><span className="w">paid</span></>
                         : <span className="none">{blobs && !never ? `No blobs in ${per}` : "No blobs"}</span>}
                       {p.timeouts > 0 && <><span className="sep">·</span><span className="tox" title={toTitle}>{int(p.timeouts)} timed out</span></>}
                     </td>
