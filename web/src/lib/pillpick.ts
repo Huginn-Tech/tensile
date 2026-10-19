@@ -3,7 +3,8 @@
  * endorsed · 12 s ago". A beat is one block's blobs as the grid takes them in; its endorsers are the
  * union of theirs, the very places that burst on the map (lib/mapflash.ts, endorsersOf on each blob's record). They
  * are named in a shuffled order, each once, a new one every ROTATE_MS, and the last named stays until the next
- * beat: one round, never again; a new beat takes the pill at once, with one of its own endorsers picked at random. A
+ * beat: one round, never again; a new beat takes the pill at once, with one of its own endorsers picked at random.
+ * What the page opened with is not news: it is named by one of its endorsers, still, with its age. A
  * beat whose endorsers are not known yet (its records have not answered, or none endorsed) is named plainly as
  * settled; endorsers that become known later join the names still to come. A validator's new or changed endpoint
  * takes the pill for HOLD_MS when it happens; the endorsers come back after, where they were.
@@ -34,6 +35,8 @@ export class PillPicker<E> {
   private key = "";
   private at = "";
   private order: string[] | null = null;
+  /** whether the beat came while the page was open; the one it opened with names one endorser and stays still */
+  private live = true;
   private i = 0;
   private ep: E | null = null;
   private epUntil = 0;
@@ -53,8 +56,13 @@ export class PillPicker<E> {
    * endorsers as far as they are known (null while none is). A new beat is named at once, by a random endorser; the
    * same beat with more endorsers known adds them, shuffled, after the one named now.
    */
-  beat(key: string, at: string, endorsers: string[] | null): void {
+  beat(key: string, at: string, endorsers: string[] | null, live = true): void {
     if (key === this.key) {
+      if (!this.live) {
+        const known = endorsers ?? [];
+        if (this.order === null && known.length) this.order = [known[Math.floor(this.rand() * known.length)]];
+        return;
+      }
       const fresh = (endorsers ?? []).filter((e) => !this.order?.includes(e));
       if (fresh.length === 0) return;
       if (this.order === null) { this.order = shuffle(fresh, this.rand); this.i = 0; return; }
@@ -63,7 +71,9 @@ export class PillPicker<E> {
     }
     this.key = key;
     this.at = at;
-    this.order = endorsers && endorsers.length ? shuffle(endorsers, this.rand) : null;
+    this.live = live;
+    const es = endorsers && endorsers.length ? endorsers : null;
+    this.order = es ? (live ? shuffle(es, this.rand) : [es[Math.floor(this.rand() * es.length)]]) : null;
     this.i = 0;
   }
 

@@ -324,7 +324,7 @@ function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost, motion, skew }: {
   heldRef.current = held;
   // fed before the paint, so a new beat is named in the frame the grid moves
   useLayoutEffect(() => {
-    if (beat) { pk.beat(beat.key, beat.at, beat.endorsers); render((n) => n + 1); }
+    if (beat) { pk.beat(beat.key, beat.at, beat.endorsers, beat.live); render((n) => n + 1); }
   }, [beat, pk]);
   useLayoutEffect(() => {
     if (ev && epAt) { pk.endpoint(ev, epAt); render((n) => n + 1); }
