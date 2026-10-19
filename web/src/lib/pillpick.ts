@@ -1,6 +1,6 @@
 /**
  * What the overview map's pill names, one validator at a time: an endorser of the newest beat of blobs, "B-Harvest
- * endorsed the latest blob · 12 s ago". A beat is one block's blobs as the grid takes them in; its endorsers are the
+ * endorsed · 12 s ago". A beat is one block's blobs as the grid takes them in; its endorsers are the
  * union of theirs, the very places that burst on the map (lib/mapflash.ts, endorsersOf on each blob's record). They
  * are named in a shuffled order, each once, a new one every ROTATE_MS, and round again (shuffled anew) until the next
  * beat; a new beat takes the pill at once, with one of its own endorsers picked at random. A beat whose endorsers are
