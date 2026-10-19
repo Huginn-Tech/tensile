@@ -3385,81 +3385,45 @@ button.warn:focus-visible { outline-offset: 0; }
 }
 
 /* ---- the countdown to Fibre's activation (components/Launch.tsx): the whole page while Fibre is still to come. The
-   clock is the page's first read; under it the chain as a track running to the activation block. Nothing glows ---- */
-.lc { --slot: rgb(var(--ink) / .05); --slot-edge: rgb(var(--ink) / .22); min-height: 100vh; min-height: 100dvh; display: grid; grid-template-rows: auto 1fr; overflow-x: clip; }
-:root[data-theme="dark"] .lc { --slot: rgb(var(--ink) / .06); --slot-edge: rgb(var(--ink) / .14); }
+   clock is the page; the chain's figures under it in one frame, as the site frames its figures; nothing glows ---- */
+.lc { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-rows: auto 1fr; }
 .lc-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; max-width: var(--page); margin: 0 auto; padding: 22px var(--gutter); }
 .lc-brand { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-weight: 600; font-size: 16px; letter-spacing: -.005em; text-decoration: none; }
 .lc-brand .mark-logo { color: var(--accent); }
 .lc-other { color: var(--text-2); font-size: var(--t-small); text-decoration: none; transition: color var(--dur); }
 .lc-other:hover { color: var(--text); }
-.lc-main { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8px 0 48px; text-align: center; }
+.lc-main { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px; padding: 24px var(--gutter) 96px; text-align: center; }
 .lc-eyebrow { display: inline-flex; align-items: center; gap: 8px; margin: 0; color: var(--text-2); font-size: var(--t-small); font-weight: 500; letter-spacing: .14em; text-transform: uppercase; }
 .lc-eyebrow svg { color: var(--celestia); }
-.lc-h { margin: 14px var(--gutter) 0; font-size: clamp(24px, 3.2vw, 36px); font-weight: 600; line-height: 1.2; letter-spacing: -.015em; color: var(--text); text-wrap: balance; }
-.lc-clock { display: flex; align-items: flex-start; justify-content: center; margin: 30px 0 0; }
+.lc-h { margin: -12px 0 0; font-size: clamp(24px, 3.2vw, 36px); font-weight: 600; line-height: 1.2; letter-spacing: -.015em; color: var(--text); text-wrap: balance; }
+.lc-clock { display: flex; align-items: flex-start; justify-content: center; margin: 8px 0 4px; }
 .lc-unit { display: flex; align-items: flex-start; }
-.lc-cell { display: flex; flex-direction: column; align-items: center; gap: 14px; min-width: 1.3em; font-size: clamp(48px, 9vw, 120px); }
+.lc-cell { display: flex; flex-direction: column; align-items: center; gap: 12px; min-width: 1.3em; font-size: clamp(44px, 10.5vw, 128px); }
 .lc-num { font-family: var(--mono); font-weight: 500; font-size: 1em; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; color: var(--text); }
 .lc-num.wait { letter-spacing: 0; }
-.lc-sep { padding: 0 .1em; font-family: var(--mono); font-weight: 400; font-size: clamp(36px, 7vw, 92px); line-height: 1.1; color: var(--text-3); opacity: .7; }
+.lc-sep { padding: 0 .12em; font-family: var(--mono); font-weight: 300; font-size: clamp(34px, 8vw, 100px); line-height: 1.12; color: var(--text-3); }
 .lc-lab { font-family: var(--sans); font-size: var(--t-tiny); font-weight: 500; letter-spacing: .16em; text-transform: uppercase; color: var(--text-3); }
 .lc-clock.done .lc-num { color: var(--text-3); }
-.lc-when { margin: 26px var(--gutter) 0; color: var(--text-3); font-size: 15px; line-height: 1.5; }
-.lc-when b { color: var(--text); font-weight: 500; }
-.lc-when .lc-loc { white-space: nowrap; }
-.lc-when .lc-loc::before { content: "·"; margin: 0 8px; color: var(--text-3); }
-
-/* the track: the chain's blocks run in from the left, one square a block, the newest lit and ringed under the clock;
-   the blocks still to come recede from it towards the activation block, each a step smaller, so the whole distance
-   meets at one point. A block steps in as one move: the chain slides one place left and the road ahead grows one step
-   about that point (two transforms); nothing moves between blocks */
-.tr { --rail: 84px; --s0: 28px; --step: 620ms; position: relative; width: 100%; height: 160px; margin: 50px 0 0; }
-.tr-grp { position: absolute; inset: 0; will-change: transform; }
-.tr-grp.go { transition: transform var(--step) cubic-bezier(.22, .7, .2, 1); }
-.tr .sq { position: absolute; top: 0; left: 0; border-radius: 6px; background: var(--rb-fill); transition: background-color 360ms ease-out; }
-.tr .sq.tip { background: var(--rb-lit); }
-/* the newest block's ring stays where it is, under the clock: each block steps into it */
-.tr-now { position: absolute; left: 0; top: 0; border-radius: 9px; box-shadow: inset 0 0 0 1.5px var(--accent); pointer-events: none; }
-.tr .sq.act { background: var(--celestia); }
-.tr .sq.slot { background: var(--slot); box-shadow: inset 0 0 0 1px var(--slot-edge); }
-.tr .sq.slot.in { background: var(--rb-lit); box-shadow: none; }
-/* the chain behind fades into the page at its left end: a mask on a still frame, so the blocks slide under it */
-.tr-pastwrap { position: absolute; inset: 0; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--fade, 40%)); mask-image: linear-gradient(90deg, transparent 0, #000 var(--fade, 40%)); }
-/* the activation block: Celestia's colour, ringed as the newest block is, at the end of the road */
-.tr-dst { position: absolute; top: 0; left: 0; transition: transform var(--step) cubic-bezier(.22, .7, .2, 1); }
-.tr-dst-sq { position: absolute; left: -14px; top: -14px; width: 28px; height: 28px; border-radius: 7px; background: var(--celestia); box-shadow: 0 0 0 3px var(--paper), 0 0 0 4.5px var(--celestia); transition: transform var(--step) cubic-bezier(.22, .7, .2, 1); }
-/* the figures on the track: the current block over the newest, the activation block over its square, the blocks to go
-   on a dimension line between them */
-.tr-tk { position: absolute; display: grid; justify-items: center; gap: 3px; white-space: nowrap; }
-.tr-k { font-size: var(--t-tiny); font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); }
-.tr-v { font-family: var(--mono); font-size: 19px; font-weight: 500; line-height: 24px; letter-spacing: -.01em; color: var(--text); }
-.tr-cur { left: 0; bottom: calc(100% - var(--rail) + var(--s0) / 2 + 16px); transform: translateX(var(--x, 50vw)) translateX(-50%); }
-.tr-dst .tr-tk { bottom: calc(var(--s0) / 2 + 16px); left: 0; transform: translateX(-50%); }
-.tr.narrow .tr-dst .tr-tk { justify-items: end; transform: translateX(calc(-100% + 12px)); }
-.tr-n { display: none; font-size: 14px; color: var(--text-3); }
-/* the last few blocks: the activation block's figures go under it, with the blocks to go, and the line goes */
-.tr.near .tr-dst .tr-tk { bottom: auto; top: calc(var(--s0) / 2 + 16px); }
-.tr.near .tr-n { display: block; }
-.tr-gap { position: absolute; left: 0; top: calc(var(--rail) + var(--s0) / 2 + 22px); height: 1px; }
-.tr-gap-line { position: absolute; left: 0; top: 0; width: 1000px; height: 1px; background: var(--line); transform-origin: 0 0; transition: transform var(--step) cubic-bezier(.22, .7, .2, 1); }
-.tr-gap-end { position: absolute; top: -4px; left: 0; width: 1px; height: 9px; background: var(--line); transition: transform var(--step) cubic-bezier(.22, .7, .2, 1); }
-.tr-gap-lab { position: absolute; top: -12px; left: 0; padding: 0 12px; background: var(--paper); font-size: 14px; line-height: 24px; color: var(--text-3); white-space: nowrap; transition: transform var(--step) cubic-bezier(.22, .7, .2, 1); }
-.tr-gap-lab b, .tr-n b { margin-right: 2px; font-size: 18px; font-weight: 500; letter-spacing: -.01em; color: var(--text); }
-.tr.near .tr-gap-lab, .tr.near .tr-gap-line, .tr.near .tr-gap-end { opacity: 0; }
-
-.lc-note { max-width: 58ch; margin: 34px var(--gutter) 0; color: var(--text-2); font-size: 15px; line-height: 1.6; text-wrap: pretty; }
-.lc-links { margin: 22px 0 0; }
+.lc-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: min(100%, 860px); margin: 8px 0 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-card); box-shadow: var(--shadow-sm); text-align: left; }
+.lc-facts > div { min-width: 0; padding: 16px 20px; }
+.lc-facts > div + div { border-left: 1px solid var(--border); }
+.lc-facts dt { margin-bottom: 8px; color: var(--text-3); font-size: var(--t-tiny); font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.lc-facts dd { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; color: var(--text); font-size: 17px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.lc-facts dd small { flex-basis: 100%; color: var(--text-3); font-size: var(--t-small); font-weight: 400; }
+.lc-facts .bt-dot { margin: 0; }
+.lc-note { max-width: 58ch; margin: 0; color: var(--text-2); font-size: 15px; line-height: 1.6; text-wrap: pretty; }
+.lc-links { margin: -4px 0 0; }
 .lc-btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 16px; border-radius: var(--r-ctl); background: var(--accent-tint); color: var(--seg-on-ink); font-size: var(--t-body); font-weight: 500; text-decoration: none; transition: background var(--dur); }
-.lc-btn:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
-@media (prefers-reduced-motion: reduce) {
-  .tr-grp.go, .tr-dst, .tr-dst-sq, .tr-gap-line, .tr-gap-lab, .tr-gap-end, .tr .sq { transition: none; }
+.lc-btn:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+@media (max-width: 860px) {
+  .lc-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lc-facts > div:nth-child(3) { border-left: 0; }
+  .lc-facts > div:nth-child(n + 3) { border-top: 1px solid var(--border); }
 }
 @media (max-width: 720px) {
   .lc-top { padding: 16px var(--gutter); }
+  .lc-main { gap: 22px; padding: 16px var(--gutter) 64px; }
   .lc-cell { gap: 8px; }
-  .tr { height: 140px; margin-top: 40px; }
-  .tr-v { font-size: 16px; }
-  .lc-when .lc-loc { display: block; }
-  .lc-when .lc-loc::before { content: none; }
+  .lc-facts > div { padding: 12px 14px; }
+  .lc-facts dd { font-size: 15px; }
 }
