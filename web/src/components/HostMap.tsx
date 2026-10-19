@@ -624,7 +624,7 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
   // ---- the pill: the endorsers of each beat of the recent blobs, as it comes (the grid's newest block when the page
   // opens), their union over the block's blobs as the grid's read gave them; and a validator's new or changed endpoint
   // (/v1/tip), which holds the pill for 12 s when it comes while the page is open and is under 30 s old ----
-  const still = useReducedMotion();
+  const calm = useReducedMotion();
   const [beatNow, setBeatNow] = useState<PillBeat | null>(null);
   // the observer's clock against the reader's (the tip's server_time), for the pill's ages and an endpoint's
   const skew = useRef(0);
@@ -660,7 +660,7 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
     const lists = blobs.map((b) => b.endorsers).filter((e): e is string[] => Array.isArray(e));
     return lists.length ? [...new Set(lists.flat())] : null;
   };
-  const burst = useBurst(fx, !still, where, els, () => owners.current, (a) => {
+  const burst = useBurst(fx, !calm, where, els, () => owners.current, (a) => {
     // a stall's older blocks come onto the grid unnamed; the pill names the newest block of a move
     if (a.blobs.length === 0 || (!a.live && a.id !== 0)) return;
     const top = a.blobs.reduce((m, b) => Math.max(m, b.settlement_height), 0);
@@ -881,7 +881,7 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
       {/* two pills across the map's foot: the stream at the left (the blobs' beats, or a validator's endpoint), the three
           counts in the centre */}
       <div className="cm-bar" ref={bar}>
-        <StreamPill beat={beatNow} ev={ev} epAt={epAt} nameOf={nameOf} evVal={evVal} evHost={evHost} motion={!still} skew={() => skew.current} />
+        <StreamPill beat={beatNow} ev={ev} epAt={epAt} nameOf={nameOf} evVal={evVal} evHost={evHost} motion={!calm} skew={() => skew.current} />
         <ul className="cm-counts" aria-busy={loading || undefined}>
           {counts.map(([n, many, one]) => (
             <li key={many}><b className={loading ? "wait" : undefined}>{loading ? "00" : int(n)}</b><span>{n === 1 && !loading ? one : many}</span></li>
