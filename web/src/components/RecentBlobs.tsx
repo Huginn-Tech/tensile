@@ -598,7 +598,7 @@ export default function RecentBlobs() {
         <div className="rb-foot">
           <p className="rb-fig">
             {shown.total != null ? <RollNumber value={shown.total} format={int} className="rb-total" /> : <span className="rb-total wait">0,000</span>}
-            <span>settlements<br />on record</span>
+            <span>{shown.total === 1 ? "settlement" : "settlements"}<br />on record</span>
           </p>
           <i className="rb-div" aria-hidden="true" />
           <p className="rb-fig">
@@ -617,7 +617,7 @@ export default function RecentBlobs() {
         {/* the height as the figure, "Height · time · size" under it; the endorsed share before its bar, the ⅔ a blob
             needs as a bare needle on it (the providers' strip beside it says what the needle is), "Endorsed voting
             power · 48 of 82 validators" under them. The names the lines do not show stay for screen readers */}
-        {none ? <p className="rb-none">No blob on record yet.</p> : <dl className="rb-spec" aria-busy={!blob || undefined}>
+        {none ? <p className="rb-none">No blob has settled yet. The first one appears here as it lands.</p> : <dl className="rb-spec" aria-busy={!blob || undefined}>
           <div className="rb-h"><dt>Height</dt><dd><span className={`ov-fig${blob ? "" : " wait"}`}>{blob ? (isLatest ? <RollNumber value={blob.settlement_height} format={int} /> : int(blob.settlement_height)) : "0,000,000"}</span></dd></div>
           <div className="rb-t"><dt className="sr-only">Time</dt><dd>{blob ? whenUTC(blob.settlement_time) : <span className="wait">Sep 00 00:00</span>}</dd></div>
           <div className="rb-size"><dt className="sr-only">Blob size</dt><dd>{blob ? bytes(blob.blob_size) : <span className="wait">00.0 MiB</span>}</dd></div>

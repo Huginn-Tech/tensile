@@ -621,7 +621,7 @@ function Page() {
           </div>
           <div className="vd-box" title={`Endorsed shards still in their retention window: read 10 minutes before it ends, counted once it closes.${notCountedText(o) ? ` Not counted in the period: ${notCountedText(o)}.` : ""}`}>
             <span className="vd-lbl">Awaiting check</span>
-            <span className="vd-fv"><b>{notLive ? "—" : int(data.in_retention_window ?? 0)}</b></span>
+            <span className="vd-fv"><b>{notLive || (noEndpoint && !data.in_retention_window) ? "—" : int(data.in_retention_window ?? 0)}</b></span>
           </div>
         </div>
       </section>
@@ -633,7 +633,10 @@ function Page() {
         <div className="vd-oc-lead">
           <div className={"vd-ocf lead" + (endorse ? "" : " na")} title={endorse ? endorse.title : "No settlement assigned it rows."}>
             <span className="vd-lbl">Endorsements <span className="vd-per">· {per}</span></span>
-            <span className="vd-fv"><b>{endorse ? pctOf(endorse.n, endorse.of) : "—"}</b>{endorse && <em>{int(endorse.n)} / {int(endorse.of)}</em>}</span>
+            {/* under MIN_RATED settlements the counts alone: one settlement is no share */}
+            <span className="vd-fv">{endorse && endorse.of < MIN_RATED
+              ? <b>{int(endorse.n)} / {int(endorse.of)}</b>
+              : <><b>{endorse ? pctOf(endorse.n, endorse.of) : "—"}</b>{endorse && <em>{int(endorse.n)} / {int(endorse.of)}</em>}</>}</span>
           </div>
           {sig?.last_endorsed_at && <div className="vd-ocf" title={`Newest settlement with its endorsement: ${utcWord(sig.last_endorsed_at)}`}>
             <span className="vd-lbl">Last endorsed</span>

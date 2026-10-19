@@ -8,12 +8,17 @@ import type { WindowName } from "@/lib/window";
  * first and the last partial ones included, and an empty one is a zero, so
  * a quiet week is a quiet week and not a shorter chart. A bucket carries its
  * settlements, their blob size and the fees they paid.
+ *
+ * fromFirst: the record begins inside the period (every settlement on record
+ * is in it, as on a network whose Fibre went live within the period, and on
+ * "all"), so the chart begins at the first bucket that holds one: the hours
+ * and days before Fibre was there are not drawn as quiet ones.
  */
 export type Bucket = { key: string; label: string; short?: string; title: string; bytes: number; settlements: number; fees: number; partial: boolean };
 
 const day = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
-export function buckets(market: Market, win: WindowName): Bucket[] {
+export function buckets(market: Market, win: WindowName, fromFirst = false): Bucket[] {
   const end = new Date(market.window.end).getTime();
   const start = new Date(market.window.start).getTime();
   // "all" has no start of its own: the first day on record
@@ -31,7 +36,7 @@ export function buckets(market: Market, win: WindowName): Bucket[] {
       out.push({ key, label: `${key.slice(11)}:00`, title: `${day(key.slice(0, 10))} ${key.slice(11)}:00 UTC${partial ? " (partial hour)" : ""}`,
         bytes: c?.bytes ?? 0, settlements: c?.settlements ?? 0, fees: c?.fees_utia ?? 0, partial });
     }
-    return out;
+    return fromFirst ? fromRecord(out) : out;
   }
   const byDay = new Map(market.daily.map((d) => [d.day, d]));
   const d1 = Math.floor(end / 86400_000);
@@ -46,5 +51,11 @@ export function buckets(market: Market, win: WindowName): Bucket[] {
     const partial = d === d1 || (!unbounded && d === d0 && start % 86400_000 !== 0);
     out.push({ key, label: day(key), short: String(Number(key.slice(8))), title: `${day(key)} UTC${partial ? " (partial day)" : ""}`, bytes: c?.bytes ?? 0, settlements: c?.settlements ?? 0, fees: c?.fees_utia ?? 0, partial });
   }
-  return out;
+  return fromFirst || unbounded ? fromRecord(out) : out;
+}
+
+/** the buckets from the first that holds a settlement on; all of them when none does */
+function fromRecord(out: Bucket[]): Bucket[] {
+  const i = out.findIndex((b) => b.settlements > 0);
+  return i > 0 ? out.slice(i) : out;
 }

@@ -742,6 +742,10 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
     [countries, "countries", "country"],
     [providers, "hosting providers", "hosting provider"],
   ];
+  // none registered yet (a network whose Fibre has just gone live): one plain line, not three zeros; providers whose
+  // places are not looked up yet: their count alone
+  const registered = hosts.length + unplaced;
+  const shownCounts = loading || (countries > 0 || providers > 0) ? counts : counts.slice(0, 1);
 
   // ---- the land's material at rest: its grain (tied to the world's origin on the device's pixel grid, so it never
   // resamples and a pan carries it with the land), its coastline under it and its shadow under that ----
@@ -886,9 +890,11 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
       <div className="cm-bar" ref={bar}>
         <StreamPill beat={beatNow} ev={ev} epAt={epAt} nameOf={nameOf} evVal={evVal} evHost={evHost} motion={!calm} skew={() => skew.current} />
         <ul className="cm-counts" aria-busy={loading || undefined}>
-          {counts.map(([n, many, one]) => (
-            <li key={many}><b className={loading ? "wait" : undefined}>{loading ? "00" : int(n)}</b><span>{n === 1 && !loading ? one : many}</span></li>
-          ))}
+          {!loading && registered === 0
+            ? <li><span>No Fibre provider registered yet</span></li>
+            : shownCounts.map(([n, many, one]) => (
+              <li key={many}><b className={loading ? "wait" : undefined}>{loading ? "00" : int(n)}</b><span>{n === 1 && !loading ? one : many}</span></li>
+            ))}
         </ul>
       </div>
     </section>

@@ -536,10 +536,13 @@ const Ban = () => (
 /**
  * The endorsements, set as a DA explorer sets a batch's signers: a band for the validators that endorsed and one for
  * those that did not, each a grid of small tiles (the name, its share of the voting power under it), every
- * validator shown. The voting power endorsed is in the figures above, so the card does not say it twice.
+ * validator shown. The voting power endorsed is in the figures above, so the card does not say it twice. Those that
+ * had no endpoint registered when the promise settled are a band of their own: they could not have endorsed it, which
+ * on a network whose Fibre has just gone live is most of them.
  */
 function Signers({ rows, marks, share, stake, table, onTable }: ListProps & { stake: number | null; table: boolean; onTable: () => void }) {
-  const on = rows.filter((a) => a.attested === true), off = rows.filter((a) => a.attested === false), un = rows.filter((a) => a.attested == null);
+  const on = rows.filter((a) => a.attested === true), un = rows.filter((a) => a.attested == null);
+  const off = rows.filter((a) => a.attested === false && a.host_at_settlement !== ""), bare = rows.filter((a) => a.attested === false && a.host_at_settlement === "");
   const f = stake ?? on.reduce((s, a) => s + share(a.voting_power), 0);
   return (
     <section className="bd-sig">
@@ -549,14 +552,15 @@ function Signers({ rows, marks, share, stake, table, onTable }: ListProps & { st
       </div>
       <div className="bd-bands">
         <Band label="Endorsed" list={on} marks={marks} share={share} vp={f} />
-        <Band label="Not endorsed" list={off} marks={marks} share={share} off vp={un.length === 0 && stake != null ? 1 - stake : undefined} />
+        <Band label="Not endorsed" list={off} marks={marks} share={share} off vp={un.length === 0 && bare.length === 0 && stake != null ? 1 - stake : undefined} />
+        <Band label="No Fibre provider" list={bare} marks={marks} share={share} off plain />
         {un.length > 0 && <Band label="Signature not recorded" list={un} marks={marks} share={share} />}
       </div>
     </section>
   );
 }
 
-function Band({ label, list, marks, share, off, vp: given }: { label: string; list: Assignment[]; marks: Map<string, Mark>; share: (vp: number) => number; off?: boolean; vp?: number }) {
+function Band({ label, list, marks, share, off, plain, vp: given }: { label: string; list: Assignment[]; marks: Map<string, Mark>; share: (vp: number) => number; off?: boolean; plain?: boolean; vp?: number }) {
   if (list.length === 0) return null;
   const vp = given ?? list.reduce((s, a) => s + share(a.voting_power), 0);
   return (
@@ -570,7 +574,7 @@ function Band({ label, list, marks, share, off, vp: given }: { label: string; li
               <Link className={"bd-tile" + (m.tone ? " " + m.tone : "")} href={validatorHref(a.operator_address, a.validator_address)}
                 title={[`${nameOf(a)} · ${pct(share(a.voting_power))} of voting power · ${int(a.row_count)} rows`, m.word, a.host_at_settlement ? `host ${a.host_at_settlement}` : ""].filter(Boolean).join("\n")}>
                 <span className="tx">
-                  <span className="nm">{off && <Ban />}<span className="t">{nameOf(a)}</span>{m.tone && <i className="mk" aria-label={m.res} />}</span>
+                  <span className="nm">{off && !plain && <Ban />}<span className="t">{nameOf(a)}</span>{m.tone && <i className="mk" aria-label={m.res} />}</span>
                   <span className="vp">{pct(share(a.voting_power))}</span>
                 </span>
               </Link>

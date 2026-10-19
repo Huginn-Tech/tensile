@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { type Validator, int, pctOf, bytes, ago, utcWord, shortMid, failedWords } from "@/lib/api";
+import { type Validator, int, pctOf, bytes, ago, utcWord, shortMid, failedWords, MIN_RATED } from "@/lib/api";
 import { WINDOWS, periodName } from "@/lib/window";
 import Avatar from "./Avatar";
 import Info from "./Info";
@@ -166,10 +166,12 @@ export default function Validators({ rows, window: win, notLive, loading, failed
   const href = (v: Validator, hash = "") => validatorHref(v.operator_address, v.address, `${win !== "24h" ? `&window=${win}` : ""}${hash}`);
 
   // The endorsement share, with the counts behind it in the title and a thin bar of it under it; a dash
-  // with its reason when nothing was assigned. Never a fault colour.
+  // with its reason when nothing was assigned; the counts alone, without a bar, under MIN_RATED settlements (a
+  // network's first hour: one settlement is no share). Never a fault colour.
   const signed = (v: Validator) => {
     const s = v.signing;
     if (!s || s.assigned === 0) return <span className="muted" title={s && s.unknown > 0 ? `${int(s.unknown)} assigned promise${s.unknown === 1 ? "" : "s"} recorded before signatures were verified: nothing to say either way.` : "No settled promise assigned this validator rows in this period."}>—</span>;
+    if (s.assigned < MIN_RATED) return <span className="rate share endorsed" title={`${int(s.signed)} of ${int(s.assigned)} settled promises endorsed: too few for a share`}>{int(s.signed)} of {int(s.assigned)}</span>;
     return (
       <span className="rate share endorsed" title={`${int(s.signed)} of ${int(s.assigned)} settled promises endorsed`}>
         {pctOf(s.signed, s.assigned)}
