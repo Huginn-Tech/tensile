@@ -1147,8 +1147,9 @@ body { background: var(--canvas); }
 .cm-land path, .cm-mat .fill path { fill: var(--cm-land); stroke: var(--cm-land); stroke-width: .6; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 .cm-atlas.near .cm-land path, .cm-atlas.near .cm-mat .fill path { stroke: var(--cm-seam); }
 /* the land's material, over it while the map is at rest (HostMap.tsx): its grain, a coastline hairline and a short
-   shadow below it; it fades in where a move lands */
-.cm-mat { position: absolute; inset: 0; pointer-events: none; animation: cm-in 180ms ease-out; transition: opacity 180ms ease-out; }
+   shadow below it; it fades in where a move lands. On a layer of its own, so its patterned land is drawn once and not
+   again with every change elsewhere on the page (without it Chrome redraws it all the time: a third of a core at rest) */
+.cm-mat { position: absolute; inset: 0; pointer-events: none; will-change: transform; animation: cm-in 180ms ease-out; transition: opacity 180ms ease-out; }
 .cm-mat.moving { visibility: hidden; opacity: 0; transition: none; }
 .cm-mat .fill path { fill: url(#cm-grain); }
 .cm-mat .coast path { fill: none; stroke: var(--cm-coast); stroke-width: 1.6; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
