@@ -200,9 +200,10 @@ button { font: inherit; color: inherit; }
 .brand { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 600; font-size: 16px; letter-spacing: -.01em; white-space: nowrap; }
 .brand:hover { text-decoration: none; }
 .brand .mark-logo { color: var(--accent); flex: none; }
-/* the current page is a filled turquoise pill with white text; the others turn to a light wash on hover */
+/* the current page is a filled turquoise pill with white text; the others turn to a light wash on hover. The pill moves at
+   once: a fading background left the page before and the page after both filled for a moment */
 .top nav { display: flex; align-items: center; gap: 4px; height: 56px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.top nav a { color: var(--text-2); font-weight: 500; display: flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 8px; white-space: nowrap; transition: background var(--dur), color var(--dur); }
+.top nav a { color: var(--text-2); font-weight: 500; display: flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 8px; white-space: nowrap; transition: color var(--dur); }
 .top nav a:hover { text-decoration: none; color: var(--text); background: var(--wash); }
 .top nav a.on, .top nav a.on:hover { color: #fff; background: var(--nav-on); }
 .top .right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
@@ -415,6 +416,8 @@ img.avatar { object-fit: cover; display: inline-block; }
 a.mon { color: var(--text); }
 a.mon:hover { color: var(--accent-ink); text-decoration: none; }
 .addr { display: block; font-size: var(--t-small); color: var(--text-3); margin-top: 1px; line-height: 1.3; }
+/* the validators list's address under each name, in the mono at its medium weight */
+.vt .addr.mono { font-weight: 500; }
 .ours { font-size: var(--t-tiny); color: var(--text-2); background: var(--tag-bg); border-radius: 3px; padding: 1px 6px; margin-left: 6px; font-weight: 500; vertical-align: 1px; text-transform: none; }
 .state { display: inline-flex; align-items: center; color: var(--text); white-space: nowrap; }
 .rate { font-weight: 500; }
