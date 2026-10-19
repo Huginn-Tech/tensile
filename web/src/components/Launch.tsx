@@ -169,7 +169,7 @@ function Track({ h, togo }: { h: number | null; togo: number | null }) {
     if (dstSq.current) {
       dstSq.current.style.transform = `scale(${k.toFixed(4)})`;
       // its ring as thick as the newest block's, whatever the square's scale
-      dstSq.current.style.boxShadow = `0 0 0 ${(3 / k).toFixed(2)}px var(--paper), 0 0 0 ${(4.5 / k).toFixed(2)}px var(--celestia)`;
+      dstSq.current.style.boxShadow = `0 0 0 ${(3 / k).toFixed(2)}px var(--canvas), 0 0 0 ${(4.5 / k).toFixed(2)}px var(--celestia)`;
     }
     const w = Math.max(0, x - g.tipX);
     if (gap.current) gap.current.style.transform = `translateX(${g.tipX.toFixed(2)}px)`;

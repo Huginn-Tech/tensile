@@ -3386,8 +3386,9 @@ button.warn:focus-visible { outline-offset: 0; }
 
 /* ---- the countdown to Fibre's activation (components/Launch.tsx): the whole page while Fibre is still to come. The
    clock is the page's first read; under it the chain as a track running to the activation block. Nothing glows ---- */
-.lc { --slot: rgb(var(--ink) / .05); --slot-edge: rgb(var(--ink) / .22); min-height: 100vh; min-height: 100dvh; display: grid; grid-template-rows: auto 1fr; overflow-x: clip; }
-:root[data-theme="dark"] .lc { --slot: rgb(var(--ink) / .06); --slot-edge: rgb(var(--ink) / .14); }
+.lc { --slot: rgb(var(--ink) / .05); --slot-edge: rgb(var(--ink) / .22); --rb-fill: #33a2ac; --rb-lit: var(--accent); min-height: 100vh; min-height: 100dvh; display: grid; grid-template-rows: auto 1fr; overflow-x: clip; }
+/* the blocks in the overview grid's colours (.deck holds them there) */
+:root[data-theme="dark"] .lc { --slot: rgb(var(--ink) / .06); --slot-edge: rgb(var(--ink) / .14); --rb-fill: #246c75; --rb-lit: #33b3bf; }
 .lc-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; max-width: var(--page); margin: 0 auto; padding: 22px var(--gutter); }
 .lc-brand { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-weight: 600; font-size: 16px; letter-spacing: -.005em; text-decoration: none; }
 .lc-brand .mark-logo { color: var(--accent); }
@@ -3428,7 +3429,7 @@ button.warn:focus-visible { outline-offset: 0; }
 .tr-pastwrap { position: absolute; inset: 0; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--fade, 40%)); mask-image: linear-gradient(90deg, transparent 0, #000 var(--fade, 40%)); }
 /* the activation block: Celestia's colour, ringed as the newest block is, at the end of the road */
 .tr-dst { position: absolute; top: 0; left: 0; transition: transform var(--step) cubic-bezier(.22, .7, .2, 1); }
-.tr-dst-sq { position: absolute; left: -14px; top: -14px; width: 28px; height: 28px; border-radius: 7px; background: var(--celestia); box-shadow: 0 0 0 3px var(--paper), 0 0 0 4.5px var(--celestia); transition: transform var(--step) cubic-bezier(.22, .7, .2, 1); }
+.tr-dst-sq { position: absolute; left: -14px; top: -14px; width: 28px; height: 28px; border-radius: 7px; background: var(--celestia); box-shadow: 0 0 0 3px var(--canvas), 0 0 0 4.5px var(--celestia); transition: transform var(--step) cubic-bezier(.22, .7, .2, 1); }
 /* the figures on the track: the current block over the newest, the activation block over its square, the blocks to go
    on a dimension line between them */
 .tr-tk { position: absolute; display: grid; justify-items: center; gap: 3px; white-space: nowrap; }
@@ -3444,7 +3445,7 @@ button.warn:focus-visible { outline-offset: 0; }
 .tr-gap { position: absolute; left: 0; top: calc(var(--rail) + var(--s0) / 2 + 22px); height: 1px; }
 .tr-gap-line { position: absolute; left: 0; top: 0; width: 1000px; height: 1px; background: var(--line); transform-origin: 0 0; transition: transform var(--step) cubic-bezier(.22, .7, .2, 1); }
 .tr-gap-end { position: absolute; top: -4px; left: 0; width: 1px; height: 9px; background: var(--line); transition: transform var(--step) cubic-bezier(.22, .7, .2, 1); }
-.tr-gap-lab { position: absolute; top: -12px; left: 0; padding: 0 12px; background: var(--paper); font-size: 14px; line-height: 24px; color: var(--text-3); white-space: nowrap; transition: transform var(--step) cubic-bezier(.22, .7, .2, 1); }
+.tr-gap-lab { position: absolute; top: -12px; left: 0; padding: 0 12px; background: var(--canvas); font-size: 14px; line-height: 24px; color: var(--text-3); white-space: nowrap; transition: transform var(--step) cubic-bezier(.22, .7, .2, 1); }
 .tr-gap-lab b, .tr-n b { margin-right: 2px; font-size: 18px; font-weight: 500; letter-spacing: -.01em; color: var(--text); }
 .tr.near .tr-gap-lab, .tr.near .tr-gap-line, .tr.near .tr-gap-end { opacity: 0; }
 
