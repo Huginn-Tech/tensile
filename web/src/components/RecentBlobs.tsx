@@ -2,7 +2,8 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { API_BASE, useApi, type Blob, type Tip, int, pctOf, bytes, whenUTC, utcWord, TIP_MS } from "@/lib/api";
+import { API_BASE, useApi, type Blob, int, pctOf, bytes, whenUTC, utcWord } from "@/lib/api";
+import { useTip } from "@/lib/tip";
 import RollNumber, { reducedMotion } from "@/components/RollNumber";
 import Info from "@/components/Info";
 import { lane } from "@/lib/status";
@@ -43,7 +44,7 @@ import { recheck } from "@/lib/recheck";
  * still: reads go on, and letting go brings what came in in one move.
  *
  * Reading the list: GET /v1/blobs as soon as the tip names a newest blob the
- * grid does not hold. The tip is the header's /v1/tip stream, shared, so no
+ * grid does not hold. The tip is the page's one (useTip, lib/tip.ts), so no
  * request of its own, and its latest_blob is the newest blob Tensile has
  * stored, which the collector stores within about a second of the scanner
  * reading its block: a new blob is on the grid a few seconds after its block,
@@ -322,7 +323,7 @@ const Place = memo(function Place({ c, i, fresh, on, tab, ghost, onShow, onKey, 
  * the grid in one column, the readout in the next.
  */
 export default function RecentBlobs() {
-  const tip = useApi<Tip>("/v1/tip", TIP_MS); // the header's stream: no request of its own
+  const tip = useTip(); // the page's one tip: no request of its own
   const skew = tip.data?.server_time && tip.fetchedAt ? Date.parse(tip.data.server_time) - Date.parse(tip.fetchedAt) : 0;
   const mark = tip.data?.latest_blob?.promise_hash;
   const feed = useBlobFeed(mark);

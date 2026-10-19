@@ -3,7 +3,8 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import PreLive from "@/components/PreLive";
-import { useApi, type Meta, type Market, type Blob, type NamespaceRow, type Publisher, type Tip, int, bytes, failedWords, hhmm, isBlob, nsDisplay, nsName, shortMid, utcWord, TIP_MS } from "@/lib/api";
+import { useApi, type Meta, type Market, type Blob, type NamespaceRow, type Publisher, int, bytes, failedWords, hhmm, isBlob, nsDisplay, nsName, shortMid, utcWord } from "@/lib/api";
+import { useTip } from "@/lib/tip";
 import Pager, { usePage } from "@/components/Pager";
 import { useWindow, WindowSwitch } from "@/lib/window";
 import BlobsDeck, { age, monthDayTime } from "@/components/BlobsDeck";
@@ -237,7 +238,7 @@ function Page() {
   const q = `${ns ? `&namespace=${encodeURIComponent(ns)}` : ""}${pub ? `&publisher=${encodeURIComponent(pub)}` : ""}`;
   const offset = (Math.min(page, MAX_PAGE) - 1) * SIZE;
   const live = page === 1;
-  const tip = useApi<Tip>("/v1/tip", TIP_MS); // the header's stream: no request of its own
+  const tip = useTip(); // the page's one tip: no request of its own
   const skew = tip.data?.server_time && tip.fetchedAt ? Date.parse(tip.data.server_time) - Date.parse(tip.fetchedAt) : 0;
   // the list holds the blob payments that failed in their block among the blobs, each in its place
   const feed = useLedger(`/v1/blobs?limit=${SIZE}&offset=${offset}&include_failed=1${q}`, live, tip.data?.height, skew);

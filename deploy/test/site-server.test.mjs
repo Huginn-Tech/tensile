@@ -42,6 +42,18 @@ function apiAnswer(req, res) {
     res.on("close", () => seen.emit("hold-closed"));
     return seen.emit("hold");
   }
+  // the tip stream: an event at once, then one every 100 ms for as long as it is read; "stream-closed <id>" when its
+  // connection closes
+  if (p === "/v1/tip/stream") {
+    const id = new URL(req.url, "http://api").searchParams.get("id");
+    res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store, no-transform" });
+    let n = 0;
+    const send = () => res.write(`event: tip\ndata: {"height":${1000 + n++}}\n\n`);
+    send();
+    const t = setInterval(send, 100);
+    res.on("close", () => { clearInterval(t); seen.emit(`stream-closed ${id}`); });
+    return;
+  }
   // an API that goes away a part of the way into its answer
   if (p === "/v1/cut") {
     res.writeHead(200, { "content-type": "application/json", "content-length": "100000" });
@@ -168,6 +180,75 @@ test("an API that goes away mid-answer ends the client's answer too", async () =
   assert.equal(got, "cut");
 });
 
+// A tip stream opened through the site as a page opens it: resolves once its headers are in, with the events that
+// arrive after, each emitted as "event" on the response.
+function streamed(who, id = "", at = base) {
+  return new Promise((ok, no) => {
+    const req = http.get(`${at}/api/v1/tip/stream${id ? `?id=${id}` : ""}`, { headers: { "x-forwarded-for": who }, agent: false }, (res) => {
+      const events = [];
+      let buf = "";
+      res.setEncoding("utf8");
+      res.on("error", () => {});
+      res.on("data", (s) => {
+        buf += s;
+        for (let i; (i = buf.indexOf("\n\n")) >= 0; buf = buf.slice(i + 2)) { events.push(buf.slice(0, i)); res.emit("event"); }
+      });
+      ok({ req, res, events });
+    });
+    req.on("error", no);
+  });
+}
+
+test("tip streams pass through as they are sent, and hold none of the places a client's requests need", async () => {
+  const who = "198.51.100.50";
+  const open = [];
+  try {
+    // more streams than the client's 16 requests at once
+    for (let i = 0; i < 20; i++) {
+      const s = await streamed(who);
+      assert.equal(s.res.statusCode, 200);
+      assert.equal(s.res.headers["content-type"], "text/event-stream; charset=utf-8");
+      assert.equal(s.res.headers["content-encoding"], undefined);
+      open.push(s);
+    }
+    // each event as the API sends it, not when the answer ends
+    await delay(500);
+    for (const s of open) assert.ok(s.events.length >= 3, `${s.events.length} events in half a second, at one every 100 ms`);
+    assert.match(open[0].events[0], /^event: tip\ndata: \{"height":\d+\}$/);
+    // and the same client's requests are still answered
+    assert.equal(await ask("/api/v1/validators?window=24h", who), 200);
+    assert.equal(await ask("/api/v1/tip", who), 200);
+  } finally {
+    open.forEach((s) => s.req.destroy());
+  }
+});
+
+test("one client has 30 tip streams open at most; past them its pages poll", async () => {
+  const open = [];
+  try {
+    for (let i = 0; i < 30; i++) open.push(await streamed("198.51.100.51"));
+    assert.ok(open.every((s) => s.res.statusCode === 200));
+    const past = await streamed("198.51.100.51");
+    open.push(past);
+    assert.equal(past.res.statusCode, 429);
+    assert.equal(await ask("/api/v1/tip", "198.51.100.51"), 200);
+    const other = await streamed("198.51.100.52");
+    open.push(other);
+    assert.equal(other.res.statusCode, 200);
+  } finally {
+    open.forEach((s) => s.req.destroy());
+  }
+});
+
+test("a page that leaves its tip stream ends it at the API", async () => {
+  const closed = once(seen, "stream-closed left");
+  const s = await streamed("198.51.100.53", "left");
+  await once(s.res, "event");
+  s.req.destroy();
+  const got = await Promise.race([closed.then(() => "ended"), delay(5000).then(() => "still open")]);
+  assert.equal(got, "ended");
+});
+
 test("a file a client stops reading and leaves is closed", { skip: !existsSync("/proc/self/fd") && "needs /proc" }, async () => {
   const fds = () => readdirSync(`/proc/${site.pid}/fd`).length;
   const leave = async () => {
@@ -215,21 +296,37 @@ const policyOf = async (at, p) => {
 };
 
 // a second server beside the first, with SITE_CONNECT_SRC set to value: its address once it listens, or its exit code
-// and what it printed when it stops instead
+// and what it printed when it stops instead; exited settles when its process has ended
 async function another(value) {
   const port = await freePort();
   const p = spawn(process.execPath, [SERVER], {
     env: { ...process.env, SITE_ROOT: root, SITE_LISTEN: `127.0.0.1:${port}`, API_LISTEN: `127.0.0.1:${api.address().port}`, SITE_CONNECT_SRC: value },
     stdio: ["ignore", "pipe", "pipe"],
   });
+  const exited = new Promise((ok) => p.once("exit", ok));
   let err = "";
   p.stderr.on("data", (b) => { err += b; });
   const got = await new Promise((ok) => {
     p.once("close", (code) => ok({ code, err }));
     p.stdout.on("data", (b) => { if (String(b).includes(" on 127.0.0.1:")) ok({ at: `http://127.0.0.1:${port}` }); });
   });
-  return { ...got, stop: () => p.kill() };
+  return { ...got, stop: () => p.kill(), exited };
 }
+
+test("a shutdown cuts the open tip streams rather than waiting on them", { skip: process.platform === "win32" && "needs POSIX signals" }, async () => {
+  const s = await another("");
+  assert.ok(s.at, `it did not start: ${s.err}`);
+  const st = await streamed("198.51.100.54", "shutdown", s.at);
+  try {
+    assert.equal(st.res.statusCode, 200);
+    s.stop();
+    const got = await Promise.race([s.exited.then(() => "exited"), delay(5000).then(() => "still running")]);
+    assert.equal(got, "exited");
+  } finally {
+    st.req.destroy();
+    s.stop();
+  }
+});
 
 test("without SITE_CONNECT_SRC the pages may ask this origin alone, as before", async () => {
   for (const p of ["/", "/api/v1/meta"]) assert.equal(await policyOf(base, p), CSP, p);

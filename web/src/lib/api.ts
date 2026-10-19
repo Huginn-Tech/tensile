@@ -1103,10 +1103,11 @@ export function subscribe(key: string, path: string, refreshMs: number, fn: (f: 
 }
 
 /**
- * How often the site asks for the newest block (/v1/tip): every second, so the header's block moves with the chain's
- * own pace (a block about every 3 s). Every reader of the tip asks with this one interval, so a page shares one stream;
- * the API keeps one answer for a quarter of a second, so a reader costs it a small cached reply, and however many
- * readers there are, the node and the database are asked at most four times a second.
+ * How often the site asks for the newest block (/v1/tip) while the API's stream of it (/v1/tip/stream) is not
+ * delivering: every second, so the header's block moves with the chain's own pace (a block about every 3 s). Every
+ * reader of the tip reads it through useTip (tip.ts), so a page shares one stream and one polling; the API keeps one
+ * answer for a quarter of a second, so a reader costs it a small cached reply, and however many readers there are, the
+ * node and the database are asked at most four times a second.
  */
 export const TIP_MS = 1000;
 
@@ -1129,17 +1130,6 @@ export function useApi<T>(path: string | null, refreshMs = 30000): Fetch<T> {
     return subscribe(`${refreshMs}|${path}`, path, refreshMs, (f) => setState(f as Fetch<T>));
   }, [path, refreshMs]);
   return state;
-}
-
-/**
- * The promise hash of the newest blob on record (/v1/tip's latest_blob), null until the tip has named one. It reads
- * the header's tip stream, so it asks nothing of its own, and it renders its page only when the blob changes, not at
- * every answer: what a page that waits for a blob to be recorded asks again on.
- */
-export function useNewestBlob(): string | null {
-  const [newest, setNewest] = useState<string | null>(null);
-  useEffect(() => subscribe(`${TIP_MS}|/v1/tip`, "/v1/tip", TIP_MS, (f) => setNewest((f.data as Tip | null)?.latest_blob?.promise_hash ?? null)), []);
-  return newest;
 }
 
 // ---- formatting ----

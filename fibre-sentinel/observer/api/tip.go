@@ -76,6 +76,9 @@ type tipCache struct {
 	// so a store that keeps failing is said once a minute, not four times a
 	// second.
 	blobErrAt time.Time
+	// gen counts the reads, so a tip stream can tell an answer from an
+	// older one (tipstream.go).
+	gen uint64
 }
 
 const tipTTL = 250 * time.Millisecond
@@ -84,17 +87,27 @@ const tipTTL = 250 * time.Millisecond
 const tipRPCTimeout = 800 * time.Millisecond
 
 func (s *Server) handleTip(w http.ResponseWriter, r *http.Request) {
+	v, _ := s.cachedTip()
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, v)
+}
+
+// cachedTip is the answer /v1/tip gives now: the one kept, read afresh once
+// it is tipTTL old, with the server's time. gen is the read it came from
+// (tipCache.gen). /v1/tip and the tip streams' producer both read it here,
+// so the node and the store are asked at the one pace however many read.
+func (s *Server) cachedTip() (tipResponse, uint64) {
 	now := s.now()
 	s.tip.mu.Lock()
 	if now.Sub(s.tip.at) >= tipTTL {
 		s.tip.v = s.readTip(now)
 		s.tip.at = now
+		s.tip.gen++
 	}
-	v := s.tip.v
+	v, gen := s.tip.v, s.tip.gen
 	s.tip.mu.Unlock()
 	v.ServerTime = now.UTC()
-	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, v)
+	return v, gen
 }
 
 // readTip asks the node first (WithTipRPC): its newest committed block, the

@@ -356,6 +356,7 @@ failing checks otherwise.
 | `api_errors` | a route answered a 5xx, or its handler panicked, in the last ten minutes. A 503 is not counted: the API answers it on purpose, while a window is still being computed (which `snapshots` covers) and as `/v1/health`'s own verdict. The error is in the API's journal. |
 | `snapshots` | a window's figures have not refreshed for twice their interval (at least 15 minutes), or three refreshes in a row failed. The site keeps showing the older figures. |
 | `records` | the API met a stored row it cannot decode in the last 15 minutes. The row is published with that part marked (a blob's `reconstructable` status `unknown`, a reading's `row_indices` left out) and the rest of the answer stands; the API's journal names each row once. |
+| `tip_streams` | a `/v1/tip/stream` was refused at the API's cap (`-tip-streams`, 2,000 by default) in the last ten minutes. No page shows less for it: a refused page polls `/v1/tip` every second, as every page did before the stream. Its detail says how many are open, the most at once since the API started and how many were refused; the journal says it at most once a minute. Raise the cap. |
 | `disk` | the data disk has under 15% free. |
 | `scan_gaps` | a scan gap is recorded (see the Runbook). |
 | `pin` | the chain upgraded past this build's pin (see the Runbook). |
@@ -1131,6 +1132,59 @@ and a client that goes away cancels its request to the API. Past 50,000
 clients in ten minutes, new ones share one allowance, so the table of
 clients stays bounded. An answer refused by these limits is a 429 with
 `retry-after: 5`.
+
+The tip stream (`/api/v1/tip/stream`, below) is one long request per shown
+page. Opening one spends a `/v1/tip` token; an open one holds none of the
+client's 16 places, but one of its 30 streams, and of the site's, which
+the open-file limit bounds (two sockets a stream: half the soft limit,
+less 512). `fibre-site@.service` sets `LimitNOFILE=65536`; a unit installed
+before it keeps systemd's 1,024, which allows 256 streams. A stream
+refused past either is a 429 or a 503, and its page polls `/v1/tip` as
+before; a 503 for the open files is in site-server's journal at most once a
+minute. site-server neither buffers nor compresses an API answer, so each
+event passes as it comes; a client that leaves ends its stream at the API,
+and an API that ends it ends the client's. At a stop, site-server cuts the
+open streams rather than wait on them.
+
+### The tip stream through a front proxy
+
+Every page reads the newest block and the newest blob from
+`/api/v1/tip/stream`, server-sent events the API pushes as the tip
+changes, and polls `/api/v1/tip` every second only while that is not
+delivering (refused, cut, or nothing for 20 s; the API pings every 15 s).
+A proxy that holds the events back or cuts the stream costs speed, never
+data: the pages poll as they did before it. A page served over HTTP/1
+never opens a stream (it would hold one of the browser's six connections
+to the site for as long as it is open), so the front proxy should speak
+HTTP/2, which Caddy does by itself and nginx with `http2 on;` (`listen 443
+ssl http2;` before 1.25).
+
+- Caddy passes each event on as it comes (its `reverse_proxy` flushes
+  `text/event-stream` at once); `deploy/Caddyfile` leaves the stream out
+  of `encode`. Mocha's shared front proxy is a Caddy, and needs nothing.
+- nginx buffers an answer by default. The API sends `X-Accel-Buffering:
+  no` on the stream, which nginx honours, but say it in the site's config
+  too, with a read timeout past the API's 15-second ping:
+
+  ```nginx
+  location = /api/v1/tip/stream {
+      proxy_pass http://127.0.0.1:3113;   # SITE_LISTEN, or the API with /api taken off
+      proxy_http_version 1.1;
+      proxy_set_header Connection "";
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_buffering off;
+      proxy_cache off;
+      gzip off;
+      proxy_read_timeout 1h;
+  }
+  ```
+
+The API caps the streams open at once (`observer-api -tip-streams`, 2,000
+by default; `0` opens none, and every page polls). Past it a stream is
+refused with a 503 and its page polls; `/v1/health`'s `tip_streams` check
+then fails for ten minutes, so the health watch says so. A shutdown of the
+API ends the open streams at once, and the pages poll until it is back.
 
 ### Two networks
 

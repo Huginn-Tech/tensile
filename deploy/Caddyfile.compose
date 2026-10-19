@@ -1,5 +1,8 @@
 {$DOMAIN} {
-	encode gzip
+	# Compressed, but for the tip stream, whose events an encoder would hold
+	# until it had enough of them to compress.
+	@compressible not path /api/v1/tip/stream
+	encode @compressible gzip
 
 	header {
 		X-Content-Type-Options nosniff

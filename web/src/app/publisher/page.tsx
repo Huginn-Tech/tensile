@@ -2,7 +2,8 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { API_BASE, useApi, notFound, badRequest, throttled, hhmm, ago, shortMid, type Blob, type Payment, type PublisherNamespace, type RecentBlob, type Tip, type Window, blobFee, bytes, int, isBlob, nsDisplay, tia, utcWord, TIP_MS } from "@/lib/api";
+import { API_BASE, useApi, notFound, badRequest, throttled, hhmm, ago, shortMid, type Blob, type Payment, type PublisherNamespace, type RecentBlob, type Window, blobFee, bytes, int, isBlob, nsDisplay, tia, utcWord } from "@/lib/api";
+import { useTip } from "@/lib/tip";
 import type { Params, PublisherWithQueue, PublisherWithdrawals } from "@/lib/withdrawals";
 import { lane } from "@/lib/status";
 import Ledger, { useLedger } from "@/components/Ledger";
@@ -127,7 +128,7 @@ function Publisher({ addr }: { addr: string }) {
   // the price of a blob, for the low-escrow warning: the parameters' own 5-minute stream (PublishersTop's too), asked
   // again soon after a failure, so one failed first answer does not lose the warning for the life of the page
   const pf = useApi<Params>("/v1/params", 300000).data?.price_formula;
-  const tip = useApi<Tip>("/v1/tip", TIP_MS); // the header's stream: no request of its own
+  const tip = useTip(); // the page's one tip: no request of its own
   const skew = tip.data?.server_time && tip.fetchedAt ? Date.parse(tip.data.server_time) - Date.parse(tip.fetchedAt) : 0;
   const now = Date.now() + skew;
 
