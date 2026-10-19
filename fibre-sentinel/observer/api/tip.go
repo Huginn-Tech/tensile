@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"math"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -75,15 +76,36 @@ type tipEndpointEvent struct {
 // unchanged table.
 const hostEventsMarkSQL = `SELECT MAX(rowid) FROM host_events`
 
-// newestEndpointEventsSQL is the newest registrations read from the chain's
-// transactions, newest first across every validator, each with the hash of
-// the transaction it came from when its cost line is on record (the join
+// newestEndpointEventsSQL is a page of the registrations read from the
+// chain's transactions, newest first across every validator, from below the
+// cursor (height, from_tx_index, cons_address), each with the hash of the
+// transaction it came from when its cost line is on record (the join
 // hostWalkSQL makes). Asked only when the mark moves.
 const newestEndpointEventsSQL = `SELECT h.cons_address, h.from_height, h.from_tx_index, h.host, h.time, COALESCE(c.tx_hash, '')
 	FROM host_events h
 	LEFT JOIN tx_costs c ON c.height = h.from_height AND c.tx_index = h.from_tx_index - 1
-	WHERE h.source = 'event'
+	WHERE h.source = 'event' AND (h.from_height < ? OR (h.from_height = ? AND (h.from_tx_index < ? OR (h.from_tx_index = ? AND h.cons_address < ?))))
 	ORDER BY h.from_height DESC, h.from_tx_index DESC, h.cons_address DESC LIMIT 64`
+
+// hostReg is a row of newestEndpointEventsSQL.
+type hostReg struct {
+	addr, host, at, hash string
+	height               int64
+	fromTx               int
+}
+
+// endpointWalkPage is the rows of a page of newestEndpointEventsSQL.
+const endpointWalkPage = 64
+
+// endpointWalkPages bounds the walk: pages of 64 registrations, newest first,
+// until one registered or changed an endpoint. Re-registering the endpoint a
+// validator already had is rare; 16 pages of it in a row would be a
+// thousand.
+const endpointWalkPages = 16
+
+// tipEndpointRetry is how long a walk that failed (the store did not answer
+// in time) waits before the next, rather than one every answer of the cache.
+const tipEndpointRetry = 5 * time.Second
 
 // hostBeforeSQL is the host a validator had before (height, from_tx_index):
 // its step just before it, of any source, as the walk takes it
@@ -136,12 +158,14 @@ type tipCache struct {
 	// ep is the newest endpoint event (latestEndpointEvent), worked out at
 	// epAt when host_events' mark was epMark: worked out again only when the
 	// mark moves or tipEndpointMaxAge has passed, so the answer costs one
-	// read of the mark, not a walk of the registrations. epErrAt is as
+	// read of the mark, not a walk of the registrations; a walk that failed
+	// at epFailAt is not tried again for tipEndpointRetry. epErrAt is as
 	// blobErrAt.
-	ep      *tipEndpointEvent
-	epMark  int64
-	epAt    time.Time
-	epErrAt time.Time
+	ep       *tipEndpointEvent
+	epMark   int64
+	epAt     time.Time
+	epErrAt  time.Time
+	epFailAt time.Time
 }
 
 const tipTTL = 250 * time.Millisecond
@@ -286,8 +310,12 @@ func (s *Server) latestEndpointEvent(ctx context.Context, now time.Time) *tipEnd
 	if !s.tip.epAt.IsZero() && mark.Int64 == s.tip.epMark && now.Sub(s.tip.epAt) < tipEndpointMaxAge {
 		return s.tip.ep
 	}
+	if now.Sub(s.tip.epFailAt) < tipEndpointRetry {
+		return s.tip.ep
+	}
 	ev, err := s.newestEndpointEvent(ctx)
 	if err != nil {
+		s.tip.epFailAt = now
 		s.tipErr(&s.tip.epErrAt, now, "newest endpoint event", err)
 		return s.tip.ep
 	}
@@ -303,32 +331,44 @@ func (s *Server) tipErr(at *time.Time, now time.Time, what string, err error) {
 	}
 }
 
-// newestEndpointEvent walks the newest registrations, newest first, to the
-// first that registered or changed an endpoint (eventOutcome, the walk's own
-// word); nil when none of them did.
+// newestEndpointEvent walks the registrations, newest first, a page at a
+// time (at most endpointWalkPages), to the first that registered or changed
+// an endpoint (eventOutcome, the walk's own word); nil when none did.
 func (s *Server) newestEndpointEvent(ctx context.Context) (*tipEndpointEvent, error) {
-	type reg struct {
-		addr, host, at, hash string
-		height               int64
-		fromTx               int
-	}
-	rows, err := s.st.DB().QueryContext(ctx, newestEndpointEventsSQL)
-	if err != nil {
-		return nil, err
-	}
-	var regs []reg
-	for rows.Next() {
-		var r reg
-		if err := rows.Scan(&r.addr, &r.height, &r.fromTx, &r.host, &r.at, &r.hash); err != nil {
-			rows.Close()
+	// the cursor: below every registration at first, then below the page's last
+	var curH int64 = math.MaxInt64
+	curTx, curAddr := 0, ""
+	for page := 0; page < endpointWalkPages; page++ {
+		rows, err := s.st.DB().QueryContext(ctx, newestEndpointEventsSQL, curH, curH, curTx, curTx, curAddr)
+		if err != nil {
 			return nil, err
 		}
-		regs = append(regs, r)
+		var regs []hostReg
+		for rows.Next() {
+			var r hostReg
+			if err := rows.Scan(&r.addr, &r.height, &r.fromTx, &r.host, &r.at, &r.hash); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			regs = append(regs, r)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		ev, err := s.firstEndpointEvent(ctx, regs)
+		if ev != nil || err != nil || len(regs) < endpointWalkPage {
+			return ev, err
+		}
+		last := regs[len(regs)-1]
+		curH, curTx, curAddr = last.height, last.fromTx, last.addr
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
+	return nil, nil
+}
+
+// firstEndpointEvent is the first of regs, newest first, that registered or
+// changed an endpoint, with its validator's names; nil when none did.
+func (s *Server) firstEndpointEvent(ctx context.Context, regs []hostReg) (*tipEndpointEvent, error) {
 	for _, r := range regs {
 		var prev string
 		prevSet := true
