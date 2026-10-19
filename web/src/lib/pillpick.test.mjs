@@ -111,3 +111,28 @@ test("a new or changed endpoint holds the pill for HOLD_MS; the endorsers come b
   bare.endpoint(ev, 0);
   assert.deepEqual(bare.show(10 * HOLD_MS), { kind: "endpoint", ev });
 });
+
+test("what the page opened with names one endorser, still, and an endorser known later does not start a round", () => {
+  const pk = new PillPicker(seeded(7));
+  const es = set("o", 40);
+  pk.beat("b0", "t0", es, false);
+  const first = who(pk);
+  assert.ok(es.includes(first), "one of its endorsers");
+  for (let i = 0; i < 100; i++) pk.tick(i * ROTATE_MS);
+  assert.equal(who(pk), first, "still, however long the page stays open");
+  assert.deepEqual(pk.names, [first], "one name, for the pill's width");
+  pk.beat("b0", "t0", [...es, "late"], false);
+  pk.tick(0);
+  assert.equal(who(pk), first);
+  // not known at first: named once it is, and still
+  const pk2 = new PillPicker(seeded(8));
+  pk2.beat("b0", "t0", null, false);
+  assert.equal(pk2.show(0).kind, "settled");
+  pk2.beat("b0", "t0", ["v1", "v2", "v3"], false);
+  const one = who(pk2);
+  pk2.tick(0); pk2.tick(0);
+  assert.equal(who(pk2), one);
+  // the next block while the page is open goes round as before
+  pk.beat("b1", "t1", set("n", 5));
+  assert.equal(new Set(run(pk, 5)).size, 5);
+});
