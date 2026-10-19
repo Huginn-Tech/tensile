@@ -296,7 +296,7 @@ function useReducedMotion(): boolean {
 }
 
 /**
- * The pill: an endorser of the newest beat at a time, "B-Harvest endorsed the latest blob · 12 s ago", a new one each
+ * The pill: an endorser of the newest beat at a time, "B-Harvest endorsed · 12 s ago", a new one each
  * ROTATE_MS in a shuffled order, each once (lib/pillpick.ts); with reduced motion one name a beat. The names
  * cross-fade in place, every name of the beat stacked in one cell, the cell easing to the width of the name shown. A
  * new beat takes the pill in the frame the grid moves, and its dot pops (not for what the grid opened with); a
@@ -378,7 +378,7 @@ function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost, motion, skew }: {
             ? <span key={w} className="on"><Link href={who.href}>{who.name}</Link></span>
             : <span key={w} aria-hidden="true">{nameOf(w).name}</span>))}
         </span>
-        {" "}endorsed the latest blob{many ? "s" : ""}
+        {" "}endorsed
       </span>
       <span className="cm-ev-ago">{ago(s.at)}</span>
     </p>
