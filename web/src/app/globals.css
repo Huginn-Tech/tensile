@@ -3491,6 +3491,8 @@ header.top .wrap {
 .top .net.menu summary::before { content: ""; position: absolute; inset: 7px 0; z-index: -1; border-radius: 999px; background: var(--paper); box-shadow: var(--shadow-sm), 0 0 0 1px var(--border); }
 .top .net.menu .list { top: 44px; }
 .top .net.menu .list a, .top .net.menu .list span { min-height: 44px; }
+/* until the first block is read its place stays out of the bar, so the network's "connecting…" has the room */
+.top .blocktick:has(.bt-n.wait) { display: none; }
 
 /* the site search: a button in the bar; tapped, it takes the whole bar (HeaderSearch.tsx adds Cancel and the veil) */
 .top .hs { grid-area: 1 / 5; justify-self: end; position: relative; z-index: 4; pointer-events: auto; flex: none; width: 44px; height: 44px; margin: 0; padding: 0; }
@@ -3572,6 +3574,19 @@ button.cp { display: inline-grid !important; place-items: center; width: 44px !i
 .crumb a { display: inline-flex; align-items: center; min-height: 44px; }
 .copy { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; height: 44px; margin: -12px -6px -12px 2px; padding: 0 8px; border: 0; background: none; font-size: 12px; font-weight: 500; color: var(--accent-ink); vertical-align: middle; }
 .ctl a.btn { display: inline-flex; align-items: center; min-height: 44px; padding-top: 0; padding-bottom: 0; }
+/* the pager's buttons: a 44 px target around the same 32 px pill, the gaps between the pills unchanged */
+.pager .ctl { gap: 0; }
+.pager .btn { position: relative; isolation: isolate; height: 44px; min-width: 44px; border: 0; background: none; box-shadow: none; }
+.pager .btn::before { content: ""; position: absolute; inset: 6px 0; z-index: -1; border-radius: 999px; border: 1px solid var(--border); background: var(--paper); box-shadow: var(--shadow-sm); transition: border-color var(--dur); }
+.pager .btn.icon { width: 44px; }
+.pager .btn.icon::before { inset: 6px; }
+.pager .btn:hover:not(:disabled)::before { border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.pager .btn:disabled::before { box-shadow: none; }
+/* an address's Copy pill keeps its size, its target 44 px around it; the publisher finder as tall as the other fields */
+.pb-addr .copy::after, .bd-err-a .copy::after { content: ""; position: absolute; inset: -10px -4px; }
+.bd-mast .pb-addr > .copy::after { content: none; }
+.pl-find .lg-chip { height: 44px; }
+button.pp-params { min-height: 44px; margin: -14px 0; }
 /* links set in a line of text: a 44 px target around the same words, the line unchanged */
 a.lg-who, a.bd-ns, .lg-t .c-b a, .bd-meta a, .vd-own a, .cm-ev-t a { padding-top: 13px; padding-bottom: 13px; margin-top: -13px; margin-bottom: -13px; }
 .lg-t .c-b a { display: inline-block; }
@@ -3612,28 +3627,33 @@ button.cp-it { min-height: 44px; margin-top: -4px; margin-bottom: -4px; }
 /* recent blobs: only the rows that hold a blob (the first always), so a young network is not a page of empty squares */
 .rb-row:not(:first-child):not(:has(a.rb-c)) { display: none; }
 .rb-head { width: 100%; justify-content: space-between; }
-.rb-grid { width: 100%; padding: 4px 0 6px; }
+/* ten squares a row at any width: a square is 28 px, or a tenth of the row less its gaps where the row is narrower (the
+   slide reads its pitch off the squares, RecentBlobs.tsx) */
+.rb-grid { width: 100%; padding: 4px 0 6px; container-type: inline-size; }
 .rb { --rb-cell: 28px; --rb-gap: 5.3px; }
-.rb-tape { align-items: center; }
+.rb-tape { --rb-cell: min(28px, (100cqw - 9 * var(--rb-gap)) / 10); align-items: center; }
 .rb-c { border-radius: 6px; }
 /* a blob's square is a 44 px tall target, its square drawn inside, its width reaching to the middle of each gap: the row
    is one strip where every point opens the nearest blob */
 a.rb-c, a.rb-c:hover, a.rb-c.rb-on, a.rb-c.rb-newest { height: 44px; background: none; box-shadow: none; transform: none; }
-a.rb-c::before { content: ""; position: absolute; left: 0; right: 0; top: 8px; height: 28px; border-radius: 6px; background: var(--rb-fill); transition: box-shadow 160ms ease-out; }
+a.rb-c::before { content: ""; position: absolute; left: 0; right: 0; top: calc((44px - var(--rb-cell)) / 2); height: var(--rb-cell); border-radius: 6px; background: var(--rb-fill); transition: box-shadow 160ms ease-out; }
 a.rb-c.rb-newest::before, a.rb-c:hover::before, a.rb-c.rb-on::before { background: var(--rb-lit); }
 a.rb-c.rb-newest::before { box-shadow: 0 0 0 2px var(--paper), 0 0 0 3.5px var(--accent); }
 a.rb-c:hover::before, a.rb-c.rb-on::before { box-shadow: 0 0 0 2px var(--paper), 0 0 0 3.5px var(--text-2); }
 .rb-grid.rb-pick a.rb-c.rb-newest:not(.rb-on)::before { background: var(--rb-fill); box-shadow: none; }
 a.rb-c::after { inset: 0 calc(var(--rb-gap) / -2); }
-/* the two figures on one line, each figure before its label; "settlements on record" on one line (RecentBlobs.tsx) */
-.rb-foot { grid-template-columns: 1fr 1px 1fr; justify-content: stretch; margin-top: 0; }
+/* the two figures on one line, each figure before its label; "settlements on record" on one line (RecentBlobs.tsx), on
+   two under 380 px. Each figure as wide as it is, the space shared evenly around them and the line between them, so a
+   long count never runs into the line; the (i) inside its figure's width */
+.rb-foot { grid-template-columns: auto 1px auto; justify-content: space-evenly; margin-top: 0; }
 .rb-fig { display: flex; align-items: baseline; justify-content: center; gap: 7px; padding: 12px 0 0; }
 .rb-fig > span:last-child:not(.rb-avl) { display: inline; white-space: nowrap; }
 .rb-fig > span:last-child { margin-top: 0; font-size: 12.5px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--text-2); }
 .rb-br { display: none; }
 .rb-div { margin-top: 10px; }
 .rb-total { font-size: 17px; }
-.rb-avl { padding-right: 16px; }
+.rb-avl { padding-right: 22px; }
+.rb-i { left: auto; right: 0; }
 .rb-st { height: 22px; padding: 0 8px; font-size: 12px; }
 
 /* ------------------------------------------------------- validators ---- */
@@ -3893,17 +3913,38 @@ a.rb-c::after { inset: 0 calc(var(--rb-gap) / -2); }
 .vd-oc-lead .vd-ocf:not(.lead) .vd-fv { margin-top: 4px; }
 }
 
-/* a narrow phone: the Blobs list's tabs and its publisher filter a little tighter, so both keep one line */
+/* a narrow phone: the Blobs list's tabs and its publisher filter a little tighter, so both keep one line; the header's
+   tabs a little tighter, so the last of them stays clear of the theme button, and the block a step closer to the network;
+   "settlements on record" on two lines, as on a wider screen, so both figures keep clear of the line between them */
 @media (max-width: 379px) {
   .lg-list:not(.pb-list):not(.vd-list) > .list-head { column-gap: 6px; }
   .lg-list:not(.pb-list):not(.vd-list) > .list-head > .tabs button { padding: 0 10px; }
   .lg-list:not(.pb-list):not(.vd-list) .lg-tools > .lg-pick:nth-last-child(2):not(.on) > .lg-chip { padding: 0 10px; }
+  .top nav { gap: 0; }
+  .top nav a, .top nav a:hover { padding: 0 10px; }
+  .top .blocktick { margin-right: 4px; }
+  .rb-br { display: inline; }
+}
+/* under 360 px the header's words a step smaller, so its bar and its tabs keep one line each, every word kept */
+@media (max-width: 359px) {
+  .top .brand { gap: 7px; font-size: 15px; }
+  .top .blocktick { gap: 4px; font-size: 11.5px; }
+  .top .net.menu summary { padding: 0 9px 0 8px; gap: 5px; }
+  .top nav a, .top nav a:hover { padding: 0 9px; font-size: 14px; }
 }
 /* the narrowest phones: Cancel a little tighter, so the search's placeholder keeps every word at 12 px */
 @media (max-width: 340px) {
   .top .hs.on { padding-right: 72px; }
   .top .hs-cancel { padding: 0 10px; }
   .top .hs.on .hs-field input[type=search]::placeholder { font-size: clamp(12px, calc((100vw - 136px) / 15.8), 14px); }
+}
+/* under 340 px the bar has no room for the block beside the network: the pages that need a height show their own; the
+   recent blobs' two figures a step smaller */
+@media (max-width: 339px) {
+  .top .blocktick { display: none; }
+  .top nav a, .top nav a:hover { padding: 0 7px; font-size: 13.5px; }
+  .rb-fig { gap: 5px; }
+  .rb-total { font-size: 15px; }
 }
 /* the phone's header and bands slide; with reduced motion they move at once */
 @media (max-width: 720px) and (prefers-reduced-motion: reduce) {
