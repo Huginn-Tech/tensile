@@ -208,10 +208,10 @@ export default function Validators({ rows, window: win, notLive, loading, failed
           <label className="search">{FIND}<span className="sr-only">Search validators</span><input type="search" placeholder="Search name or address" value={q} onChange={(e) => setQ(e.target.value)} /></label>
           <Pick label="Filter validators" value={filter} onChange={setFilter} options={[
             { value: "all", label: "All validators", count: counts.all },
-            { value: "providers", label: "Fibre providers", count: counts.providers },
-            { value: "unreachable", label: "Unreachable now", count: counts.unreachable },
-            { value: "cert", label: "Wrong certificate now", count: counts.cert },
-            { value: "nohost", label: "No endpoint", count: counts.nohost },
+            { value: "providers", label: "Fibre providers", count: counts.providers, dot: "ok" },
+            { value: "unreachable", label: "Unreachable now", count: counts.unreachable, dot: "hold" },
+            { value: "cert", label: "Wrong certificate now", count: counts.cert, dot: "hold" },
+            { value: "nohost", label: "No endpoint", count: counts.nohost, dot: "none" },
           ]} />
         </div>
       </div>
