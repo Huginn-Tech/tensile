@@ -246,7 +246,9 @@ function Publisher({ addr }: { addr: string }) {
   const nsChoices: Choice[] | null = nss
     ? nss.map((x) => ({ value: x.ns, label: <NsName ns={x.ns} />, count: x.n, find: `${nsDisplay(x.ns)} ${nsHex(x.ns)}`.toLowerCase() }))
     : seen ? seen.map((x) => ({ value: x, label: <NsName ns={x} />, find: `${nsDisplay(x)} ${nsHex(x)}`.toLowerCase() })) : null;
-  const liveWord = !live || feed.refused ? null : feed.error ? "Not answering" : feed.loaded ? "Live" : "Connecting";
+  // a read that got no answer at all is the connection's: reconnecting, not the API's failure
+  const down = !!feed.error && !feed.unanswered;
+  const liveWord = !live || feed.refused ? null : down ? "Not answering" : feed.unanswered ? "Reconnecting" : feed.loaded ? "Live" : "Connecting";
   const i = addr.indexOf("1");
 
   // the list's count: what the tab holds, as its pager counts it (Blobs: under the namespace picked)
@@ -377,7 +379,7 @@ function Publisher({ addr }: { addr: string }) {
             <div className="lg-tools">
               <Picker name="Namespace" icon={NS_ICON} value={ns} text={ns ? <NsName ns={ns} /> : null} choices={nsChoices}
                 accept={(s) => (/^[0-9a-f]{58}$/.test(s) ? s : null)} placeholder="Name or hex" onPick={setNs} />
-              {liveWord && <span className={`lg-live${feed.error ? " down" : ""}`} title={feed.error ? `The observer API did not answer (${feed.error}); the list shows the last read.` : "New blobs come in as the chain moves, while this page is open."}><i aria-hidden="true" />{liveWord}</span>}
+              {liveWord && <span className={`lg-live${down ? " down" : ""}`} title={down ? `The observer API did not answer (${feed.error}); the list shows the last read.` : "New blobs come in as the chain moves, while this page is open."}><i aria-hidden="true" />{liveWord}</span>}
             </div>
           )}
         </div>

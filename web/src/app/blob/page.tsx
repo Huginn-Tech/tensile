@@ -317,7 +317,7 @@ function Page() {
     return (
       <>
         <div className="head"><div><p className="crumb"><Link href="/blobs/">Blobs</Link> › {via.text.slice(0, 10)}…</p><h1>{none && !unasked ? (other.asking ? "Loading…" : other.href ? "Not on this network" : "Not indexed yet") : unasked || via.kind === "bad" || hit?.error ? "Blob" : "Loading…"}</h1></div></div>
-        <StatusLine meta={meta} metaError={metaErr} snap={null} client={{ error: hit?.error ?? null, fetchedAt: hit && !hit.error ? hit.at : null }} />
+        <StatusLine meta={meta} metaError={metaErr} snap={null} client={{ error: hit?.error ?? null, fetchedAt: hit && !hit.error ? hit.at : null, status: hit?.unanswered ? 0 : undefined }} />
         {via.kind === "bad" && <p className="notice"><span className="mono">{shortMid(via.text, 10, 6)}</span> is not a {name}: {via.of === "id" ? "the client's blob ID is a version byte, 0, then the 32-byte commitment, in base64, or 66 hex characters" : "one is 64 hex characters"}.</p>}
         {other.href && <p className="elsewhere"><OnOther href={other.href} /></p>}
         {none && !other.asking && !other.href && (via.kind === "tx"

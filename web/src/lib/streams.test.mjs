@@ -117,7 +117,8 @@ test("a stream with no interval asks again after a failure, until it is answered
   answer(path, { throws: "connection refused" }, ok());
   const s = watch(path, 0);
   await settle();
-  assert.equal(s.seen.at(-1).status, 0);
+  // no answer at all is the connection's, not the API's: no error on screen, still loading
+  assert.equal(s.seen.at(-1)?.error ?? null, null);
   await pass(2000);
   assert.equal(count(path), 2);
   assert.equal(s.seen.at(-1).error, null);
@@ -125,6 +126,25 @@ test("a stream with no interval asks again after a failure, until it is answered
   await pass(600000);
   assert.equal(count(path), 2);
   s.stop();
+});
+
+test("no answer at all keeps what is on screen, without an error, and asks again the moment another answer comes", async () => {
+  const a = "/v1/conn-a", b = "/v1/conn-b";
+  answer(a, ok({ v: 1 }), { throws: "Failed to fetch" }, ok({ v: 2 }));
+  const s = watch(a, 30000);
+  await settle();
+  await pass(30000);
+  assert.equal(count(a), 2);
+  assert.deepEqual(s.seen.at(-1).data, { v: 1 });
+  assert.equal(s.seen.at(-1).error, null, "the connection's failure is no error on screen");
+  // another stream is answered well before a's back-off (2 s) is over: a asks at once
+  answer(b, ok());
+  const t = watch(b, 30000);
+  await settle();
+  assert.equal(count(a), 3);
+  assert.deepEqual(s.seen.at(-1).data, { v: 2 });
+  s.stop();
+  t.stop();
 });
 
 test("a refusal (429) backs off past a fast interval and waits out its Retry-After", async () => {

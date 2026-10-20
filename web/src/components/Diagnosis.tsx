@@ -67,7 +67,7 @@ export function diagnose(v: ValidatorDetail, c: EndpointCheck | undefined, decid
   const [name, port] = split(v.host);
   const host = v.host;
   if (v.reachable === null) {
-    return { tone: "none", title: "Registered, not checked yet", text: `${host} is registered; the first check runs within five minutes.` };
+    return { tone: "none", title: "Registered, not checked yet", text: `${host} is registered; the first check runs within about a minute.` };
   }
   if (v.reachable === false) {
     // The newest heartbeat, when it is about the host registered now. A check

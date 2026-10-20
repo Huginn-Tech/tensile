@@ -43,6 +43,7 @@ func main() {
 		dnsTO    = flag.Duration("dns-timeout", 5*time.Second, "")
 		tcpTO    = flag.Duration("tcp-timeout", 5*time.Second, "")
 		tlsTO    = flag.Duration("tls-timeout", 10*time.Second, "")
+		newEvery = flag.Duration("new-every", 30*time.Second, "how often, between rounds, to read the registry for an endpoint registered or moved since the last read, which is dialled then rather than at the next round (0 = only at rounds)")
 		parallel = flag.Int("parallel", 16, "handshakes in flight at once; one TLS handshake per endpoint per round either way")
 		logLines = flag.Int("log-ring", 300, "log lines kept in memory for the crash dump")
 	)
@@ -89,42 +90,13 @@ func main() {
 	// a few of these old.
 	st.Set(status.CadenceKey, int((*interval+2*time.Minute)/time.Second))
 
-	// A round the chain side refuses writes nothing to reachability.jsonl:
-	// there is no validator to attribute a row to. The status file is where
-	// the failure goes, dated, so the gap in the file has an explanation.
-	inactiveLogged := false
-	round := func() {
-		chainID, tip, err := chain.Status(ctx)
-		if err != nil {
-			log.Printf("status: %v", err)
-			st.Error(fmt.Sprintf("status: %v", err))
-			return
-		}
-		provs, err := chain.BondedFibreProviders(ctx)
-		if err != nil {
-			if scan.IsModuleInactive(err) {
-				// Before the chain runs app version 10 there is no
-				// registry to dial: a round with nothing to do, not a
-				// failure. The scanner treats the same answer the same
-				// way, and the site says Fibre is not live; a "degraded"
-				// banner over that would contradict it.
-				if !inactiveLogged {
-					log.Printf("x/valaddr is not active on this chain yet (%v); nothing to dial until the v10 upgrade, checking every round", err)
-					inactiveLogged = true
-				}
-				st.OK()
-				return
-			}
-			log.Printf("providers: %v", err)
-			st.Error(fmt.Sprintf("providers: %v", err))
-			return
-		}
-		inactiveLogged = false
+	// dial runs the handshakes of provs at tip and appends each measurement
+	// to reachability.jsonl; it returns how many it wrote and how many of
+	// those were reachable. Only the read of the validator set can fail it.
+	dial := func(chainID string, tip int64, provs []scan.FibreProvider) (n, ok int, err error) {
 		members, err := chain.ValidatorSet(ctx, tip)
 		if err != nil {
-			log.Printf("validator set h=%d: %v", tip, err)
-			st.Error(fmt.Sprintf("validator set: %v", err))
-			return
+			return 0, 0, fmt.Errorf("validator set h=%d: %w", tip, err)
 		}
 		keyByHex := map[string]ed25519.PublicKey{}
 		for _, m := range members {
@@ -142,10 +114,9 @@ func main() {
 		// after; a half record a crash or a full disk left is cut when the
 		// next run opens the file (openOutput).
 		var (
-			mu    sync.Mutex
-			wg    sync.WaitGroup
-			sem   = make(chan struct{}, *parallel)
-			n, ok int
+			mu  sync.Mutex
+			wg  sync.WaitGroup
+			sem = make(chan struct{}, *parallel)
 		)
 		for _, pr := range provs {
 			if ctx.Err() != nil {
@@ -195,6 +166,51 @@ func main() {
 			}(in, pr.ConsAddressBech32[:20], pr.Host)
 		}
 		wg.Wait()
+		return n, ok, nil
+	}
+
+	// the registry as the heartbeat last dialled it, each provider's host by
+	// its consensus address; nil until the first round has dialled it
+	var known map[string]string
+
+	// A round the chain side refuses writes nothing to reachability.jsonl:
+	// there is no validator to attribute a row to. The status file is where
+	// the failure goes, dated, so the gap in the file has an explanation.
+	inactiveLogged := false
+	round := func() {
+		chainID, tip, err := chain.Status(ctx)
+		if err != nil {
+			log.Printf("status: %v", err)
+			st.Error(fmt.Sprintf("status: %v", err))
+			return
+		}
+		provs, err := chain.BondedFibreProviders(ctx)
+		if err != nil {
+			if scan.IsModuleInactive(err) {
+				// Before the chain runs app version 10 there is no
+				// registry to dial: a round with nothing to do, not a
+				// failure. The scanner treats the same answer the same
+				// way, and the site says Fibre is not live; a "degraded"
+				// banner over that would contradict it.
+				if !inactiveLogged {
+					log.Printf("x/valaddr is not active on this chain yet (%v); nothing to dial until the v10 upgrade, checking every round", err)
+					inactiveLogged = true
+				}
+				st.OK()
+				return
+			}
+			log.Printf("providers: %v", err)
+			st.Error(fmt.Sprintf("providers: %v", err))
+			return
+		}
+		inactiveLogged = false
+		n, ok, err := dial(chainID, tip, provs)
+		if err != nil {
+			log.Printf("%v", err)
+			st.Error(err.Error())
+			return
+		}
+		known = hostsOf(provs)
 
 		log.Printf("round done: h=%d registered=%d probed=%d reachable=%d", tip, len(provs), n, ok)
 		st.OK()
@@ -203,12 +219,54 @@ func main() {
 		st.Set("reachable", ok)
 	}
 
+	// A Fibre provider that registers, or moves to another host, is dialled
+	// as soon as the registry shows it rather than at the next round, up to
+	// an -interval later: between rounds the registry is read every
+	// -new-every, and only the endpoints not as the last read had them are
+	// dialled. Their rows are like a round's, at the time they were dialled.
+	// A read or a dial that fails is left to the next read, and to the
+	// round, which reports failures.
+	fresh := func() {
+		if known == nil {
+			return
+		}
+		provs, err := chain.BondedFibreProviders(ctx)
+		if err != nil {
+			return
+		}
+		var add []scan.FibreProvider
+		for _, pr := range provs {
+			if known[pr.ConsAddressBech32] != pr.Host {
+				add = append(add, pr)
+			}
+		}
+		if len(add) > 0 {
+			chainID, tip, err := chain.Status(ctx)
+			if err != nil {
+				return
+			}
+			n, ok, err := dial(chainID, tip, add)
+			if err != nil {
+				log.Printf("new endpoints: %v", err)
+				return
+			}
+			log.Printf("new endpoints: h=%d probed=%d reachable=%d", tip, n, ok)
+		}
+		known = hostsOf(provs)
+	}
+
 	round()
 	if *once {
 		return
 	}
 	tick := time.NewTicker(*interval)
 	defer tick.Stop()
+	var freshTick <-chan time.Time
+	if *newEvery > 0 {
+		t := time.NewTicker(*newEvery)
+		defer t.Stop()
+		freshTick = t.C
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -217,8 +275,20 @@ func main() {
 			return
 		case <-tick.C:
 			round()
+		case <-freshTick:
+			fresh()
 		}
 	}
+}
+
+// hostsOf is a read of the registry as the heartbeat keeps it: each
+// provider's host by its consensus address.
+func hostsOf(provs []scan.FibreProvider) map[string]string {
+	m := make(map[string]string, len(provs))
+	for _, pr := range provs {
+		m[pr.ConsAddressBech32] = pr.Host
+	}
+	return m
 }
 
 // openOutput opens the heartbeat's file for append, after cutting off it a

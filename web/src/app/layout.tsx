@@ -4,6 +4,7 @@ import "./fonts.css";
 import "./globals.css";
 import { Header, Footer } from "@/components/Chrome";
 import Launch from "@/components/Launch";
+import Reconnecting from "@/components/Reconnecting";
 import { PREVIEW_IMAGE_PATH, SITE_NAME, SITE_URL } from "@/lib/site";
 
 // Fonts are served from this site's own origin (fonts.css, public/fonts): a
@@ -53,6 +54,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {children}
             <Footer />
           </main>
+          <Reconnecting />
         </Launch>
       </body>
     </html>

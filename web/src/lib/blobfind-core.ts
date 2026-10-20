@@ -18,6 +18,8 @@ export type Found = {
   partial: string | null;
   /** nothing was found and a lookup failed, for this reason: nothing is known either way */
   error: string | null;
+  /** every lookup that failed got no answer at all: the connection's (lib/api.ts, reached and lost), not the API's */
+  unanswered: boolean;
   /** the transaction failed in a block: what the chain returned; set only with no rows */
   failedTx: FailedTx | null;
   /** when the answers came in */
@@ -29,16 +31,16 @@ type List = { blobs?: Blob[]; total?: number; commitment?: string; tx?: string; 
 type Get = (url: string, init: RequestInit) => Promise<Pick<Response, "ok" | "status" | "json">>;
 
 /** one lookup: its blobs, or "none" (a 404, or a 400 for a value the route does not take), or an error */
-async function ask(get: Get, url: string): Promise<{ data: unknown } | { none: true } | { error: string }> {
+async function ask(get: Get, url: string): Promise<{ data: unknown } | { none: true } | { error: string; unanswered: boolean }> {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), 20000);
   try {
     const r = await get(url, { cache: "no-store", signal: ctl.signal });
     if (r.status === 404 || r.status === 400) return { none: true };
-    if (!r.ok) return { error: String(r.status) };
+    if (!r.ok) return { error: String(r.status), unanswered: false };
     return { data: await r.json() };
   } catch (e) {
-    return { error: e instanceof DOMException && e.name === "AbortError" ? "no answer within 20 s" : e instanceof Error ? e.message : String(e) };
+    return { error: e instanceof DOMException && e.name === "AbortError" ? "no answer within 20 s" : e instanceof Error ? e.message : String(e), unanswered: true };
   } finally {
     clearTimeout(t);
   }
@@ -65,9 +67,10 @@ export async function findBlobs(key: BlobKey, opts: { as?: MatchBy[]; limit?: nu
   let more = 0, noTx = false;
   let failedTx: FailedTx | null = null;
   const errors: string[] = [];
+  let unanswered = true;
   want.forEach((w, i) => {
     const a = answers[i];
-    if ("error" in a) { errors.push(a.error); return; }
+    if ("error" in a) { errors.push(a.error); unanswered &&= a.unanswered; return; }
     if ("none" in a) return;
     let blobs: Blob[] = [];
     if (w === "promise") {
@@ -90,7 +93,7 @@ export async function findBlobs(key: BlobKey, opts: { as?: MatchBy[]; limit?: nu
   rows.sort((a, b) => b.settlement_height - a.settlement_height || b.settlement_tx_index - a.settlement_tx_index);
   const failed = errors[0] ?? null;
   return {
-    rows, total: rows.length + more, by, noTx, partial: failed,
+    rows, total: rows.length + more, by, noTx, partial: failed, unanswered: errors.length > 0 && unanswered,
     // a failed transaction is known: a lookup that failed beside it leaves nothing open
     error: rows.length === 0 && !failedTx ? failed : null,
     failedTx: rows.length === 0 ? failedTx : null,

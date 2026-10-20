@@ -4057,6 +4057,9 @@ func (s *Server) reconstructableCount(ctx context.Context, win Window) (reconstr
 // not ask for one, and the size the startup warm-up fills the verdict cache to.
 const blobPageDefault = 50
 
+// maxEndorsersPage is the most blobs a page of /v1/blobs?endorsers=1 holds.
+const maxEndorsersPage = 50
+
 // The commitment, tx and namespace filters of /v1/blobs, kept as constants
 // so the plan test reads the conditions the route runs. blobByTxSQL takes
 // the hash twice: in lower case, as the scanner writes it, and in upper, as
@@ -4193,6 +4196,13 @@ func (s *Server) handleBlobs(w http.ResponseWriter, r *http.Request) {
 		withEndorsers = true
 	default:
 		writeErr(w, 400, "endorsers must be 0 or 1")
+		return
+	}
+	// With its endorsers a blob carries up to one address per validator, so
+	// a page of them is held to maxEndorsersPage blobs rather than 500: the
+	// overview asks for at most its grid's 50.
+	if withEndorsers && limit > maxEndorsersPage {
+		writeErr(w, 400, fmt.Sprintf("with endorsers=1, limit must be an integer between 1 and %d", maxEndorsersPage))
 		return
 	}
 	// include_failed: the failed blob payments among the blobs, in their

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { API_BASE } from "@/lib/api";
+import { API_BASE, onBack, reach } from "@/lib/api";
 import type { BlobKey } from "@/lib/blobkey";
 import { ALL, findBlobs, isShort, type Found, type MatchBy } from "@/lib/blobfind-core";
 
@@ -29,7 +29,7 @@ export function useFind(key: BlobKey | null, opts: { as?: MatchBy[]; limit?: num
     const run = async () => {
       clearTimeout(t);
       busy = true;
-      const found = await findBlobs(key, { as, limit: opts.limit ?? 25, base: API_BASE, get: (url, init) => fetch(url, init) });
+      const found = await findBlobs(key, { as, limit: opts.limit ?? 25, base: API_BASE, get: reach });
       busy = false;
       if (!on) return;
       last = found;
@@ -40,7 +40,9 @@ export function useFind(key: BlobKey | null, opts: { as?: MatchBy[]; limit?: num
     };
     live.current = { sig, since: Date.now(), ask: () => { if (busy) again = true; else if (last && isShort(last)) run(); } };
     run();
-    return () => { on = false; clearTimeout(t); live.current = null; };
+    // the connection back after a lookup that got no answer: ask again now
+    const offBack = onBack(() => { if (last?.unanswered && !busy) run(); });
+    return () => { on = false; clearTimeout(t); live.current = null; offBack(); };
   }, [sig]); // eslint-disable-line react-hooks/exhaustive-deps
   // a new value of retryOn for the identifier asked: the first one seen for it is where it started, not a change
   const retryOn = opts.retryOn ?? null;
