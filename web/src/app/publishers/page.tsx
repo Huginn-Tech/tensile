@@ -103,8 +103,9 @@ function Page() {
 
   const pubs = list?.publishers ?? [];
   // The namespaces and the newest blob, where the API gives them; an API from before them gives the newest escrow
-  // movement of any kind, and the list shows that as it did.
-  const blobs = pubs.some((p) => p.last_settlement_at !== undefined);
+  // movement of any kind, and the list shows that as it did. Until the list says which, and for an empty one, the
+  // columns are the current API's, so they do not change when it comes.
+  const blobs = !list || pubs.length === 0 || pubs.some((p) => p.last_settlement_at !== undefined);
   // the API's order is by fees, then blob size; any other keeps an account with no blobs last (in the period, or by
   // the newest blob ever when that is the order), unless the order is the escrow's, which is a balance now whatever
   // the period

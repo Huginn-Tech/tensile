@@ -76,6 +76,18 @@ export type Feed = {
 };
 const empty = (path: string): Feed => ({ path, rows: [], total: 0, failed: 0, loaded: false, error: null, refused: false, unanswered: false, lastNewAt: 0 });
 
+/**
+ * The last answer of each page of a list, kept for a few minutes after the list closed (at most 20, the oldest dropped
+ * first): a list opened again (Blobs and Publishers, back and forth) shows its rows at once while it reads them again,
+ * instead of its placeholders and then the same rows.
+ */
+const KEPT_MS = 5 * 60000, KEPT_MAX = 20;
+const kept = new Map<string, { at: number; f: Feed }>();
+const keptFeed = (path: string): Feed | null => {
+  const k = kept.get(path);
+  return k && Date.now() - k.at < KEPT_MS ? k.f : null;
+};
+
 /** a row's key: a blob's promise hash; a failed payment, which settled no blob, its place (its block, its index in it) */
 const keyOf = (r: ListRow) => (isFailed(r) ? `f${r.settlement_height}:${r.settlement_tx_index}` : r.promise_hash);
 
@@ -108,7 +120,7 @@ async function readPage(path: string): Promise<{ blobs: ListRow[]; total: number
  * an error. skew: the observer's clock minus the reader's.
  */
 export function useLedger(path: string, live: boolean, height: number | undefined, skew: number): Feed {
-  const [feed, setFeed] = useState<Feed>(() => empty(path));
+  const [feed, setFeed] = useState<Feed>(() => keptFeed(path) ?? empty(path));
   const cur = useRef(feed);
   const busy = useRef(false);
   const last = useRef(0);
@@ -120,7 +132,15 @@ export function useLedger(path: string, live: boolean, height: number | undefine
   const skewRef = useRef(skew);
   skewRef.current = skew;
 
-  const apply = useCallback((f: Feed) => { cur.current = f; setFeed(f); }, []);
+  const apply = useCallback((f: Feed) => {
+    cur.current = f;
+    setFeed(f);
+    if (f.loaded && !f.error) {
+      kept.delete(f.path);
+      kept.set(f.path, { at: Date.now(), f });
+      if (kept.size > KEPT_MAX) kept.delete(kept.keys().next().value as string);
+    }
+  }, []);
   const gap = () => {
     const f = cur.current;
     return f.error || (f.loaded && Date.now() + skewRef.current - f.lastNewAt > IDLE_AFTER_MS) ? SLOW_MS : FAST_MS;
@@ -162,10 +182,10 @@ export function useLedger(path: string, live: boolean, height: number | undefine
     else later.current = window.setTimeout(read, wait);
   }, [read]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // a new page or filter: nothing of the old one stands for it, and it is read at once
+  // a new page or filter: nothing of the old one stands for it (its own kept answer may), and it is read at once
   useEffect(() => {
     window.clearTimeout(later.current);
-    apply(empty(path));
+    apply(keptFeed(path) ?? empty(path));
     last.current = 0;
     read();
   }, [path, apply, read]);

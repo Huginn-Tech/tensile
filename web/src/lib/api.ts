@@ -950,6 +950,26 @@ type Sub = {
 };
 const streams = new Map<string, Sub>();
 
+/**
+ * The last good answer of each stream, kept for a few minutes after its last page closed (at most KEPT_MAX of them,
+ * the oldest dropped first): a page opened again (Blobs and Publishers, back and forth) shows what it showed, at once,
+ * while its stream asks again, instead of its loading frame and then the same figures. Its fetchedAt stays the time it
+ * was read.
+ */
+const KEPT_MS = 5 * 60000, KEPT_MAX = 40;
+const kept = new Map<string, Fetch<unknown>>();
+function keep(key: string, f: Fetch<unknown>) {
+  if (f.data === null || f.error || !f.fetchedAt) return;
+  kept.delete(key);
+  kept.set(key, { data: f.data, error: null, loading: false, fetchedAt: f.fetchedAt });
+  if (kept.size > KEPT_MAX) kept.delete(kept.keys().next().value as string);
+}
+/** a stream's kept answer, while it is recent */
+function keptAnswer(key: string): Fetch<unknown> | null {
+  const f = kept.get(key);
+  return f && Date.now() - Date.parse(f.fetchedAt!) < KEPT_MS ? f : null;
+}
+
 /** how soon to ask again for a figure being computed: what the API says, kept between 2 and 30 s */
 function computingRetryMs(seconds: unknown): number {
   const s = typeof seconds === "number" && isFinite(seconds) ? seconds : 5;
@@ -1101,7 +1121,7 @@ async function fetchOnce(path: string): Promise<Fetch<unknown> & { retryMs?: num
 export function subscribe(key: string, path: string, refreshMs: number, fn: (f: Fetch<unknown>) => void): () => void {
   let st = streams.get(key);
   if (!st) {
-    const own: Sub = { subs: new Set(), timer: null, last: { data: null, error: null, loading: true, fetchedAt: null }, load: () => {}, busy: 0, again: false, fails: 0, due: false };
+    const own: Sub = { subs: new Set(), timer: null, last: keptAnswer(key) ?? { data: null, error: null, loading: true, fetchedAt: null }, load: () => {}, busy: 0, again: false, fails: 0, due: false };
     st = own;
     streams.set(key, st);
     watchVisibility();
@@ -1152,6 +1172,7 @@ export function subscribe(key: string, path: string, refreshMs: number, fn: (f: 
         else own.fails = 0;
       }
       const out = own.last;
+      keep(key, out);
       own.subs.forEach((s) => s(out));
       if (own.again && own.busy === 0) {
         own.again = false;
@@ -1162,13 +1183,13 @@ export function subscribe(key: string, path: string, refreshMs: number, fn: (f: 
     };
     own.load = load;
     load();
-  } else if (!st.last.loading || st.last.computing) {
-    // A later subscriber gets the current value at once. So does one that
-    // arrives while the figure is being computed with nothing to show yet:
-    // that state is still "loading", and the subscriber would otherwise hear
-    // nothing of it until the next retry, seconds later.
-    fn(st.last);
   }
+  // A later subscriber gets the current value at once, and so does the first
+  // one of a stream that starts from a kept answer. So does one that arrives
+  // while the figure is being computed with nothing to show yet: that state is
+  // still "loading", and the subscriber would otherwise hear nothing of it
+  // until the next retry, seconds later.
+  if (!st.last.loading || st.last.computing) fn(st.last);
   st.subs.add(fn);
   return () => {
     const cur = streams.get(key);
@@ -1203,7 +1224,8 @@ export function askAgain(path: string, refreshMs = 30000): void {
 }
 
 export function useApi<T>(path: string | null, refreshMs = 30000): Fetch<T> {
-  const [state, setState] = useState<Fetch<T>>({ data: null, error: null, loading: !!path, fetchedAt: null });
+  // a page opened again starts from its stream's kept answer (see kept), so its first frame is the one it closed on
+  const [state, setState] = useState<Fetch<T>>(() => (path ? (keptAnswer(`${refreshMs}|${path}`) as Fetch<T> | null) : null) ?? { data: null, error: null, loading: !!path, fetchedAt: null });
   useEffect(() => {
     if (!path) return;
     return subscribe(`${refreshMs}|${path}`, path, refreshMs, (f) => setState(f as Fetch<T>));

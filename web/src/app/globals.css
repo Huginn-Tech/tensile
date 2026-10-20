@@ -163,7 +163,9 @@
 
 /* ------------------------------------------------------------------ base --- */
 * { box-sizing: border-box; }
-html { font-size: 16px; }
+/* the scrollbar's room is kept whether the page scrolls or not, so a page that grows or shrinks as it loads, or the
+   next page, never moves sideways */
+html { font-size: 16px; scrollbar-gutter: stable; }
 body {
   margin: 0; background: var(--paper); color: var(--text);
   font-family: var(--sans); font-size: var(--t-body); line-height: 1.45;
@@ -275,8 +277,9 @@ button { font: inherit; color: inherit; }
 .net.menu summary { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; }
 .net.menu summary::-webkit-details-marker { display: none; }
 .net.menu summary::after { content: ""; width: 6px; height: 6px; border-right: 1.5px solid var(--text-2); border-bottom: 1.5px solid var(--text-2); transform: translateY(-2px) rotate(45deg); margin-left: 2px; }
-.net.menu .list { position: absolute; right: 0; top: 36px; z-index: 30; min-width: 160px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px; display: grid; gap: 2px; box-shadow: 0 8px 24px rgb(0 0 0 / .12); }
-.net.menu .list a, .net.menu .list span { display: block; padding: 6px 10px; border-radius: 6px; color: var(--text); font-weight: 400; text-align: left; }
+/* right under the chip, as wide as it (wider only for a longer name, then centred on it), each mark under the chip's */
+.net.menu .list { position: absolute; left: 50%; top: 36px; z-index: 30; transform: translateX(-50%); width: max-content; min-width: calc(100% + 2px); background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 4px; display: grid; gap: 2px; box-shadow: 0 8px 24px rgb(0 0 0 / .12); }
+.net.menu .list a, .net.menu .list span { display: block; padding: 6px 8px; border-radius: 6px; color: var(--text); font-weight: 400; text-align: left; }
 .net.menu .list a:hover { background: var(--wash); text-decoration: none; }
 .net.menu .list a { display: flex; align-items: center; gap: 8px; }
 .net.menu .list span { color: var(--text); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -1062,14 +1065,10 @@ body { background: var(--canvas); }
    of it stops under prefers-reduced-motion.
    ========================================================================== */
 .deck {
-  /* the sea is the panel; land and badges are tokens so the two themes are a handful of lines. The land's grain is
-     two tiles of light and dark specks laid on its shade at these strengths; its coast is a hairline, its shadow short */
+  /* the sea is the panel; land and badges are tokens so the two themes are a handful of lines. The land is one smooth
+     shade; zoomed in, a faint seam parts the countries */
   --cm-land: #dde3e5;
-  --cm-coast: #c2cacd;
-  --cm-shade: rgb(16 48 56 / .16);
   --cm-seam: rgb(255 255 255 / .6);
-  --cm-grain-hi: .1;
-  --cm-grain-lo: .03;
   /* a place: a body, a ring in its state's colour and a figure; the open one filled; a lone host a dot */
   --cm-badge: var(--accent);
   --cm-badge-body: #e3f1f2;
@@ -1109,11 +1108,7 @@ body { background: var(--canvas); }
 }
 :root[data-theme="dark"] .deck {
   --cm-land: #263035;
-  --cm-coast: #3c4d54;
-  --cm-shade: rgb(0 0 0 / .6);
   --cm-seam: rgb(9 14 17 / .45);
-  --cm-grain-hi: .11;
-  --cm-grain-lo: .28;
   --cm-badge: #33b3bf;
   --cm-badge-body: #0e353b;
   --cm-badge-ink: #e9fafb;
@@ -1159,25 +1154,14 @@ body { background: var(--canvas); }
   mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent), linear-gradient(180deg, transparent, #000 9%, #000 80%, transparent);
   mask-composite: intersect;
 }
-.cm-land, .cm-mat { display: block; width: 100%; height: 100%; }
+/* the land fades in once, when the list is in and its view is known (HostMap.tsx); on a layer of its own, so it is not
+   drawn again with every change elsewhere on the page */
+.cm-land { display: block; width: 100%; height: 100%; will-change: transform; animation: cm-in 240ms ease-out; }
 /* only the land, in one shade: no grid, no outline of the world, no country set apart by colour. Each country is
    stroked in its own fill, so the seams where two outlines meet do not show as hairlines; zoomed in, a faint seam
    parts the countries */
-.cm-land path, .cm-mat .fill path { fill: var(--cm-land); stroke: var(--cm-land); stroke-width: .6; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-.cm-atlas.near .cm-land path, .cm-atlas.near .cm-mat .fill path { stroke: var(--cm-seam); }
-/* the land's material, over it while the map is at rest (HostMap.tsx): its grain, a coastline hairline and a short
-   shadow below it; it fades in where a move lands. On a layer of its own, so its patterned land is drawn once and not
-   again with every change elsewhere on the page (without it Chrome redraws it all the time: a third of a core at rest) */
-.cm-mat { position: absolute; inset: 0; pointer-events: none; will-change: transform; animation: cm-in 180ms ease-out; transition: opacity 180ms ease-out; }
-.cm-mat.moving { visibility: hidden; opacity: 0; transition: none; }
-.cm-mat .fill path { fill: url(#cm-grain); }
-.cm-mat .coast path { fill: none; stroke: var(--cm-coast); stroke-width: 1.6; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-.cm-mat .shade path { fill: var(--cm-shade); }
-.cm-grain rect { fill: var(--cm-land); }
-.cm-grain .hi { opacity: var(--cm-grain-hi); }
-.cm-grain .lo { opacity: var(--cm-grain-lo); }
-.cm-atlas.near .cm-grain .hi { opacity: calc(var(--cm-grain-hi) * .6); }
-.cm-atlas.near .cm-grain .lo { opacity: calc(var(--cm-grain-lo) * .6); }
+.cm-land path { fill: var(--cm-land); stroke: var(--cm-land); stroke-width: .6; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.cm-atlas.near .cm-land path { stroke: var(--cm-seam); }
 
 /* the map's name and the key of Tensile's check, in its top-left corner; the view buttons in the other */
 .cm-title { position: absolute; left: 24px; top: 18px; z-index: 6; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px; pointer-events: none; }
@@ -1655,8 +1639,8 @@ a.rb-c:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; z-
   .deck-row > .rb { padding: 16px 10px 18px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cm-badge, .cm-mat, .cm-tools button, .rb-c, .ov-links a span { transition: none; }
-  .cm-pop, .cm-ev, .cm-mat, .cm-ev-dot.pop { animation: none; }
+  .cm-badge, .cm-tools button, .rb-c, .ov-links a span { transition: none; }
+  .cm-pop, .cm-ev, .cm-land, .cm-ev-dot.pop { animation: none; }
   .cm-ev-who, .cm-ev-who > span { transition: none; }
   /* no bursts: the pill says each beat, the map holds still */
   .cm-fx, .cm-trace { display: none; }
