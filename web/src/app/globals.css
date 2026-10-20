@@ -3679,6 +3679,8 @@ a.rb-c::after { inset: 0 calc(var(--rb-gap) / -2); }
 .vlist .tools .pick-v > .off { display: none; }
 .vlist .tools .pick .list { left: auto; right: -1px; }
 .vlist .tools .search input::placeholder { font-size: 12.5px; }
+/* an empty field keeps no room for the clear button it does not show, so the placeholder has the field's width */
+.vlist .tools .search input:placeholder-shown::-webkit-search-cancel-button { display: none; }
 .vlist > .tablewrap.framed { grid-area: 4 / 1 / 5 / 3; position: relative; overflow: visible; margin-top: 4px; border-radius: 14px; }
 
 /* the table becomes a list: one row a validator, read whole on a phone */
@@ -3913,13 +3915,19 @@ a.rb-c::after { inset: 0 calc(var(--rb-gap) / -2); }
 .vd-oc-lead .vd-ocf:not(.lead) .vd-fv { margin-top: 4px; }
 }
 
-/* a narrow phone: the Blobs list's tabs and its publisher filter a little tighter, so both keep one line; the header's
+/* a narrow phone: the Blobs list's tabs and its publisher filter a little tighter, so both keep one line, and the two
+   lists' search fields a little roomier, so their placeholders keep every word down to 360 px; the header's
    tabs a little tighter, so the last of them stays clear of the theme button, and the block a step closer to the network;
    "settlements on record" on two lines, as on a wider screen, so both figures keep clear of the line between them */
 @media (max-width: 379px) {
   .lg-list:not(.pb-list):not(.vd-list) > .list-head { column-gap: 6px; }
-  .lg-list:not(.pb-list):not(.vd-list) > .list-head > .tabs button { padding: 0 10px; }
-  .lg-list:not(.pb-list):not(.vd-list) .lg-tools > .lg-pick:nth-last-child(2):not(.on) > .lg-chip { padding: 0 10px; }
+  .lg-list:not(.pb-list):not(.vd-list) > .list-head > .tabs button { padding: 0 8px; }
+  .lg-list:not(.pb-list):not(.vd-list) .lg-tools > .lg-pick:nth-last-child(2):not(.on) > .lg-chip { padding: 0 9px; }
+  .lg-findbox { gap: 6px; padding: 0 7px 0 10px; }
+  .lg-findbox input::placeholder { font-size: 12px; }
+  .vlist .tools > .search { gap: 6px; padding: 0 8px 0 10px; }
+  .vlist .tools .pick > button { padding: 0 24px 0 11px; }
+  .vlist .tools .select::after { right: 10px; }
   .top nav { gap: 0; }
   .top nav a, .top nav a:hover { padding: 0 10px; }
   .top .blocktick { margin-right: 4px; }
