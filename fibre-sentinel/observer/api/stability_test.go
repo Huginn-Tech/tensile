@@ -135,8 +135,9 @@ func stabilityFixtureStore(t *testing.T) (*httptest.Server, *store.Store) {
 			m.DNS.OK = true
 			m.TCP.OK, m.TLS.OK = up, up
 			// v2's endpoint answers throughout but its endorsement lapsed for
-			// the two heartbeats before it went down, so identity validity and
-			// reachability are different measurements of different things.
+			// the two heartbeats before it went down: identity validity is over
+			// the handshakes and reachability over every heartbeat, so the two
+			// come out differently.
 			m.Identity.OK = up && !(addr == "v2" && i >= 5)
 			if up {
 				m.Outcome = probe.OutcomeReachable
@@ -272,9 +273,12 @@ func TestReachabilityHistoryIsPublishedPerValidator(t *testing.T) {
 		t.Errorf("v1 last_unreachable_at = %v, want null: it never failed a heartbeat", *v1.LastDown)
 	}
 
+	// v2 completed TLS on seven heartbeats, but on two of them with a
+	// certificate no longer endorsed, which a publisher rejects as surely as
+	// no answer: 5 of its 10 count as reached.
 	v2 := vals["v2"]
-	if v2.Uptime.Num != 7 || v2.Uptime.Den != 10 {
-		t.Errorf("v2 reachability_window = %d/%d, want 7/10", v2.Uptime.Num, v2.Uptime.Den)
+	if v2.Uptime.Num != 5 || v2.Uptime.Den != 10 {
+		t.Errorf("v2 reachability_window = %d/%d, want 5/10", v2.Uptime.Num, v2.Uptime.Den)
 	}
 	if v2.LastDown == nil {
 		t.Error("v2 last_unreachable_at is null, but three of its heartbeats did not complete TLS")
@@ -288,8 +292,9 @@ func TestReachabilityHistoryIsPublishedPerValidator(t *testing.T) {
 	}
 
 	// Network-wide, the same two questions have different answers: one
-	// endpoint is down right now, and 17 of 20 heartbeats completed over the
-	// window. A census of the present cannot say how the week went.
+	// endpoint is down right now, and 15 of 20 heartbeats reached it with an
+	// endorsed certificate over the window. A census of the present cannot say
+	// how the week went.
 	var net struct {
 		Window rateJSON `json:"reachability_window"`
 		Now    rateJSON `json:"reachability"`
@@ -297,8 +302,8 @@ func TestReachabilityHistoryIsPublishedPerValidator(t *testing.T) {
 	if code := get(t, ts, "/v1/network?window=all", &net); code != 200 {
 		t.Fatalf("network: %d", code)
 	}
-	if net.Window.Num != 17 || net.Window.Den != 20 {
-		t.Errorf("network reachability_window = %d/%d, want 17/20", net.Window.Num, net.Window.Den)
+	if net.Window.Num != 15 || net.Window.Den != 20 {
+		t.Errorf("network reachability_window = %d/%d, want 15/20", net.Window.Num, net.Window.Den)
 	}
 	if net.Now.Num != 1 || net.Now.Den != 2 {
 		t.Errorf("network reachability = %d/%d, want 1/2: v2 is unreachable as of its newest evidence",

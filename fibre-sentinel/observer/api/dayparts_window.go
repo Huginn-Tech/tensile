@@ -511,6 +511,7 @@ type netRows struct {
 	byOutcome  map[string]int64
 	lat        hist
 	beats, up  int64
+	identUp    int64
 	validators map[string]bool
 }
 
@@ -535,6 +536,7 @@ func netRowsOf(m map[string]*rowAcc, ex excludeSet, lat hist) netRows {
 		}
 		n.beats += a.beats
 		n.up += a.up
+		n.identUp += a.identUp
 	}
 	return n
 }
@@ -1105,7 +1107,8 @@ func (a *rowAcc) fill(v *validatorRow) {
 		}
 	}
 	if a.beats > 0 {
-		v.Reachability = rate(a.up, a.beats)
+		// reached: TLS completed with a certificate its consensus key endorsed
+		v.Reachability = rate(a.identUp, a.beats)
 		v.IdentityValid = rate(a.identUp, a.up)
 		if a.lastDown != "" {
 			at := a.lastDown

@@ -222,14 +222,16 @@ export default function Methodology() {
             <p>Beside it, the network median: the median of the validators&rsquo; own rates, over those with at least 20 decided shards.</p>
           </Def>
 
-          <Def id="reachability" name="Reachability" say="The share of endpoint checks in the period that completed a TLS handshake with the validator’s registered Fibre endpoint.">
-            <Formula note="a check every five minutes">completed handshakes / checks</Formula>
+          <Def id="reachability" name="Reachability" say="The share of endpoint checks in the period that completed a TLS handshake with the validator’s registered Fibre endpoint, with a certificate the validator’s consensus key endorsed.">
+            <Formula note="a check every five minutes">handshakes with its certificate / checks</Formula>
             <Rules rows={[
               ["Counts", "Every check from the main location, failed ones included."],
               ["Not counted", "Checks from the second location, and a check that failed before it left Tensile."],
             ]} />
+            <p>A handshake that shows another key&rsquo;s certificate, or one whose endorsement has lapsed, counts as not reached: a publisher rejects it as surely as no answer.</p>
             <p>A check asks for no blob data, so reachability says nothing about serving rows, and it is not signing uptime.</p>
             <p id="reachable-now">The status shown now, reachable or unreachable, is the newest check, with two allowances. One failed check after a success still shows reachable; two in a row show unreachable. An endpoint the main location cannot reach shows reachable when the second location completed a handshake with it in the last 15 minutes. Neither allowance changes the percentage.</p>
+            <p id="wrong-certificate">An endpoint whose newest check answered without TLS, or with a certificate that is not this validator&rsquo;s or has lapsed, shows as a wrong certificate, in amber like an unreachable one, on the map, the providers dial and the validators&rsquo; filter.</p>
           </Def>
 
           <Def id="throughput" name="Throughput" say="The median download speed of the validator’s served shards of 2 MiB or more.">

@@ -1252,7 +1252,9 @@ type networkResponse struct {
 	ValidatorsProbed    int64    `json:"validators_probed"`
 	Reachability        Rate     `json:"reachability"` // endpoints whose latest heartbeat or probe reached TLS
 	// ReachabilityWindow is every reachability heartbeat in the window that
-	// completed TLS, over every heartbeat sent. Reachability above is a census
+	// completed TLS with a certificate the validator's consensus key
+	// endorsed, over every heartbeat sent: one a publisher rejects is no more
+	// use to it than no answer. Reachability above is a census
 	// of the endpoints right now; this is how the whole window went, which is
 	// the difference between "two are down" and "two have been down all week".
 	// Heartbeats are pooled, so a validator that registered mid-window
@@ -1834,18 +1836,18 @@ func (s *Server) previousWindow(ctx context.Context, win Window, ex excludeSet) 
 			return nil, err
 		}
 		n := netRowsOf(rw, excludeSet{}, lat)
-		p.Reachability = rate(n.up, n.beats)
+		p.Reachability = rate(n.identUp, n.beats)
 		p.LatencyP50, _ = n.lat.percentiles()
 		return p, nil
 	}
 	db := s.q(ctx)
-	var beats, beatsUp int64
+	var beats, beatsOK int64
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*),
-			COALESCE(SUM(CASE WHEN tcp_ok = 1 AND tls_ok = 1 THEN 1 ELSE 0 END), 0)
-		FROM reachability WHERE started_at >= ? AND started_at <= ? AND outcome <> 'PROBE_ERROR' AND +vantage = ?`, prev.startArg(), prev.endArg(), s.vantage).Scan(&beats, &beatsUp); err != nil {
+			COALESCE(SUM(CASE WHEN tcp_ok = 1 AND tls_ok = 1 AND identity_ok = 1 THEN 1 ELSE 0 END), 0)
+		FROM reachability WHERE started_at >= ? AND started_at <= ? AND outcome <> 'PROBE_ERROR' AND +vantage = ?`, prev.startArg(), prev.endArg(), s.vantage).Scan(&beats, &beatsOK); err != nil {
 		return nil, err
 	}
-	p.Reachability = rate(beatsUp, beats)
+	p.Reachability = rate(beatsOK, beats)
 	if p.LatencyP50, _, _, err = s.latencyWhere(ctx,
 		`started_at >= ? AND started_at <= ? AND assigned = 1 AND phase = 'in_window'`, prev.startArg(), prev.endArg()); err != nil {
 		return nil, err
@@ -2012,16 +2014,18 @@ func (s *Server) computeNetwork(ctx context.Context, win Window, ex excludeSet, 
 	// plus keeps the vantage term off reachability_vantage, which would
 	// otherwise be chosen for the equality and walk every row this observer
 	// ever wrote instead of the window's span of reachability_started.
-	var beats, beatsUp int64
+	// A heartbeat counts as reached when it completed TLS with a certificate
+	// the validator's consensus key endorsed (ReachabilityWindow).
+	var beats, beatsOK int64
 	if rn != nil {
-		beats, beatsUp = rn.beats, rn.up
+		beats, beatsOK = rn.beats, rn.identUp
 	} else if err := db.QueryRowContext(ctx, `SELECT COUNT(*),
-			COALESCE(SUM(CASE WHEN tcp_ok = 1 AND tls_ok = 1 THEN 1 ELSE 0 END), 0)
+			COALESCE(SUM(CASE WHEN tcp_ok = 1 AND tls_ok = 1 AND identity_ok = 1 THEN 1 ELSE 0 END), 0)
 		FROM reachability WHERE started_at >= ? AND started_at <= ? AND outcome <> 'PROBE_ERROR' AND +vantage = ?`+exv,
-		ex.args(win.startArg(), win.endArg(), s.vantage)...).Scan(&beats, &beatsUp); err != nil {
+		ex.args(win.startArg(), win.endArg(), s.vantage)...).Scan(&beats, &beatsOK); err != nil {
 		return nil, err
 	}
-	resp.ReachabilityWindow = rate(beatsUp, beats)
+	resp.ReachabilityWindow = rate(beatsOK, beats)
 
 	pubsDone := false
 	if e != nil && partsFor(win) {
@@ -2059,7 +2063,7 @@ func (s *Server) computeNetwork(ctx context.Context, win Window, ex excludeSet, 
 		resp.Gaps += rolled.Gaps
 		addRolledObligations(&resp.Obligations, rolled.Obligations)
 		resp.ByObligation = resp.Obligations.Rate
-		resp.ReachabilityWindow = rate(beatsUp+rolled.BeatsUp, beats+rolled.Beats)
+		resp.ReachabilityWindow = rate(beatsOK+rolled.IdentityUp, beats+rolled.Beats)
 		// validators probed: the raw set and the rolled set together
 		seen := map[string]bool{}
 		for a := range rolled.ProbesByVal {
@@ -2430,7 +2434,9 @@ type validatorRow struct {
 	ConfirmedFrom  string `json:"confirmed_from,omitempty"`
 	AlsoFailedFrom string `json:"also_failed_from,omitempty"`
 	// Reachability is how often this observer completed a TLS conversation with the
-	// endpoint over the window, from the reachability heartbeat: every
+	// endpoint over the window, with a certificate the validator's consensus
+	// key endorsed (one a publisher rejects counts as not reached), from the
+	// reachability heartbeat: every
 	// registered validator, every five minutes, whether or not it was assigned
 	// anything. It is the closest thing here to "is the Fibre service
 	// running", and unlike the Service rate its coverage does not depend on
@@ -2893,7 +2899,8 @@ func (s *Server) validatorRows(ctx context.Context, win Window, only string) ([]
 				return nil, err
 			}
 			v := get(addr)
-			v.Reachability = rate(up, seen)
+			// reached: TLS completed with a certificate its consensus key endorsed
+			v.Reachability = rate(ident, seen)
 			// Denominator is the heartbeats that reached TLS, not all of them: an
 			// unreachable endpoint presented no certificate, and counting that as
 			// an identity failure would report the same outage twice.
@@ -3068,7 +3075,7 @@ func (s *Server) validatorRows(ctx context.Context, win Window, only string) ([]
 				v.Classes[c] += n
 			}
 			v.ProbeCount += rp.Probes
-			v.Reachability = rate(v.Reachability.Num+rp.BeatsUp, v.Reachability.Den+rp.Beats)
+			v.Reachability = rate(v.Reachability.Num+rp.IdentityUp, v.Reachability.Den+rp.Beats)
 			// Endorsement is measured over the handshakes that completed, so
 			// its denominator is the rolled BeatsUp, not the rolled Beats.
 			v.IdentityValid = rate(v.IdentityValid.Num+rp.IdentityUp, v.IdentityValid.Den+rp.BeatsUp)
