@@ -633,10 +633,8 @@ function Page() {
         <div className="vd-oc-lead">
           <div className={"vd-ocf lead" + (endorse ? "" : " na")} title={endorse ? endorse.title : "No settlement assigned it rows."}>
             <span className="vd-lbl">Endorsements <span className="vd-per">· {per}</span></span>
-            {/* under MIN_RATED settlements the counts alone: one settlement is no share */}
-            <span className="vd-fv">{endorse && endorse.of < MIN_RATED
-              ? <b>{int(endorse.n)} / {int(endorse.of)}</b>
-              : <><b>{endorse ? pctOf(endorse.n, endorse.of) : "—"}</b>{endorse && <em>{int(endorse.n)} / {int(endorse.of)}</em>}</>}</span>
+            {/* the share from the first settlement on, the counts behind it beside it */}
+            <span className="vd-fv"><b>{endorse ? pctOf(endorse.n, endorse.of) : "—"}</b>{endorse && <em>{int(endorse.n)} / {int(endorse.of)}</em>}</span>
           </div>
           {sig?.last_endorsed_at && <div className="vd-ocf" title={`Newest settlement with its endorsement: ${utcWord(sig.last_endorsed_at)}`}>
             <span className="vd-lbl">Last endorsed</span>
