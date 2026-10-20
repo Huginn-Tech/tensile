@@ -72,3 +72,34 @@ func TestAReaderAfterAHoldDoesNotShareTheComputationStartedBeforeIt(t *testing.T
 		t.Fatalf("after both finished: faults=%d after %d computations; the answer from before the hold must not replace the one after it", f, calls.Load())
 	}
 }
+
+// A validator page computed on its own goroutine that panics answers its
+// reader 500, keeps nothing, and leaves the API running for the next reader.
+func TestAPanickingValidatorPageAnswers500AndTheNextReaderIsServed(t *testing.T) {
+	s := newSnapshotServer(t)
+	addr := strings.Repeat("b2", 20)
+	now := time.Now().UTC().Format(time.RFC3339)
+	if _, err := s.st.DB().Exec(`INSERT INTO validator_identities (cons_address, status, first_seen_at, updated_at) VALUES (?, 'BOND_STATUS_BONDED', ?, ?)`, addr, now, now); err != nil {
+		t.Fatal(err)
+	}
+	var calls atomic.Int32
+	s.details.compute = func(ctx context.Context, _ string, _ Window, _ time.Time) (int, any, error) {
+		if calls.Add(1) == 1 {
+			panic("odd chain data")
+		}
+		return 200, map[string]int{"faults": 0}, nil
+	}
+	win := testWindow("24h")
+	read := func() int {
+		w := httptest.NewRecorder()
+		s.serveValidatorDetail(w, httptest.NewRequest("GET", "/v1/validators/"+addr, nil), addr, win, time.Now())
+		return w.Code
+	}
+	if c := read(); c != 500 {
+		t.Fatalf("the reader of the panicking computation got %d, want 500", c)
+	}
+	s.bg.Wait()
+	if c := read(); c != 200 || calls.Load() != 2 {
+		t.Fatalf("the next reader got %d after %d computations; the failed one must not be kept", c, calls.Load())
+	}
+}
