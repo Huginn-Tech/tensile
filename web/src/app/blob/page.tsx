@@ -1,5 +1,5 @@
 "use client";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useApi, askAgain, type Blob, type BlobReading, type Meta, type TxCost as Cost, int, bytes, tia, utcWord, hhmm, shortMid, nsDisplay, notFound, pctOf, API_BASE,
@@ -17,6 +17,7 @@ import { validatorHref } from "@/lib/addr";
 import { blobKey, blobIdOf, type BlobKey } from "@/lib/blobkey";
 import { useFind } from "@/lib/blobfind";
 import { useOther, OnOther } from "@/lib/othernet";
+import { usePhone } from "@/lib/phone";
 
 type Assignment = {
   validator_address: string; moniker?: string; voting_power: number; row_count: number; attested: boolean | null; host_at_settlement: string | null;
@@ -560,12 +561,26 @@ function Signers({ rows, marks, share, stake, table, onTable }: ListProps & { st
   );
 }
 
+/** the endorsers a band shows on a phone before its "Show all" */
+const SHOWN_TILES = 10;
+
 function Band({ label, list, marks, share, off, plain, fold, vp: given }: { label: string; list: Assignment[]; marks: Map<string, Mark>; share: (vp: number) => number; off?: boolean; plain?: boolean; fold?: boolean; vp?: number }) {
   // a folded band shows its head alone until it is clicked
   const [open, setOpen] = useState(!fold);
+  // on a phone, one validator a line, a band shows its first ten and the rest on a tap, so a band of fifty is not a page
+  // of names before the next band's head
+  const phone = usePhone();
+  const [all, setAll] = useState(false);
+  const tiles = useRef<HTMLUListElement>(null);
   if (list.length === 0) return null;
   const vp = given ?? list.reduce((s, a) => s + share(a.voting_power), 0);
   const share$ = `${(vp * 100).toFixed(2)}%`;
+  const cut = phone && !all && list.length > SHOWN_TILES;
+  // the button goes as the rest come: the focus moves on to the first of them, where the button was
+  const showAll = () => {
+    setAll(true);
+    requestAnimationFrame(() => tiles.current?.querySelectorAll("a")[SHOWN_TILES]?.focus());
+  };
   return (
     <div className={"bd-band" + (off ? " off" : "")}>
       {fold
@@ -574,8 +589,8 @@ function Band({ label, list, marks, share, off, plain, fold, vp: given }: { labe
           <span className="bd-fr">{share$}<svg className="bd-chev" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
         </button>
         : <div className="bd-bh"><span>{label} · {int(list.length)}</span><span>{share$}</span></div>}
-      {open && <ul className="bd-tiles">
-        {list.map((a) => {
+      {open && <ul className="bd-tiles" ref={tiles}>
+        {(cut ? list.slice(0, SHOWN_TILES) : list).map((a) => {
           const m = marks.get(a.validator_address)!;
           return (
             <li key={a.validator_address}>
@@ -590,6 +605,7 @@ function Band({ label, list, marks, share, off, plain, fold, vp: given }: { labe
           );
         })}
       </ul>}
+      {open && cut && <button type="button" className="bd-more" onClick={showAll}>Show all {int(list.length)}</button>}
     </div>
   );
 }

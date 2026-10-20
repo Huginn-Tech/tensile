@@ -603,11 +603,12 @@ export default function RecentBlobs() {
           ))}
         </div>
         {/* two figures under one rule, a full-height line between them: the settlements on record, and how many of
-            those Tensile read were available. The first label on two lines */}
+            those Tensile read were available. The first label on two lines; on a phone, where each figure stands
+            before its label, on one: the break is not drawn there, and the space after it falls away where it is */}
         <div className="rb-foot">
           <p className="rb-fig">
             {shown.total != null ? <RollNumber value={shown.total} format={int} className="rb-total" /> : <span className="rb-total wait">0,000</span>}
-            <span>{shown.total === 1 ? "settlement" : "settlements"}<br />on record</span>
+            <span>{shown.total === 1 ? "settlement" : "settlements"}<br className="rb-br" /> on record</span>
           </p>
           <i className="rb-div" aria-hidden="true" />
           <p className="rb-fig">

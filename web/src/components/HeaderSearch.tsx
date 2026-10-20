@@ -11,8 +11,13 @@ import { useOther, OnOther } from "@/lib/othernet";
 import { siteTarget, type SiteTarget } from "@/lib/sitefind";
 import Ident from "@/components/Ident";
 import { KIND_WORD, KIND_OF } from "@/lib/txkind";
+import { usePhone } from "@/lib/phone";
 
-/** the full placeholder needs about 300 px of field; a narrower one says only "Search" */
+/**
+ * the full placeholder needs about 300 px of field; a narrower one says only "Search". On a phone the open search
+ * takes the whole bar and keeps every word, in smaller type (globals.css; what is typed stays 16 px, so the phone does
+ * not zoom in)
+ */
 const WORDS = "Search tx hash, blob ID or address";
 const WORDS_FIT = 300;
 
@@ -171,6 +176,7 @@ export default function HeaderSearch() {
   const [bad, setBad] = useState(false);
   const [pick, setPick] = useState(-1);
   const [fits, setFits] = useState(true);
+  const phone = usePhone();
   const input = useRef<HTMLInputElement>(null);
   const field = useRef<HTMLLabelElement>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -285,14 +291,17 @@ export default function HeaderSearch() {
   const ask = (t: SiteTarget | null) => { setAsked(t); setPick(-1); };
   // the row the arrow keys picked stays in sight in a long list
   useEffect(() => { if (pick >= 0) document.getElementById(`hs-i${pick}`)?.scrollIntoView({ block: "nearest" }); }, [pick]);
+  // a row picked with Tab has the focus, not the field: whichever it is, it lets go, and the panel closes with it
+  const close = () => {
+    const el = document.activeElement;
+    if (el instanceof HTMLElement && box.current?.contains(el)) el.blur();
+    setOn(false);
+  };
   const open = (href: string) => {
     setQ("");
     ask(null);
     setBad(false);
-    // a row picked with Tab has the focus, not the field: whichever it is, it lets go, and the panel closes with it
-    const el = document.activeElement;
-    if (el instanceof HTMLElement && box.current?.contains(el)) el.blur();
-    setOn(false);
+    close();
     router.push(href);
   };
   const enter = () => {
@@ -308,7 +317,7 @@ export default function HeaderSearch() {
       <div className="hs-box">
         <label className="hs-field" ref={field}>
           {ICON}
-          <input ref={input} type="search" value={q} placeholder={fits ? WORDS : "Search"}
+          <input ref={input} type="search" value={q} placeholder={fits || phone ? WORDS : "Search"}
             aria-label="Search by transaction hash, blob ID, commitment, promise hash, valoper address or publisher address"
             aria-controls="hs-list" aria-expanded={on && items.length > 0} aria-activedescendant={on && pick >= 0 ? `hs-i${pick}` : undefined}
             role="combobox" aria-autocomplete="list"
@@ -380,6 +389,14 @@ export default function HeaderSearch() {
           )}
         </div>
       </div>
+      {/* on a phone the open search takes the whole bar: Cancel is its way out, at the thumb's side, and the page steps
+          back under a flat veil that closes it too on a tap. Neither takes the field's focus on the way, as the panel
+          does not, so the tap that closes the search opens nothing under it */}
+      {phone && on && <>
+        <button type="button" className="hs-cancel" onMouseDown={(e) => e.preventDefault()} onClick={close}
+          onKeyDown={(e) => { if (e.key === "Escape") close(); }}>Cancel</button>
+        <div className="hs-veil" aria-hidden="true" onMouseDown={(e) => e.preventDefault()} onClick={close} />
+      </>}
     </div>
   );
 }

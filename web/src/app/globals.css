@@ -3458,3 +3458,455 @@ button.warn:focus-visible { outline-offset: 0; }
   .lc-facts > div { padding: 12px 14px; }
   .lc-facts dd { font-size: 15px; }
 }
+
+/* =============================================================================
+   The phone: the same pages, words and figures, laid out for one hand. A slim bar (the mark, the block, the network,
+   the search) always on screen; the page tabs in a strip under it that tucks away while reading down and comes back on
+   the first move up (Chrome.tsx sets html[data-tabs="off"]); the controls a long list is read with stay under that bar;
+   every control a 44 px target; nothing scrolls sideways and no lone dash stands for a figure. Last in the file: it
+   overrides the phone rules above it. What only the phone does in the components asks lib/phone.ts.
+   ========================================================================== */
+@media (max-width: 720px) {
+
+/* ---------------------------------------------------------------- header --- */
+/* --hdr is the header's height at the moment, 96 px with the tabs and 52 px while they are tucked away: every sticky
+   band under it reads it, so it rides up and down with the tabs */
+html { --hdr: calc(96px + env(safe-area-inset-top, 0px)); scroll-padding-top: calc(108px + env(safe-area-inset-top, 0px)); -webkit-tap-highlight-color: transparent; }
+html[data-tabs="off"] { --hdr: calc(52px + env(safe-area-inset-top, 0px)); }
+header.top { position: fixed; top: 0; left: 0; right: 0; z-index: 60; padding-top: env(safe-area-inset-top, 0px); border: 0; background: none; pointer-events: none; }
+header.top::before, header.top::after { content: ""; position: absolute; left: 0; right: 0; pointer-events: none; }
+header.top::before { top: 0; height: calc(52px + env(safe-area-inset-top, 0px)); z-index: 3; background: var(--canvas); transition: box-shadow 200ms; }
+header.top::after { top: calc(52px + env(safe-area-inset-top, 0px)); height: 44px; z-index: 1; background: var(--canvas); box-shadow: inset 0 -1px 0 var(--border); transition: transform 220ms cubic-bezier(.2, .7, .2, 1); }
+header.top .wrap {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto 44px; grid-template-rows: 52px 44px; align-items: center;
+  column-gap: 0; row-gap: 0; height: auto; min-height: 0; padding: 0 6px 0 16px;
+}
+.top .right { display: contents; }
+.top .divider { display: none; }
+.top .brand { grid-area: 1 / 1; position: relative; z-index: 4; pointer-events: auto; height: 44px; gap: 9px; font-size: 17px; }
+.top .blocktick { grid-area: 1 / 3; position: relative; z-index: 4; margin-right: 8px; gap: 6px; font-size: 12.5px; }
+.top .blocktick .bt-n { color: var(--text-2); }
+.top .net { grid-area: 1 / 4; position: relative; z-index: 4; pointer-events: auto; height: 44px; padding: 0; border: 0; background: none; box-shadow: none; }
+.top .net.menu summary { position: relative; isolation: isolate; height: 44px; padding: 0 12px 0 10px; gap: 7px; font-size: 13px; }
+.top .net.menu summary::before { content: ""; position: absolute; inset: 7px 0; z-index: -1; border-radius: 999px; background: var(--paper); box-shadow: var(--shadow-sm), 0 0 0 1px var(--border); }
+.top .net.menu .list { top: 44px; }
+.top .net.menu .list a, .top .net.menu .list span { min-height: 44px; }
+
+/* the site search: a button in the bar; tapped, it takes the whole bar (HeaderSearch.tsx adds Cancel and the veil) */
+.top .hs { grid-area: 1 / 5; justify-self: end; position: relative; z-index: 4; pointer-events: auto; flex: none; width: 44px; height: 44px; margin: 0; padding: 0; }
+.top .hs-box { width: 44px; height: 44px; max-width: none; }
+.top .hs-field { position: relative; width: 44px; height: 44px; padding: 0; gap: 0; justify-content: center; border: 0; border-radius: 999px; background: none; color: var(--text); }
+.top .hs-field:hover { border-color: transparent; }
+.top .hs-field svg { width: 19px; height: 19px; }
+.top .hs-field input[type=search] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; font-size: 16px; }
+.top .hs-key { display: none; }
+.top .hs.on {
+  position: fixed; z-index: 80; justify-self: stretch; left: 0; right: 0; top: 0; width: auto; height: calc(52px + env(safe-area-inset-top, 0px));
+  padding: calc(4px + env(safe-area-inset-top, 0px)) 80px 4px 12px; background: var(--canvas); box-shadow: inset 0 -1px 0 var(--border);
+}
+.top .hs.on .hs-box { width: 100%; }
+.top .hs.on .hs-field { width: 100%; justify-content: flex-start; gap: 10px; padding: 0 12px; border-radius: 12px; background: var(--paper); border: 1px solid color-mix(in srgb, var(--accent) 60%, transparent); box-shadow: none; }
+.top .hs.on .hs-field svg { width: 16px; height: 16px; color: var(--text-3); }
+/* what is typed is 16 px, so the phone does not zoom in; the placeholder keeps every word, in type the field holds (its
+   words are about 15.3 em, the field the screen less 144 px) */
+.top .hs.on .hs-field input[type=search] { position: static; flex: 1; width: auto; opacity: 1; font-size: 16px; }
+.top .hs.on .hs-field input[type=search]::placeholder { font-size: clamp(12px, calc((100vw - 144px) / 15.8), 14px); }
+/* the panel hangs from the bar's lower edge: no gap between them for the page to show through */
+.top .hs.on .hs-dd { top: 48px; left: 0; width: calc(100vw - 24px); max-width: none; transform: none; padding: 14px 16px 6px; border-top: 0; border-radius: 0 0 14px 14px; font-size: 13.5px; }
+.top .hs.on .hs-dd .hs-kinds li { height: 36px; }
+.top .hs.on .hs-dd .hs-kinds code { font-size: 12.5px; }
+.top .hs.on .hs-dd .hs-h { font-size: 11px; }
+/* its last line in the list's rhythm, a hairline over it */
+.top .hs.on .hs-dd .hs-ft { display: flex; align-items: center; min-height: 44px; margin: 6px 0 0; padding: 0; border-top: 1px solid var(--border); color: var(--text-3); }
+.top .hs-cancel { position: absolute; z-index: 1; top: calc(4px + env(safe-area-inset-top, 0px)); right: 4px; height: 44px; padding: 0 14px; border: 0; border-radius: 10px; background: none; color: var(--accent-ink); font: 500 15px/44px var(--sans); cursor: pointer; }
+.top .hs-cancel:focus-visible { outline-offset: -2px; }
+/* search open: the page steps back under a flat veil and the tabs strip folds away, so only the field and its list stand */
+.top .hs-veil { position: fixed; inset: calc(52px + env(safe-area-inset-top, 0px)) 0 0; z-index: -1; background: color-mix(in srgb, var(--canvas) 74%, transparent); }
+header.top:has(.hs.on)::after, .top:has(.hs.on) nav, .top:has(.hs.on) .theme { visibility: hidden; }
+
+/* the tabs: the filled pill of the current page, inside a full-height tap row; the first pill on the mark's edge */
+.top nav { grid-area: 2 / 1 / 3 / 5; position: relative; z-index: 2; pointer-events: auto; order: 0; flex-basis: auto; height: 44px; margin-left: 0; gap: 2px; overflow: visible; transition: transform 220ms cubic-bezier(.2, .7, .2, 1); }
+.top nav a, .top nav a:hover { position: relative; isolation: isolate; height: 44px; padding: 0 12px; border-radius: 0; background: none; font-size: 15px; color: var(--text-2); }
+.top nav a::before { content: ""; position: absolute; inset: 6px 0; z-index: -1; border-radius: 9px; }
+.top nav a.on, .top nav a.on:hover { background: none; color: #fff; }
+.top nav a.on::before { background: var(--nav-on); }
+.top .theme { grid-area: 2 / 5; justify-self: end; position: relative; z-index: 2; isolation: isolate; pointer-events: auto; width: 44px; height: 44px; border: 0; background: none; box-shadow: none; transition: transform 220ms cubic-bezier(.2, .7, .2, 1); }
+.top .theme::before { content: ""; position: absolute; inset: 6px; z-index: -1; border-radius: 50%; background: var(--paper); box-shadow: var(--shadow-sm), 0 0 0 1px var(--border); }
+html[data-tabs="off"] header.top::after, html[data-tabs="off"] .top nav, html[data-tabs="off"] .top .theme { transform: translateY(-44px); }
+html[data-tabs="off"] .top nav, html[data-tabs="off"] .top .theme { pointer-events: none; }
+html[data-tabs="off"] header.top::before { box-shadow: inset 0 -1px 0 var(--border); }
+/* a tab reached by the keyboard brings the strip back, so the focus is never hidden under the bar */
+html[data-tabs="off"] header.top:has(nav a:focus-visible, .theme:focus-visible)::after,
+html[data-tabs="off"] .top:has(nav a:focus-visible, .theme:focus-visible) nav,
+html[data-tabs="off"] .top:has(nav a:focus-visible, .theme:focus-visible) .theme { transform: none; pointer-events: auto; }
+main.wrap { padding-top: calc(96px + env(safe-area-inset-top, 0px)); }
+/* the bands that stick at the page's top on a wider screen stick under the header here, and the panels that open over
+   the page open over it too */
+.otp { top: var(--hdr); transition: top 220ms cubic-bezier(.2, .7, .2, 1); }
+.lg-newbar { top: calc(var(--hdr) + 22px); }
+.info-pop, .warn-tip, .vd-tip { z-index: 70; }
+
+/* --------------------------------------------- taps of 44 px, same look ---- */
+/* the (i): a 44 px target around the same 16 px ring, its footprint in the line unchanged */
+.info { position: relative; isolation: isolate; width: 44px; height: 44px; margin: -14.5px -14.5px -14.5px -8.5px; border: 0; border-radius: 0; vertical-align: middle; background: none !important; font-size: 12px; color: var(--accent-ink); }
+.info::before { content: ""; position: absolute; left: 50%; top: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--accent); z-index: -1; }
+.info[aria-expanded="true"], .info.solid { color: var(--paper); }
+.info[aria-expanded="true"]::before, .info.solid::before { background: var(--accent); }
+.ov-eyebrow .info { top: 0; }
+/* the period switch and every pill track: 44 px rows, the pressed pill drawn inside */
+.seg { padding: 0 2px; gap: 0; }
+.seg button, .seg button:first-child { position: relative; isolation: isolate; height: 44px; min-width: 44px; padding: 0 13px; line-height: 44px; background: none !important; }
+.seg button::before { content: ""; position: absolute; inset: 4px 1px; z-index: -1; border-radius: 999px; }
+.seg button[aria-pressed="true"]::before { background: var(--nav-on); }
+.tabs { padding: 0 2px; }
+.tabs button { position: relative; isolation: isolate; height: 44px; background: none !important; }
+.tabs button::before { content: ""; position: absolute; inset: 4px 0; z-index: -1; border-radius: 999px; }
+.tabs button[aria-pressed="true"]::before { background: var(--nav-on); }
+.search, .select { height: 46px; }
+.search input[type=search] { height: 44px; font-size: 16px; }
+.foot { padding-bottom: 20px; }
+.foot a { display: inline-flex; align-items: center; justify-content: center; min-width: 45px; min-height: 45px; padding: 0 3px; margin: 0 -3px; }
+.tnote a { display: inline-flex; align-items: center; min-height: 44px; }
+button.cp { display: inline-grid !important; place-items: center; width: 44px !important; height: 44px !important; margin: -14px -14px -14px -12px !important; vertical-align: middle !important; background: none !important; }
+.vd-pf button.cp { margin: -13px -12px -13px -8px !important; }
+.crumb a { display: inline-flex; align-items: center; min-height: 44px; }
+.copy { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; height: 44px; margin: -12px -6px -12px 2px; padding: 0 8px; border: 0; background: none; font-size: 12px; font-weight: 500; color: var(--accent-ink); vertical-align: middle; }
+.ctl a.btn { display: inline-flex; align-items: center; min-height: 44px; padding-top: 0; padding-bottom: 0; }
+/* links set in a line of text: a 44 px target around the same words, the line unchanged */
+a.lg-who, a.bd-ns, .lg-t .c-b a, .bd-meta a, .vd-own a, .cm-ev-t a { padding-top: 13px; padding-bottom: 13px; margin-top: -13px; margin-bottom: -13px; }
+.lg-t .c-b a { display: inline-block; }
+/* the small counts, the chart's ticks and a label's period ("· 24h") at the 12 px floor; the uppercase labels stay */
+.cp-q, .cp-q .ov-frac-n, .cp-q .ov-frac-d { font-size: 12px; }
+.tabs .n, #list .tabs .n, .vd-tab .n, .bd-sh h2 .n, .bd-vh .n, .pb-th .n { font-size: 12px; }
+.chart svg text.tick, .chart svg text.peak { font-size: 12px; }
+.vd-per, .pan-c dt .per { font-size: max(12px, 1em); }
+
+/* ------------------------------------------------------ overview top ---- */
+.deck { margin-top: 12px; border-radius: 16px; }
+.cm-vp { border-radius: 16px 16px 0 0; }
+/* the map's foot: the counts and the newest event laid flat on the panel, one hairline above each */
+.cm-bar { margin: 0; border: 0; border-radius: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
+.cm-counts { padding: 12px 0 13px; border-top: 1px solid var(--border); }
+.cm-counts li { gap: 3px; font-size: 12px; color: var(--text-2); }
+.cm-counts b { font-size: 21px; letter-spacing: -.02em; }
+.cm-ev { height: 48px; padding: 0 16px; font-size: 13px; }
+.cm-ev-t a { display: inline-block; padding: 13px 0; margin: -13px 0; }
+.cm-b { width: 45px !important; height: 45px !important; }
+.cm-badge { font-size: 12px; }
+
+/* the instruments flat on the one panel, a hairline between them: the dial, the latest blob, the recent blobs */
+.deck-row, .deck-row.no-cp { grid-template-areas: "cp" "rd" "rb"; padding: 0 0 14px; }
+.deck-row.no-cp { grid-template-areas: "rd" "rb"; }
+.deck-row > .cp { margin: 0; padding: 18px 16px 12px; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: none; box-shadow: none; }
+.cp-dial { margin: 4px 0 10px; }
+/* the dial's key on the panel's edge, as the latest blob and the recent blobs are: name at the left, figures at the right */
+.cp-rest { align-self: stretch; grid-template-columns: minmax(0, 1fr) max-content max-content max-content; row-gap: 0; margin-top: 2px; font-size: 13px; }
+.cp-rest > li { min-height: 36px; align-items: center; }
+.cp-it { min-height: 36px; margin-top: 0; margin-bottom: 0; }
+button.cp-it { min-height: 44px; margin-top: -4px; margin-bottom: -4px; }
+.deck-row > .rb-read { --rb-sheet-halo: var(--paper); margin: 0 !important; padding: 18px 16px 16px; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: none; box-shadow: none; }
+.rb-read .ov-links { padding-top: 16px; }
+.rb-read .ov-links > * { height: 44px; font-size: 13.5px; }
+.rb-read .ov-links > a:not(:first-child) { background: var(--seg-track); }
+.deck-row > .rb { justify-self: stretch; width: auto; margin: 0 !important; padding: 16px 16px 0; border: 0; border-top: 1px solid var(--border); border-radius: 0; background: none; box-shadow: none; }
+/* recent blobs: only the rows that hold a blob (the first always), so a young network is not a page of empty squares */
+.rb-row:not(:first-child):not(:has(a.rb-c)) { display: none; }
+.rb-head { width: 100%; justify-content: space-between; }
+.rb-grid { width: 100%; padding: 4px 0 6px; }
+.rb { --rb-cell: 28px; --rb-gap: 5.3px; }
+.rb-tape { align-items: center; }
+.rb-c { border-radius: 6px; }
+/* a blob's square is a 44 px tall target, its square drawn inside, its width reaching to the middle of each gap: the row
+   is one strip where every point opens the nearest blob */
+a.rb-c, a.rb-c:hover, a.rb-c.rb-on, a.rb-c.rb-newest { height: 44px; background: none; box-shadow: none; transform: none; }
+a.rb-c::before { content: ""; position: absolute; left: 0; right: 0; top: 8px; height: 28px; border-radius: 6px; background: var(--rb-fill); transition: box-shadow 160ms ease-out; }
+a.rb-c.rb-newest::before, a.rb-c:hover::before, a.rb-c.rb-on::before { background: var(--rb-lit); }
+a.rb-c.rb-newest::before { box-shadow: 0 0 0 2px var(--paper), 0 0 0 3.5px var(--accent); }
+a.rb-c:hover::before, a.rb-c.rb-on::before { box-shadow: 0 0 0 2px var(--paper), 0 0 0 3.5px var(--text-2); }
+.rb-grid.rb-pick a.rb-c.rb-newest:not(.rb-on)::before { background: var(--rb-fill); box-shadow: none; }
+a.rb-c::after { inset: 0 calc(var(--rb-gap) / -2); }
+/* the two figures on one line, each figure before its label; "settlements on record" on one line (RecentBlobs.tsx) */
+.rb-foot { grid-template-columns: 1fr 1px 1fr; justify-content: stretch; margin-top: 0; }
+.rb-fig { display: flex; align-items: baseline; justify-content: center; gap: 7px; padding: 12px 0 0; }
+.rb-fig > span:last-child:not(.rb-avl) { display: inline; white-space: nowrap; }
+.rb-fig > span:last-child { margin-top: 0; font-size: 12.5px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--text-2); }
+.rb-br { display: none; }
+.rb-div { margin-top: 10px; }
+.rb-total { font-size: 17px; }
+.rb-avl { padding-right: 16px; }
+.rb-st { height: 22px; padding: 0 8px; font-size: 12px; }
+
+/* ------------------------------------------------------- validators ---- */
+.vlist { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; padding-top: 28px; }
+.vlist > .vhead, .vlist > .vband { display: contents; }
+.vlist .vhead h2 { grid-area: 1 / 1; font-size: 20px; letter-spacing: -.015em; }
+.vlist .vhead .sub { grid-area: 2 / 1 / 3 / 3; margin: 2px 0 0; font-size: 13px; color: var(--text-3); }
+.vlist .vband > .seg { grid-area: 1 / 2; width: auto; }
+.vlist .vband > .seg button { flex: none; }
+/* the list's search and filter on one line, a band that stays under the header while the list is on screen and rides
+   with the tabs strip; its hairline once it rests there (Validators.tsx sets data-stuck) */
+.vlist .vband > .tools {
+  grid-area: 3 / 1 / 4 / 3; position: sticky; top: var(--hdr); z-index: 31;
+  display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; width: auto;
+  margin: 8px -16px 0; padding: 8px 16px; background: var(--canvas);
+  transition: top 220ms cubic-bezier(.2, .7, .2, 1), box-shadow 200ms;
+}
+.vlist .vband > .tools[data-stuck] { box-shadow: 0 1px 0 var(--border); }
+.vlist .tools > .search { flex: 1 1 auto; width: auto; min-width: 0; gap: 7px; padding: 0 10px 0 12px; }
+.vlist .tools > .select { flex: none; font-size: 13px; }
+.vlist .tools .pick > button { padding: 0 28px 0 13px; }
+.vlist .tools .select::after { right: 13px; top: 18px; }
+.vlist .tools .pick-v > .off { display: none; }
+.vlist .tools .pick .list { left: auto; right: -1px; }
+.vlist .tools .search input::placeholder { font-size: 12.5px; }
+.vlist > .tablewrap.framed { grid-area: 4 / 1 / 5 / 3; position: relative; overflow: visible; margin-top: 4px; border-radius: 14px; }
+
+/* the table becomes a list: one row a validator, read whole on a phone */
+.tablewrap.framed .vt, .tablewrap.framed .vt thead, .tablewrap.framed .vt tbody { display: block; min-width: 0; table-layout: auto; }
+/* its head, one 44 px line that stays under the band: the order on the left as one control, the share's heading over
+   the share */
+.tablewrap.framed .vt thead { position: sticky; top: calc(var(--hdr) + 62px); z-index: 20; height: 45px; border-radius: 14px 14px 0 0; background: var(--paper); box-shadow: inset 0 -1px 0 var(--border); transition: top 220ms cubic-bezier(.2, .7, .2, 1); }
+.tablewrap.framed .vt thead[data-stuck] { border-radius: 0; }
+.tablewrap.framed .vt thead tr:not(.vt-sb) { display: flex; justify-content: flex-end; align-items: center; height: 44px; padding: 0; border: 0; }
+.tablewrap.framed .vt thead tr:not(.vt-sb) > th { display: none; }
+.tablewrap.framed .vt thead tr:not(.vt-sb) > th.c-end { display: flex; align-items: center; height: 44px; padding: 0 12px 0 8px !important; border: 0; background: none; font-size: 11px; letter-spacing: .07em; }
+.tablewrap.framed .vt[data-by="signed"] thead tr:not(.vt-sb) > th.c-end { display: none; }
+.tablewrap.framed .vt thead .thi { display: inline-flex; align-items: center; }
+.tablewrap.framed .vt thead .thi-i { position: static; transform: none; }
+.tablewrap.framed .vt thead button.sort { display: inline-block; height: 44px; line-height: 44px; white-space: nowrap; }
+.tablewrap.framed .vt thead button.sort:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 6px; }
+.tablewrap.framed .vt thead .arrow { color: inherit; margin-left: 5px; }
+.tablewrap.framed .vt thead .per, .tablewrap.framed .vt thead .per span { font-size: 12px; letter-spacing: .02em; }
+/* the order control: its name in the muted weight of the figure each row shows under its share, which it names */
+.tablewrap.framed .vt thead tr.vt-sb { position: absolute; left: 12px; top: 0; z-index: 2; display: block; height: 44px; padding: 0; border: 0; }
+.tablewrap.framed .vt thead tr.vt-sb > th { display: block; height: 44px; padding: 0 !important; border: 0; background: none; }
+.vt-sort {
+  position: relative; isolation: isolate; display: inline-flex; align-items: center; gap: 6px; height: 44px; padding: 0 12px 0 10px;
+  border: 0; background: none; font: 500 13px/1 var(--sans); letter-spacing: 0; text-transform: none; color: var(--text-2); white-space: nowrap; cursor: pointer;
+}
+.vt-sort::before { content: ""; position: absolute; inset: 7px 0; z-index: -1; border-radius: 999px; background: var(--seg-track); }
+.vt-sort[aria-expanded="true"]::before { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent); }
+.vt-sort:focus-visible { outline-offset: -4px; border-radius: 999px; }
+.vt-sort svg { flex: none; width: 15px; height: 15px; color: var(--text-2); }
+.vt-sort .vt-sort-a { color: var(--accent-ink); }
+/* tapped: the four orders under it, each a 44 px line with its (i) */
+.tablewrap.framed .vt.sort-open thead tr:not(.vt-sb) {
+  position: absolute; top: 46px; left: 12px; z-index: 3; flex-direction: column; align-items: stretch; width: 270px; height: auto; padding: 4px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--paper); box-shadow: 0 8px 24px rgb(0 0 0 / .14);
+}
+.tablewrap.framed .vt.sort-open thead tr:not(.vt-sb) > th.c-power, .tablewrap.framed .vt.sort-open thead tr:not(.vt-sb) > th.c-shard,
+.tablewrap.framed .vt.sort-open thead tr:not(.vt-sb) > th.c-end, .tablewrap.framed .vt.sort-open thead tr:not(.vt-sb) > th.c-last {
+  display: flex !important; align-items: center; height: 44px; padding: 0 0 0 12px !important; border: 0; border-radius: 8px; background: none;
+  font-size: 14px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--text);
+}
+.tablewrap.framed .vt.sort-open[data-by="power"] thead tr:not(.vt-sb) > th.c-power, .tablewrap.framed .vt.sort-open[data-by="shard"] thead tr:not(.vt-sb) > th.c-shard,
+.tablewrap.framed .vt.sort-open[data-by="signed"] thead tr:not(.vt-sb) > th.c-end, .tablewrap.framed .vt.sort-open[data-by="last"] thead tr:not(.vt-sb) > th.c-last { background: var(--wash); }
+.tablewrap.framed .vt.sort-open thead .thi { flex: 1; justify-content: space-between; min-width: 0; }
+.tablewrap.framed .vt.sort-open thead button.sort { flex: 1; text-align: left; font-size: 14px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--text); }
+.tablewrap.framed .vt.sort-open thead button.sort[aria-pressed="true"] { font-weight: 500; color: var(--accent-ink); }
+.tablewrap.framed .vt.sort-open thead .per, .tablewrap.framed .vt.sort-open thead .per span { font-size: 14px; letter-spacing: 0; }
+.tablewrap.framed .vt.sort-open thead .thi-i { margin-right: 8px; }
+
+/* a row: avatar; the name over the state and hosting; on the right the Endorsements share, its bar under it, and under
+   that the figure the list is ordered by, when the row does not already show it. A long hosting name wraps whole */
+.tablewrap.framed .vt tbody tr {
+  display: grid; grid-template-columns: 30px max-content minmax(0, 1fr) auto; grid-template-rows: 20px 5px minmax(17px, auto); grid-auto-rows: auto;
+  grid-template-areas: "av nm nm en" "av . . en" "av st ho sv"; align-items: center;
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+}
+/* ordered by the last endorsement, whose times are long: the time on a line of its own, so the hosting name has the room */
+.tablewrap.framed .vt[data-by="last"] tbody tr:not(.open) { grid-template-rows: 20px 5px minmax(17px, auto) 17px; grid-template-areas: "av nm nm en" "av . . en" "av st ho ." "av sv sv sv"; }
+.tablewrap.framed .vt tbody tr:last-child { border-bottom: 0; border-radius: 0 0 13px 13px; }
+.tablewrap.framed .vt tbody tr > td { display: block; min-width: 0; padding: 0; border: 0; background: none !important; text-align: left; overflow: visible; box-shadow: none; }
+.tablewrap.framed .vt tbody tr > td.col-pin, .tablewrap.framed .vt .who, .tablewrap.framed .vt .who > span:not(.avatar) { display: contents; }
+.tablewrap.framed .vt tbody tr.warn { background: var(--hold-tint); }
+.tablewrap.framed .vt tbody tr:active { background: var(--wash); }
+/* the row's toggle is unseen; the keyboard's focus on it rings the row */
+.tablewrap.framed .vt tbody tr:has(.vt-tg:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tablewrap.framed .vt .avatar { display: block; grid-area: av; width: 30px; height: 30px; border-radius: 8px; font-size: 12px; }
+.tablewrap.framed .vt span.avatar { display: grid; place-items: center; }
+.tablewrap.framed .vt tbody .mon { grid-area: nm; display: block; max-width: none; min-width: 0; margin: -12px 0 -12px 10px; padding: 12px 0; font-size: 15px; line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tablewrap.framed .vt tbody .ours { grid-area: nm; justify-self: end; }
+.tablewrap.framed .vt tbody .addr { display: none; }
+.tablewrap.framed .vt tbody tr > td.vt-ep { grid-area: st; align-self: start; margin-left: 10px; line-height: 17px; }
+.tablewrap.framed .vt tbody tr > td.vt-ep .state { font-size: 12.5px; font-weight: 500; line-height: 17px; color: var(--text-2); }
+.tablewrap.framed .vt tbody tr > td.vt-ep .dot { width: 7px; height: 7px; margin-right: 5px; }
+.tablewrap.framed .vt tbody tr > td.vt-ho { grid-area: ho; align-self: start; display: flex; align-items: flex-start; min-width: 0; font-size: 12.5px; line-height: 17px; color: var(--text-2); }
+.tablewrap.framed .vt tbody tr > td.vt-ho::before { content: "·"; flex: none; margin: 0 5px; color: var(--text-3); }
+.tablewrap.framed .vt tbody tr > td.vt-ho:has(> .muted) { display: none; }
+.tablewrap.framed .vt tbody tr > td.vt-ho .hosting { align-items: flex-start; min-width: 0; gap: 5px; color: var(--text-2); }
+.tablewrap.framed .vt tbody tr > td.vt-ho .hosting > span:not(.flag):not(.flag-none):not(.cc) { min-width: 0; white-space: normal; overflow-wrap: break-word; }
+.tablewrap.framed .vt tbody tr > td.vt-ho .hosting > .flag { margin-top: 3px; }
+.tablewrap.framed .vt tbody tr > td.vt-ho .hosting > .cc { margin-top: 1px; }
+.tablewrap.framed .vt tbody tr > td.vt-vp, .tablewrap.framed .vt tbody tr > td.vt-sd, .tablewrap.framed .vt tbody tr > td.vt-le { display: none; }
+/* the share on the name's line, its bar under it */
+.tablewrap.framed .vt tbody tr > td.vt-en { grid-area: en; justify-self: end; align-self: start; padding-left: 10px; }
+.tablewrap.framed .vt tbody .rate.share { display: flex; flex-direction: column; align-items: flex-end; font-size: 15px; line-height: 20px; }
+.tablewrap.framed .vt tbody .rate.share .eb { position: static; display: block; width: 60px; height: 4px; margin-top: 1px; transform: none; }
+/* no share: the words for why in its place (Validators.tsx), on the name's line */
+.tablewrap.framed .vt tbody tr > td.vt-en > .na { display: block; padding: 0; font-family: var(--sans); font-size: 12.5px; font-weight: 400; line-height: 20px; color: var(--text-3); white-space: nowrap; }
+/* the figure the list is ordered by, when the row hides it: under the bar, on the state's line, in the order control's
+   muted weight; its name (the order's) is said to assistive tech, and shown once the row is open */
+.tablewrap.framed .vt[data-by="power"] tbody tr:not(.open) > td.vt-vp,
+.tablewrap.framed .vt[data-by="shard"] tbody tr:not(.open) > td.vt-sd,
+.tablewrap.framed .vt[data-by="last"] tbody tr:not(.open) > td.vt-le {
+  display: block; grid-area: sv; justify-self: end; align-self: start; padding-left: 10px; font-size: 12px; font-weight: 500; line-height: 17px; color: var(--text-2); white-space: nowrap; font-variant-numeric: tabular-nums lining-nums;
+}
+.tablewrap.framed .vt[data-by="shard"] tbody tr:not(.open) > td.vt-sd:has(> .muted),
+.tablewrap.framed .vt[data-by="last"] tbody tr:not(.open) > td.vt-le:has(> .muted) { display: none; }
+.tablewrap.framed .vt tbody tr .vt-l { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* a row tapped open: its address with its copy, its other figures under it, name and value, and the way to its page */
+.tablewrap.framed .vt tbody tr.open { grid-template-areas: "av nm nm en" "av . . en" "av st ho sv" ". ad ad ac" ". vp vp vp" ". sd sd sd" ". le le le" ". go go go"; background: color-mix(in srgb, var(--accent) 4%, transparent); }
+.tablewrap.framed .vt tbody tr.open .addr { display: block; grid-area: ad; align-self: center; margin: 10px 0 2px 10px; font-size: 12px; color: var(--text-3); }
+.tablewrap.framed .vt tbody tr.open .copy { grid-area: ac; justify-self: end; margin: 10px -8px 2px 0; }
+.tablewrap.framed .vt tbody tr.open > td.vt-vp, .tablewrap.framed .vt tbody tr.open > td.vt-sd, .tablewrap.framed .vt tbody tr.open > td.vt-le {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-left: 10px; padding: 7px 0; border-top: 1px solid var(--border); font-size: 13.5px; font-weight: 500; line-height: 20px; color: var(--text);
+}
+.tablewrap.framed .vt tbody tr.open > td.vt-vp { grid-area: vp; }
+.tablewrap.framed .vt tbody tr.open > td.vt-sd { grid-area: sd; }
+.tablewrap.framed .vt tbody tr.open > td.vt-le { grid-area: le; }
+.tablewrap.framed .vt tbody tr.open .vt-l { position: static; width: auto; height: auto; margin: 0; overflow: visible; clip: auto; font-family: var(--sans); font-size: 13px; font-weight: 400; color: var(--text-2); }
+.tablewrap.framed .vt tbody tr.open > td > .muted { color: var(--text-3); }
+.tablewrap.framed .vt tbody tr.open > td.vt-go { grid-area: go; margin: 6px 0 2px 10px; }
+.tablewrap.framed .vt tbody tr.open > td.vt-go a { display: flex; align-items: center; justify-content: center; gap: 6px; height: 44px; border-radius: 10px; background: var(--accent-tint); color: var(--accent-ink); font-family: var(--sans); font-size: 13.5px; font-weight: 500; }
+.tablewrap.framed .vt tbody tr.open > td.vt-go a:hover { text-decoration: none; }
+.tablewrap.framed .vt tbody tr.empty { display: block; }
+.tablewrap.framed .vt tbody tr.empty > td { padding: 16px 14px; }
+
+/* ------------------------------------------------------------ blobs ---- */
+/* the Blobs list's head (the publisher's and the validator's lists keep theirs): the tabs and the publisher filter on
+   one line, the filter at its right end; the scope under them at the left; then the search across the screen; a
+   namespace picked from a row, or what a search found, on a line of its own. A screen too narrow for the tabs and the
+   filter side by side puts the filter on the next line rather than over the tabs */
+.lg-list:not(.pb-list):not(.vd-list) { margin-top: 26px; }
+.lg-list:not(.pb-list):not(.vd-list) > .list-head { flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 10px 8px; padding-bottom: 14px; margin-bottom: 14px; }
+.lg-list:not(.pb-list):not(.vd-list) > .list-head > .tabs button { padding: 0 12px; }
+.lg-list:not(.pb-list):not(.vd-list) .lg-tools { display: contents; }
+.lg-list:not(.pb-list):not(.vd-list) .lg-tools > * { order: 4; }
+.lg-list:not(.pb-list):not(.vd-list) .lg-tools > .lg-pick:nth-last-child(2) { order: 1; margin-left: auto; }
+.lg-list:not(.pb-list):not(.vd-list) > .list-head > .lg-scope { order: 2; flex-basis: 100%; margin: -2px 0 0; font-size: 12.5px; }
+.lg-list:not(.pb-list):not(.vd-list) .lg-tools > .lg-findbox { order: 3; flex-basis: 100%; }
+.lg-findbox { height: 46px; }
+.lg-findbox input { height: 44px; font-size: 16px; }
+.lg-findbox input::placeholder { font-size: 13px; }
+.lg-tools .lg-chip, .lg-tools .lg-pick > button, .lg-tools .lg-pick { min-height: 44px; }
+
+/* ------------------------------------------------------------- blob ---- */
+.bd-mast { padding-top: 18px; }
+.bd-title { margin-bottom: 2px; font-size: 26px; }
+.bd-mast .pb-addr { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "l l" "h c"; column-gap: 12px; row-gap: 2px; align-items: center; margin-top: 4px; }
+.bd-mast .pb-addr .bd-idl { grid-area: l; margin: 0; }
+.bd-mast .pb-addr > .mono { grid-area: h; padding: 2px 0; word-break: break-all; font-size: 13px; line-height: 20px; color: var(--text); }
+.bd-mast .pb-addr > .copy { grid-area: c; height: 44px; margin: 0; padding: 0 14px 0 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--paper); color: var(--text); font-size: 13px; }
+.bd-mast .pb-addr > .bd-many { grid-column: 1 / -1; }
+/* the state a pill; the settlement and its window plain lines, on the title's edge */
+.bd-chips { flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 14px; }
+.bd-chips > span:not(.state) { min-height: 0; padding: 0; border: 0; background: none; box-shadow: none; font-size: 13px; color: var(--text-2); white-space: normal; }
+.bd-chips > span.state { min-height: 32px; padding: 0 12px 0 10px; font-size: 13.5px; }
+/* the figures before the identifiers; both frames' labels on one edge, Tensile's eye hung in the padding before them */
+.bd-top { display: flex; flex-direction: column; gap: 12px; margin-top: 18px; }
+.bd-top > .bd-figs { order: -1; }
+.bd-top .bd-meta { width: 100%; grid-template-columns: 108px minmax(0, 1fr); padding: 2px 16px 2px 22px; border-radius: 14px; font-size: 13px; }
+.bd-top .bd-meta dt, .bd-top .bd-meta dd { padding: 9px 0; }
+.bd-figs dt.tz { position: relative; }
+.bd-figs dt.tz svg { position: absolute; left: -18px; top: 50%; width: 12px; height: 12px; margin-top: -6px; }
+/* "· read 17:54 UTC" a word space after "asked", as "· 4,096 needed" is after "16,384" */
+.bd-figs dd > em + em { margin-left: -2.5px; }
+.bd-top .bd-meta dd:has(> .copy) { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; column-gap: 8px; }
+.bd-top .bd-meta dd > .copy { margin: -12px -8px -12px auto; }
+.bd-top .bd-meta dd > .bd-many { flex-basis: 100%; }
+/* the endorsers: one list, name at the left and share at the right, 44 px lines; ten a band, then the rest on a tap
+   (blob/page.tsx). The Table switch's word on the percentages' right edge */
+.bd-sh { height: 52px; padding-right: 2px; }
+.bd-tbl { position: relative; height: 44px; padding: 0 14px; border: 0; background: none; font-size: 13px; color: var(--accent-ink); }
+.bd-tbl[aria-pressed="true"] { background: none; }
+.bd-bh, .bd-bh.bd-fold { min-height: 44px; padding: 0 16px; font-size: 13.5px; }
+.bd-tiles { grid-template-columns: minmax(0, 1fr); column-gap: 0; row-gap: 0; padding: 0 16px; }
+.bd-tile, .bd-tile.fault { min-height: 44px; padding: 0; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: none; }
+.bd-tiles > li:last-child .bd-tile { border-bottom: 0; }
+.bd-tile .tx { flex: 1; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
+.bd-tile .nm { flex: 1; min-width: 0; font-size: 14px; font-weight: 500; line-height: 20px; }
+.bd-tile .nm .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bd-tile .vp { flex: none; font-size: 13px; line-height: 20px; color: var(--text-2); font-variant-numeric: tabular-nums lining-nums; }
+.bd-more { display: flex; align-items: center; justify-content: center; gap: 6px; width: calc(100% - 32px); height: 44px; margin: 4px 16px 14px; padding: 0; border: 0; border-radius: 10px; background: var(--accent-tint); color: var(--accent-ink); font: 500 13.5px/1 var(--sans); cursor: pointer; }
+
+/* -------------------------------------------------------- validator ---- */
+/* where it is and which period stay in view while the page is read: one 52 px bar under the header, "Validators ›" and
+   the period switch; the name comes into it only once the title has gone under it (validator/page.tsx sets data-named
+   on the bar, and data-fit on a name too long for it at 15 px) */
+.vd-head { position: sticky; top: var(--hdr); z-index: 30; flex-wrap: nowrap; gap: 12px; height: 52px; min-height: 0; margin: 0 -16px; padding: 4px 16px; background: var(--canvas); box-shadow: 0 1px 0 var(--border); transition: top 220ms cubic-bezier(.2, .7, .2, 1); }
+.vd-head .seg { flex: none; }
+.vd-head .crumb { display: flex; flex-wrap: wrap; align-items: center; align-content: center; column-gap: 6px; row-gap: 0; flex: 1; min-width: 0; margin: 0; font-size: 14px; line-height: 16px; color: var(--text-2); transition: font-size 200ms, color 200ms; }
+.vd-head .crumb a { display: inline-flex; align-items: center; min-height: 0; margin: -14px 0; padding: 14px 0; color: inherit; }
+.vd-head .crumb-nm {
+  flex-basis: 100%; min-width: 0; max-height: 0; overflow: hidden; opacity: 0; transform: translateY(8px);
+  font-size: 15px; font-weight: 600; line-height: 19px; letter-spacing: -.005em; color: var(--text); white-space: nowrap; text-overflow: ellipsis;
+  transition: max-height 220ms cubic-bezier(.2, .7, .2, 1), opacity 180ms, transform 220ms cubic-bezier(.2, .7, .2, 1);
+}
+.vd-head .crumb-nm[data-fit="1"] { font-size: 13.5px; }
+.vd-head[data-named] .crumb { font-size: 12px; color: var(--text-3); }
+.vd-head[data-named] .crumb-nm { max-height: 19px; margin-top: 1px; opacity: 1; transform: none; }
+.vd-pf { margin-top: 14px; }
+.vd-pf-top { padding: 16px 16px 4px; }
+.vd-pf .avatar { width: 44px; height: 44px; }
+.vd-title h1 { font-size: 26px; line-height: 32px; }
+.vd-own { font-size: 12.5px; }
+.vd-own-a .mono { font-size: 12.5px; word-break: break-all; }
+.vd-links { margin-top: 0; }
+.vd-links a { display: inline-flex; align-items: center; min-height: 44px; }
+.vd-fact { padding: 12px 16px 14px; }
+.vd-tabs button, .vd-tab { position: relative; height: 44px; }
+.vd-list .seg button { min-width: 44px; }
+/* the service rate's count and the network's rate beside the figure, not under it in a column of their own */
+.vd-rate { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "l l" "v s"; column-gap: 14px; align-items: baseline; }
+.vd-rate > .vd-lbl { grid-area: l; }
+.vd-rate > .vd-rate-v { grid-area: v; }
+.vd-rate > .vd-rate-s { grid-area: s; margin: 0; }
+.vd-rate .vd-ref { display: inline; }
+.vd-rate .vd-ref::before { content: "·"; margin: 0 6px; }
+/* the latest checks: each a 44 px tall target, its square drawn inside; the newest's time at the strip's left end, the
+   oldest's at its right end */
+.vd-strip { gap: 3px; margin: -11px 0 -10px; }
+.vd-strip .vd-c, .vd-strip .vd-c:hover, .vd-strip .vd-c.on, .vd-strip .vd-c.open { position: relative; height: 44px; aspect-ratio: auto; border-radius: 0; background: none; box-shadow: none; }
+.vd-strip .vd-c::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; aspect-ratio: 1 / 1; transform: translateY(-50%); border-radius: 3px; background: var(--cc); transition: box-shadow var(--dur); }
+.vd-strip .vd-c.open::before { background: color-mix(in srgb, var(--cc) 14%, transparent); box-shadow: inset 0 0 0 1.5px var(--cc); }
+.vd-strip .vd-c.slot::before { background: var(--wash); box-shadow: inset 0 0 0 1px var(--line-soft); }
+.vd-strip .vd-c.on::before { box-shadow: 0 0 0 2px var(--paper), 0 0 0 3.5px var(--cc); }
+.vd-strip button.vd-c::after { content: ""; position: absolute; inset: 0 -1.5px; }
+.vd-ends { width: 100% !important; min-width: 0; margin-top: 6px; }
+/* Tensile's other figures in On chain's make: two to a line, each a label over its value, one value size; a hairline
+   over them as over On chain's grid */
+.vd-boxes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; row-gap: 14px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.vd-box { flex-direction: column; align-items: flex-start; justify-content: flex-start; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.vd-box:nth-child(2) { order: 3; }
+.vd-box .vd-lbl { line-height: 16px; }
+.vd-box .vd-fv { margin-top: 4px; }
+/* no throughput yet: its title's words in place of a dash (validator/page.tsx), the line's whole width theirs */
+.vd-box.na { grid-column: 1 / -1; }
+.vd-box .vd-fv .vd-nv { font-family: var(--sans); font-size: 13px; line-height: 22px; color: var(--text-3); white-space: normal; }
+/* On chain: the endorsements alone on their line as the lead, the rest in its grid, two to a line, one value size */
+.vd-oc { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; row-gap: 14px; align-content: start; }
+.vd-oc > h2 { grid-column: 1 / -1; }
+.vd-oc-lead, .vd-oc-grid { display: contents; }
+.vd-oc .vd-ocf.lead { grid-column: 1 / -1; margin-top: -2px; padding-bottom: 14px; border-bottom: 1px solid var(--line-soft); }
+.vd-oc-lead .vd-ocf:not(.lead) .vd-fv { margin-top: 4px; }
+}
+
+/* a narrow phone: the Blobs list's tabs and its publisher filter a little tighter, so both keep one line */
+@media (max-width: 379px) {
+  .lg-list:not(.pb-list):not(.vd-list) > .list-head { column-gap: 6px; }
+  .lg-list:not(.pb-list):not(.vd-list) > .list-head > .tabs button { padding: 0 10px; }
+  .lg-list:not(.pb-list):not(.vd-list) .lg-tools > .lg-pick:nth-last-child(2):not(.on) > .lg-chip { padding: 0 10px; }
+}
+/* the narrowest phones: Cancel a little tighter, so the search's placeholder keeps every word at 12 px */
+@media (max-width: 340px) {
+  .top .hs.on { padding-right: 72px; }
+  .top .hs-cancel { padding: 0 10px; }
+  .top .hs.on .hs-field input[type=search]::placeholder { font-size: clamp(12px, calc((100vw - 136px) / 15.8), 14px); }
+}
+/* the phone's header and bands slide; with reduced motion they move at once */
+@media (max-width: 720px) and (prefers-reduced-motion: reduce) {
+  header.top::before, header.top::after, .top nav, .top .theme, .vlist .vband > .tools, .tablewrap.framed .vt thead, .otp,
+  .vd-head, .vd-head .crumb, .vd-head .crumb-nm, a.rb-c::before { transition: none; }
+}

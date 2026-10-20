@@ -1,10 +1,11 @@
 "use client";
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { type Validator, int, pctOf, bytes, ago, utcWord, shortMid, failedWords } from "@/lib/api";
 import { WINDOWS, periodName } from "@/lib/window";
 import Avatar from "./Avatar";
+import Copy from "./Copy";
 import Info from "./Info";
 import Pick from "./Pick";
 import { endpointState } from "./Readiness";
@@ -12,6 +13,7 @@ import { HostingCell } from "./Hosting";
 import { SELF_VALIDATOR } from "@/lib/site";
 import { isOperatorAccount, validatorHref } from "@/lib/addr";
 import { openRow } from "@/lib/row";
+import { usePhone } from "@/lib/phone";
 
 /**
  * The validators table: who, whether the endpoint answers right now, how
@@ -33,6 +35,14 @@ function isSelf(v: Validator): boolean {
 
 type Filter = "all" | "providers" | "unreachable" | "cert" | "nohost";
 type SortKey = "power" | "shard" | "signed" | "last";
+
+/** each order's heading; per: it counts the selected period, which follows it in brackets */
+const ORDERS: Record<SortKey, { label: string; per?: boolean }> = {
+  power: { label: "Voting power" },
+  shard: { label: "Shard data", per: true },
+  signed: { label: "Endorsements", per: true },
+  last: { label: "Last endorsement" },
+};
 
 /**
  * A rejected certificate, in a word: the reason a client refuses it, after the
@@ -91,6 +101,14 @@ function sortValue(v: Validator, k: SortKey, notLive?: boolean): number | null {
 
 /** the search field's mark, the site search's own */
 const FIND = <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.75" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="m10.5 10.5 3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>;
+/** the phone's order control's mark: three lines, longest first */
+const ORDER = <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4h11M2.5 8h7.5M2.5 12h4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>;
+
+/** a sticky element resting at its sticky top, the page scrolled: it then draws the hairline that parts it from the rows under it */
+function markStuck(el: HTMLElement | null) {
+  if (!el) return;
+  el.toggleAttribute("data-stuck", window.scrollY > 0 && el.getBoundingClientRect().top <= parseFloat(getComputedStyle(el).top) + 0.5);
+}
 
 /**
  * `periodSwitch`, the page's period control, sits under the heading, on one band with the search and the filter: the
@@ -103,6 +121,51 @@ export default function Validators({ rows, window: win, notLive, loading, failed
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "power", dir: -1 });
   const router = useRouter();
   const go = (_: React.MouseEvent, to: string) => router.push(to);
+  // A phone reads the list one row a validator: the order is one control over it whose list holds the four orders, and
+  // a tapped row opens in place (its address, its other figures, the way to its page) rather than leaving the list.
+  const phone = usePhone();
+  const [sortOpen, setSortOpen] = useState(false);
+  const [open, setOpen] = useState<string | null>(null);
+  const band = useRef<HTMLDivElement>(null);
+  const head = useRef<HTMLTableSectionElement>(null);
+  const body = useRef<HTMLTableSectionElement>(null);
+  const sortBtn = useRef<HTMLButtonElement>(null);
+  const sortId = useId();
+
+  // the band and the head stay under the header while the list is read; each draws its hairline only once it rests there
+  useEffect(() => {
+    if (!phone) return;
+    const els = [band.current, head.current];
+    let raf = 0;
+    const read = () => { raf = 0; els.forEach(markStuck); };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(read); };
+    read();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(raf);
+      els.forEach((el) => el?.removeAttribute("data-stuck"));
+    };
+  }, [phone]);
+
+  // the orders' list closes on a tap outside the head (an (i)'s panel is outside it, in <body>) and on Escape, which
+  // first closes an open (i)
+  useEffect(() => {
+    if (!sortOpen) return;
+    const away = (e: PointerEvent) => {
+      const t = e.target instanceof Element ? e.target : null;
+      if (t?.closest(".info-pop") || head.current?.contains(t)) return;
+      setSortOpen(false);
+    };
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || document.querySelector(".info-pop")) return;
+      setSortOpen(false);
+      sortBtn.current?.focus();
+    };
+    document.addEventListener("pointerdown", away);
+    window.addEventListener("keydown", key);
+    return () => { document.removeEventListener("pointerdown", away); window.removeEventListener("keydown", key); };
+  }, [sortOpen]);
 
   const counts = useMemo(() => ({
     all: rows.length,
@@ -143,7 +206,21 @@ export default function Validators({ rows, window: win, notLive, loading, failed
     });
   }, [rows, filter, needle, sort, notLive]);
 
-  const clickSort = (k: SortKey, dflt: 1 | -1) => setSort((s) => (s.key === k ? { key: k, dir: (s.dir * -1) as 1 | -1 } : { key: k, dir: dflt }));
+  // a new order is read from its first row: on a phone the list of orders closes and, with the head resting mid-list, the
+  // list's top comes back under the head. The page moves up, so the header's tabs come back: its full height is counted
+  const toListTop = () => {
+    const tb = body.current, th = head.current, b = band.current;
+    if (!tb || !th || !b || !th.hasAttribute("data-stuck")) return;
+    const bar = document.querySelector("header.top")?.getBoundingClientRect().height ?? 0;
+    window.scrollTo({ top: window.scrollY + tb.getBoundingClientRect().top - (bar + b.offsetHeight + th.offsetHeight) });
+  };
+  const clickSort = (k: SortKey, dflt: 1 | -1) => {
+    setSort((s) => (s.key === k ? { key: k, dir: (s.dir * -1) as 1 | -1 } : { key: k, dir: dflt }));
+    if (!phone) return;
+    setSortOpen(false);
+    sortBtn.current?.focus({ preventScroll: true });
+    toListTop();
+  };
   // A heading with a definition carries it behind an (i), opened by a click:
   // nothing appears on hover. The (i) sits outside the label's box so the
   // label stays centred over its column. A heading that counts the selected
@@ -152,6 +229,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
   // over it, unseen), so switching periods never moves a heading or, where the
   // columns follow their headings, the table.
   const period = periodName(win);
+  const sortName = ORDERS[sort.key].label + (ORDERS[sort.key].per ? ` (${period})` : "");
   const perLabel = (
     <span className="per">
       <span>({period})</span>
@@ -171,10 +249,16 @@ export default function Validators({ rows, window: win, notLive, loading, failed
   const href = (v: Validator, hash = "") => validatorHref(v.operator_address, v.address, `${win !== "24h" ? `&window=${win}` : ""}${hash}`);
 
   // The endorsement share, with the counts behind it in the title and a thin bar of it under it, from the first
-  // settlement on; a dash with its reason when nothing was assigned. Never a fault colour.
-  const signed = (v: Validator) => {
+  // settlement on; a dash with its reason when nothing was assigned. Never a fault colour. A phone's row has no column
+  // to explain a lone dash: it says so in words, or says nothing where the row's state already does (no endpoint,
+  // jailed, not bonded, not checked yet: `quiet`).
+  const signed = (v: Validator, quiet: boolean) => {
     const s = v.signing;
-    if (!s || s.assigned === 0) return <span className="muted" title={s && s.unknown > 0 ? `${int(s.unknown)} assigned promise${s.unknown === 1 ? "" : "s"} recorded before signatures were verified: nothing to say either way.` : "No settled promise assigned this validator rows in this period."}>—</span>;
+    if (!s || s.assigned === 0) {
+      const title = s && s.unknown > 0 ? `${int(s.unknown)} assigned promise${s.unknown === 1 ? "" : "s"} recorded before signatures were verified: nothing to say either way.` : "No settled promise assigned this validator rows in this period.";
+      if (phone) return quiet ? null : <span className="muted na" title={title}>{s && s.unknown > 0 ? "Not recorded" : "None assigned"}</span>;
+      return <span className="muted" title={title}>—</span>;
+    }
     return (
       <span className="rate share endorsed" title={`${int(s.signed)} of ${int(s.assigned)} settled promises endorsed`}>
         {pctOf(s.signed, s.assigned)}
@@ -195,14 +279,14 @@ export default function Validators({ rows, window: win, notLive, loading, failed
   };
 
   return (
-    <section>
+    <section className="vlist">
       <div className="vhead">
         <h2>Validators</h2>
         <p className="sub">{notLive ? "Bonded set" : "Endorsements over the selected period"}</p>
       </div>
       <div className="vband">
         {periodSwitch}
-        <div className="tools">
+        <div className="tools" ref={band}>
           <label className="search">{FIND}<span className="sr-only">Search validators</span><input type="search" placeholder="Search name or address" value={q} onChange={(e) => setQ(e.target.value)} /></label>
           <Pick label="Filter validators" value={filter} onChange={setFilter} options={[
             { value: "all", label: "All validators", count: counts.all },
@@ -214,19 +298,30 @@ export default function Validators({ rows, window: win, notLive, loading, failed
         </div>
       </div>
       <div className="tablewrap framed">
-        <table className="vt">
-          <thead>
-            <tr>
+        <table className={"vt" + (phone && sortOpen ? " sort-open" : "")} data-by={phone ? sort.key : undefined}>
+          <thead ref={head}>
+            {/* the phone's order control, over the row of headings that becomes its list (globals.css) */}
+            {phone && (
+              <tr className="vt-sb">
+                <th>
+                  <button type="button" className="vt-sort" ref={sortBtn} aria-expanded={sortOpen} aria-controls={sortId}
+                    aria-label={`Sorted by ${sortName}, ${sort.dir === -1 ? "descending" : "ascending"}`} onClick={() => setSortOpen((o) => !o)}>
+                    {ORDER}<span>{sortName}</span><span className="vt-sort-a" aria-hidden="true">{sort.dir === -1 ? "↓" : "↑"}</span>
+                  </button>
+                </th>
+              </tr>
+            )}
+            <tr id={phone ? sortId : undefined}>
               <th className="col-pin">Validator</th>
               <th className="c-ep" title="Whether the validator's Fibre server answered Tensile's latest check.">Endpoint now</th>
               {showHosting && <th className="c-host" title="Where the validator's Fibre server is hosted.">Hosting</th>}
-              <Th col="c-power" k="power" dflt={-1} label="Voting power" title="The default order. Not a performance ranking." />
-              <Th col="c-shard" k="shard" dflt={-1} label="Shard data" per info="Row data of the shards this validator stored and endorsed over the period's settled blobs: blob_size / 4096 per row, padding included. The row proofs stored beside them are not counted." />
-              <Th col="c-end" k="signed" dflt={-1} label="Endorsements" per info="How often this validator’s signature is in the settlement, counted while it had a Fibre provider. A settlement needs signatures from ⅔ of the stake, and the first validators to respond fill it." />
-              <Th col="c-last" k="last" dflt={-1} label="Last endorsement" info="The last time this validator signed a blob, in any period." />
+              <Th col="c-power" k="power" dflt={-1} label={ORDERS.power.label} title="The default order. Not a performance ranking." />
+              <Th col="c-shard" k="shard" dflt={-1} label={ORDERS.shard.label} per info="Row data of the shards this validator stored and endorsed over the period's settled blobs: blob_size / 4096 per row, padding included. The row proofs stored beside them are not counted." />
+              <Th col="c-end" k="signed" dflt={-1} label={ORDERS.signed.label} per info="How often this validator’s signature is in the settlement, counted while it had a Fibre provider. A settlement needs signatures from ⅔ of the stake, and the first validators to respond fill it." />
+              <Th col="c-last" k="last" dflt={-1} label={ORDERS.last.label} info="The last time this validator signed a blob, in any period." />
             </tr>
           </thead>
-          <tbody>
+          <tbody ref={body}>
             {list.length === 0 && (
               <tr className="empty"><td colSpan={6 + (showHosting ? 1 : 0)}>
                 {loading && rows.length === 0 ? "Loading…"
@@ -241,10 +336,20 @@ export default function Validators({ rows, window: win, notLive, loading, failed
             )}
             {list.map((v) => {
               const e = endpoint(v);
+              const isOpen = phone && open === v.address;
+              const toggle = () => setOpen((o) => (o === v.address ? null : v.address));
+              const addr = v.moniker ? (v.operator_address || v.cons_address || v.address) : (v.cons_address || v.address);
+              // a phone's row names its figures for assistive tech, and shows the names once it is open (globals.css)
+              const named = (label: string) => phone && <span className="vt-l">{label}</span>;
               return (
-                // The whole row opens the validator; links keep their own target.
-                <tr key={v.address} className={e.warn ? "warn" : undefined}
-                  onClick={(ev) => openRow(ev, href(v), go)} onAuxClick={(ev) => openRow(ev, href(v), go)}>
+                // The whole row opens the validator; links keep their own target. On a phone a tap opens the row in
+                // place instead, and its name and the open row's last line are the links to its page.
+                <tr key={v.address} className={[e.warn ? "warn" : "", isOpen ? "open" : ""].filter(Boolean).join(" ") || undefined}
+                  onClick={(ev) => {
+                    if (!phone) return openRow(ev, href(v), go);
+                    if (!(ev.target as HTMLElement).closest("a, button") && !window.getSelection()?.toString()) toggle();
+                  }}
+                  onAuxClick={(ev) => openRow(ev, href(v), go)}>
                   <td className="id col-pin">
                     <span className="who">
                       <Avatar v={v} />
@@ -255,16 +360,20 @@ export default function Validators({ rows, window: win, notLive, loading, failed
                         {notLive && v.signaled_upgrade === false && <span className="ours" title="Has not signalled on chain for the app version that brings Fibre.">not signalled</span>}
                         {/* The operator address is the one operators and delegators know (explorers list it); the consensus address stays in the tooltip and on the validator page. */}
                         {/* Without a moniker the name above already is the operator address; the line then gives the consensus address rather than the same one twice. */}
-                        {(v.moniker || v.operator_address) && <span className="addr mono" title={[v.operator_address, v.cons_address || v.address].filter(Boolean).join(" · ")}>{shortMid(v.moniker ? (v.operator_address || v.cons_address || v.address) : (v.cons_address || v.address), 18, 4)}</span>}
+                        {(v.moniker || v.operator_address) && <span className="addr mono" title={[v.operator_address, v.cons_address || v.address].filter(Boolean).join(" · ")}>{shortMid(addr, 18, 4)}</span>}
+                        {isOpen && (v.moniker || v.operator_address) && <Copy text={addr} label={addr === v.operator_address ? "the valoper address" : "the consensus address"} />}
+                        {/* the row's toggle for a keyboard or a screen reader, unseen: a tap anywhere on the row is the same */}
+                        {phone && <button type="button" className="vt-tg sr-only" aria-expanded={isOpen} onClick={toggle}>Details</button>}
                       </span>
                     </span>
                   </td>
-                  <td><span className="state" title={e.title}><i className={"dot " + e.dot} />{e.word}</span></td>
-                  {showHosting && <td><HostingCell h={v.hosting} /></td>}
-                  <td className="num fig">{int(v.voting_power)}</td>
-                  <td className="num fig">{shard(v)}</td>
-                  <td className="num soft-col fig">{signed(v)}</td>
-                  <td className="num">{last(v)}</td>
+                  <td className="vt-ep"><span className="state" title={e.title}><i className={"dot " + e.dot} />{e.word}</span></td>
+                  {showHosting && <td className="vt-ho"><HostingCell h={v.hosting} full={phone} /></td>}
+                  <td className="num fig vt-vp">{named(ORDERS.power.label)}{int(v.voting_power)}</td>
+                  <td className="num fig vt-sd">{named(`${ORDERS.shard.label} (${period})`)}{shard(v)}</td>
+                  <td className="num soft-col fig vt-en">{signed(v, e.dot === "none")}</td>
+                  <td className="num vt-le">{named(ORDERS.last.label)}{last(v)}</td>
+                  {isOpen && <td className="vt-go"><Link href={href(v)}>Validator page <span aria-hidden="true">→</span></Link></td>}
                 </tr>
               );
             })}
