@@ -1019,6 +1019,10 @@ body { background: var(--canvas); }
 .api-conv dt { font-weight: 600; color: var(--text); }
 .api-conv dd { margin: 0; color: var(--text-2); line-height: 1.55; }
 
+/* the poster closes the page, at the content width and framed like the cards above it */
+.api-poster { margin: 48px 0 0; }
+.api-poster img { display: block; width: 100%; height: auto; border-radius: var(--r-card); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+
 @media (max-width: 1180px) {
   .api-ep-head { grid-template-columns: auto minmax(0, 1fr) auto; }
   .api-sum { grid-column: 2; grid-row: 2; }

@@ -13,7 +13,7 @@ export const metadata: Metadata = {
  * The API page: plain documentation. A title, one sentence, the base URL;
  * then every endpoint in order under its resource (endpoints.ts), each
  * opening to its parameters, a Try it and an example response; then what
- * every route shares, one line each.
+ * every route shares, one line each; then the poster, closing the page.
  */
 
 const CONVENTIONS: [string, ReactNode][] = [
@@ -48,6 +48,14 @@ export default function Developers() {
           ))}
         </dl>
       </section>
+
+      <figure className="api-poster">
+        <img src="/poster/tensile-engraving-1600.webp"
+          srcSet="/poster/tensile-engraving-1600.webp 1600w, /poster/tensile-engraving-3200.webp 3200w"
+          sizes="(max-width: 1200px) calc(100vw - 32px), 1120px" width={1600} height={900}
+          alt="Tensile for Celestia Fibre, tensile.huginn.tech: an engraving of a tensile testing machine, with the line Every blob, checked."
+          loading="lazy" decoding="async" />
+      </figure>
     </div>
   );
 }
