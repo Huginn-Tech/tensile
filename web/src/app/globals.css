@@ -1725,8 +1725,10 @@ a.rb-c:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; z-
 .tc-tab[aria-selected="true"] .tc-k { color: var(--text-2); }
 .tc-v { display: block; margin: 10px 0 0; font-family: var(--font-table); font-size: 22px; line-height: 28px; font-weight: 400; letter-spacing: -.01em; color: var(--text-2); font-variant-numeric: proportional-nums lining-nums; white-space: nowrap; }
 .tc-tab[aria-selected="true"] .tc-v { font-weight: 500; color: var(--text); }
-.tc-v .u, .tc-v .of { margin-left: 2px; font-size: var(--t-cell); font-weight: 400; letter-spacing: 0; color: var(--text-3); }
-.tc-v .beside { margin-left: 10px; font-size: var(--t-cell); font-weight: 400; letter-spacing: 0; color: var(--text-3); }
+/* the small words beside a figure sit inside its line (line-height 1), so the line is as tall with them as with the
+   loading frame's bar and nothing under it moves when the figures come */
+.tc-v .u, .tc-v .of { margin-left: 2px; font-size: var(--t-cell); font-weight: 400; line-height: 1; letter-spacing: 0; color: var(--text-3); }
+.tc-v .beside { margin-left: 10px; font-size: var(--t-cell); font-weight: 400; line-height: 1; letter-spacing: 0; color: var(--text-3); }
 .tc-v .beside b { font-weight: 500; color: var(--text-2); }
 .tc-v button.warn { margin-left: 4px; vertical-align: 2px; }
 .tc-static .tc-v { color: var(--text-2); }
