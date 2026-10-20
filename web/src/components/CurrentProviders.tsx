@@ -33,8 +33,9 @@ function ring(R: number) {
     const d0 = deg(l0), d1 = deg(l1), [x0, y0] = at(d0, rc), [x1, y1] = at(d1, rc);
     return `M${x0.toFixed(2)} ${y0.toFixed(2)}A${rc} ${rc} 0 ${d1 - d0 > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
   };
-  // the box reaches down past the ring's ends to hold the share's second line, which sits in the opening
-  return { R, len, cx, cy, at, deg, arc, w: 2 * R + 4, h: cy + 54 };
+  // the box reaches down past the ring's ends to hold the share's second line, which sits in the opening, and past
+  // the ends' round caps
+  return { R, len, cx, cy, at, deg, arc, w: 2 * R + 4, h: Math.ceil(Math.max(cy + 54, cy + rc / 2 + SW / 2 + 1)) };
 }
 
 /**
@@ -71,8 +72,9 @@ export default function CurrentProviders({ rows }: { rows: Validator[] | null })
   const unchecked = up.filter((v) => endpointState(v) === "none");
   const off = ready ? r!.bonded.filter((v) => !reg.has(v.address)).sort(byPower) : [];
 
-  // three lines under the dial take a smaller ring, so the window keeps its height
-  const g = ring(ready && down.length > 0 && unchecked.length > 0 ? 80 : 92);
+  // as large a ring as the window holds without growing, with up to two lines under it; three lines take a smaller
+  // ring, so the window keeps its height
+  const g = ring(ready && down.length > 0 && unchecked.length > 0 ? 94 : 110);
   let at = 0;
   const segs: Seg[] = ready ? [...up, ...down, ...off].map((v) => {
     const l0 = at;
