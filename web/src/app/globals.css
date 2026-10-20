@@ -3491,6 +3491,8 @@ header.top .wrap {
 .top .net.menu summary::before { content: ""; position: absolute; inset: 7px 0; z-index: -1; border-radius: 999px; background: var(--paper); box-shadow: var(--shadow-sm), 0 0 0 1px var(--border); }
 .top .net.menu .list { top: 44px; }
 .top .net.menu .list a, .top .net.menu .list span { min-height: 44px; }
+/* until the first block is read its place stays out of the bar, so the network's "connecting…" has the room */
+.top .blocktick:has(.bt-n.wait) { display: none; }
 
 /* the site search: a button in the bar; tapped, it takes the whole bar (HeaderSearch.tsx adds Cancel and the veil) */
 .top .hs { grid-area: 1 / 5; justify-self: end; position: relative; z-index: 4; pointer-events: auto; flex: none; width: 44px; height: 44px; margin: 0; padding: 0; }
@@ -3572,6 +3574,19 @@ button.cp { display: inline-grid !important; place-items: center; width: 44px !i
 .crumb a { display: inline-flex; align-items: center; min-height: 44px; }
 .copy { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; height: 44px; margin: -12px -6px -12px 2px; padding: 0 8px; border: 0; background: none; font-size: 12px; font-weight: 500; color: var(--accent-ink); vertical-align: middle; }
 .ctl a.btn { display: inline-flex; align-items: center; min-height: 44px; padding-top: 0; padding-bottom: 0; }
+/* the pager's buttons: a 44 px target around the same 32 px pill, the gaps between the pills unchanged */
+.pager .ctl { gap: 0; }
+.pager .btn { position: relative; isolation: isolate; height: 44px; min-width: 44px; border: 0; background: none; box-shadow: none; }
+.pager .btn::before { content: ""; position: absolute; inset: 6px 0; z-index: -1; border-radius: 999px; border: 1px solid var(--border); background: var(--paper); box-shadow: var(--shadow-sm); transition: border-color var(--dur); }
+.pager .btn.icon { width: 44px; }
+.pager .btn.icon::before { inset: 6px; }
+.pager .btn:hover:not(:disabled)::before { border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.pager .btn:disabled::before { box-shadow: none; }
+/* an address's Copy pill keeps its size, its target 44 px around it; the publisher finder as tall as the other fields */
+.pb-addr .copy::after, .bd-err-a .copy::after { content: ""; position: absolute; inset: -10px -4px; }
+.bd-mast .pb-addr > .copy::after { content: none; }
+.pl-find .lg-chip { height: 44px; }
+button.pp-params { min-height: 44px; margin: -14px 0; }
 /* links set in a line of text: a 44 px target around the same words, the line unchanged */
 a.lg-who, a.bd-ns, .lg-t .c-b a, .bd-meta a, .vd-own a, .cm-ev-t a { padding-top: 13px; padding-bottom: 13px; margin-top: -13px; margin-bottom: -13px; }
 .lg-t .c-b a { display: inline-block; }
@@ -3893,17 +3908,33 @@ a.rb-c::after { inset: 0 calc(var(--rb-gap) / -2); }
 .vd-oc-lead .vd-ocf:not(.lead) .vd-fv { margin-top: 4px; }
 }
 
-/* a narrow phone: the Blobs list's tabs and its publisher filter a little tighter, so both keep one line */
+/* a narrow phone: the Blobs list's tabs and its publisher filter a little tighter, so both keep one line; the header's
+   tabs a little tighter, so the last of them stays clear of the theme button, and the block a step closer to the network */
 @media (max-width: 379px) {
   .lg-list:not(.pb-list):not(.vd-list) > .list-head { column-gap: 6px; }
   .lg-list:not(.pb-list):not(.vd-list) > .list-head > .tabs button { padding: 0 10px; }
   .lg-list:not(.pb-list):not(.vd-list) .lg-tools > .lg-pick:nth-last-child(2):not(.on) > .lg-chip { padding: 0 10px; }
+  .top nav { gap: 0; }
+  .top nav a, .top nav a:hover { padding: 0 10px; }
+  .top .blocktick { margin-right: 4px; }
+}
+/* under 360 px the header's words a step smaller, so its bar and its tabs keep one line each, every word kept */
+@media (max-width: 359px) {
+  .top .brand { gap: 7px; font-size: 15px; }
+  .top .blocktick { gap: 4px; font-size: 11.5px; }
+  .top .net.menu summary { padding: 0 9px 0 8px; gap: 5px; }
+  .top nav a, .top nav a:hover { padding: 0 9px; font-size: 14px; }
 }
 /* the narrowest phones: Cancel a little tighter, so the search's placeholder keeps every word at 12 px */
 @media (max-width: 340px) {
   .top .hs.on { padding-right: 72px; }
   .top .hs-cancel { padding: 0 10px; }
   .top .hs.on .hs-field input[type=search]::placeholder { font-size: clamp(12px, calc((100vw - 136px) / 15.8), 14px); }
+}
+/* under 340 px the bar has no room for the block beside the network: the pages that need a height show their own */
+@media (max-width: 339px) {
+  .top .blocktick { display: none; }
+  .top nav a, .top nav a:hover { padding: 0 7px; font-size: 13.5px; }
 }
 /* the phone's header and bands slide; with reduced motion they move at once */
 @media (max-width: 720px) and (prefers-reduced-motion: reduce) {
