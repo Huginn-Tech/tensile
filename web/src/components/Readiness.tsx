@@ -41,6 +41,18 @@ export function readiness(rows: Validator[]) {
   const registered = bonded.filter((v) => !!v.host);
   const regPower = registered.reduce((s, v) => s + (v.voting_power || 0), 0);
   const quorum = Math.floor((total * 2) / 3);
-  const pct = (n: number) => (total > 0 ? `${((100 * n) / total).toFixed(1)}%` : "—");
+  // one decimal, like the rest of the dial; only all of it reads "100%" and only none of it "0%". A share that one
+  // decimal would round to either end gets a second one, and past that a bound, as pct2 in lib/api.ts does
+  const pct = (n: number) => {
+    if (total <= 0) return "—";
+    if (n >= total) return "100%";
+    if (n <= 0) return "0%";
+    const v = (100 * n) / total;
+    for (const d of [1, 2]) {
+      const s = v.toFixed(d);
+      if (Number(s) > 0 && Number(s) < 100) return `${s}%`;
+    }
+    return v > 50 ? ">99.99%" : "<0.01%";
+  };
   return { bonded, total, registered, regPower, quorum, pct };
 }
