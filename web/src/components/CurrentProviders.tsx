@@ -13,10 +13,10 @@ export function Frac() {
 
 /* the dial: an open ring of 240°, its opening at the foot, angles from the top and clockwise */
 const SPAN = 240, A0 = -SPAN / 2;
-const SW = 6; // the ring's width, as the latest blob's bar is tall
+const SW = 14; // the ring's width: wide enough that the cuts between the providers read
 const TILE = 6; // without a Fibre provider, a validator this long (px) or longer is a stretch of its own, the shorter ones run together
-const GAP = 1.5; // after such a stretch of its own, before the next
-const CUT = 0.75; // after a Fibre provider's stretch: every provider is one of its own, however short
+const GAP = 1.75; // after such a stretch of its own, before the next
+const CUT = 1.25; // after a Fibre provider's stretch: every provider is one of its own, however short
 
 type Tone = "on" | "hold" | "off";
 type Seg = { v: Validator; tone: Tone; l0: number; l1: number; own: boolean };
@@ -33,9 +33,15 @@ function ring(R: number) {
     const d0 = deg(l0), d1 = deg(l1), [x0, y0] = at(d0, rc), [x1, y1] = at(d1, rc);
     return `M${x0.toFixed(2)} ${y0.toFixed(2)}A${rc} ${rc} 0 ${d1 - d0 > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
   };
+  // a round cap on the ring's end at d: half a disc, outside the ring only (forward: past the end, else before the
+  // start), so the stretch under it is not painted twice where the ring's tone is see-through
+  const cap = (d: number, forward: boolean) => {
+    const [ox, oy] = at(d, R), [ix, iy] = at(d, R - SW);
+    return `M${ox.toFixed(2)} ${oy.toFixed(2)}A${SW / 2} ${SW / 2} 0 0 ${forward ? 1 : 0} ${ix.toFixed(2)} ${iy.toFixed(2)}Z`;
+  };
   // the box reaches down past the ring's ends to hold the share's second line, which sits in the opening, and past
   // the ends' round caps
-  return { R, len, cx, cy, at, deg, arc, w: 2 * R + 4, h: Math.ceil(Math.max(cy + 54, cy + rc / 2 + SW / 2 + 1)) };
+  return { R, len, cx, cy, at, deg, arc, cap, w: 2 * R + 4, h: Math.ceil(Math.max(cy + 54, cy + rc / 2 + SW / 2 + 1)) };
 }
 
 /**
@@ -74,7 +80,7 @@ export default function CurrentProviders({ rows }: { rows: Validator[] | null })
 
   // as large a ring as the window holds without growing, with up to two lines under it; three lines take a smaller
   // ring, so the window keeps its height
-  const g = ring(ready && down.length > 0 && unchecked.length > 0 ? 94 : 110);
+  const g = ring(ready && down.length > 0 && unchecked.length > 0 ? 94 : 109);
   let at = 0;
   const segs: Seg[] = ready ? [...up, ...down, ...off].map((v) => {
     const l0 = at;
@@ -98,7 +104,6 @@ export default function CurrentProviders({ rows }: { rows: Validator[] | null })
   const lq = total > 0 ? Math.min(1, Math.max(0, quorum / total)) * g.len : 0;
   const [nx0, ny0] = g.at(g.deg(lq), g.R - SW - 5), [nx1, ny1] = g.at(g.deg(lq), g.R + 4);
   const [qx, qy] = g.at(g.deg(lq), g.R - SW - 8);
-  const [sx, sy] = g.at(A0, g.R - SW / 2), [ex, ey] = g.at(A0 + SPAN, g.R - SW / 2);
   const capTone = (s?: Seg) => `cp-cap ${s?.tone ?? "off"}${p && s && p === s ? " lit" : ""}`;
   const name = (v: Validator) => v.moniker || shortMid(v.operator_address || v.address, 18, 4);
   const standing = (s: Seg) => s.tone === "off" ? "no Fibre provider" : s.tone === "hold" ? "unreachable"
@@ -132,8 +137,8 @@ export default function CurrentProviders({ rows }: { rows: Validator[] | null })
             {runs.map((s, k) => (
               <path key={`${s.tone}${s.l0}:${k}`} className={`cp-seg ${s.tone}`} d={g.arc(s.l0, end(s, k < runs.length - 1))} strokeWidth={SW} />
             ))}
-            <circle className={capTone(segs[0])} cx={sx} cy={sy} r={SW / 2} />
-            <circle className={capTone(segs[segs.length - 1])} cx={ex} cy={ey} r={SW / 2} />
+            <path className={capTone(segs[0])} d={g.cap(A0, false)} />
+            <path className={capTone(segs[segs.length - 1])} d={g.cap(A0 + SPAN, true)} />
             {p && <path className={`cp-pt ${p.tone}`} d={g.arc(p.l0, Math.max(p.l0 + 1.5, end(p, p.own)))} strokeWidth={SW} />}
             <line className="cp-halo" x1={nx0} y1={ny0} x2={nx1} y2={ny1} />
             <line className="cp-needle" x1={nx0} y1={ny0} x2={nx1} y2={ny1} />
