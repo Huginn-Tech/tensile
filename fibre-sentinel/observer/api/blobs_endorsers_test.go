@@ -101,4 +101,14 @@ func TestBlobsListEndorsers(t *testing.T) {
 	if code, body := get("/v1/blobs?endorsers=yes"); code != 400 || !strings.Contains(body, "endorsers must be 0 or 1") {
 		t.Errorf("a bad value: %d %s", code, body)
 	}
+	// a page with endorsers holds at most 50 blobs; without them, 500
+	if code, body := get("/v1/blobs?endorsers=1&limit=51"); code != 400 || !strings.Contains(body, "between 1 and 50") {
+		t.Errorf("51 with endorsers: %d %s", code, body)
+	}
+	if code, body := get("/v1/blobs?endorsers=1&limit=50"); code != 200 {
+		t.Errorf("50 with endorsers: %d %s", code, body)
+	}
+	if code, body := get("/v1/blobs?limit=500"); code != 200 {
+		t.Errorf("500 without endorsers: %d %s", code, body)
+	}
 }
