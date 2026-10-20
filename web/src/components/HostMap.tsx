@@ -255,9 +255,11 @@ function EventPill({ ev, pulse, v, place }: { ev: TipEndpointEvent; pulse: boole
   useEvery(30000);
   const who = v ? name(v) : ev.moniker || ev.operator_address || ev.address;
   const did = ev.outcome === "changed" ? "changed its endpoint" : "registered its endpoint";
+  // its dot says what the endpoint's check found: the map's reachable or unreachable
+  const down = !!v && endpointState(v) === "unreachable";
   return (
     <p className="cm-ev">
-      <i className={`cm-ev-dot${pulse ? " pop" : ""}`} aria-hidden="true" />
+      <i className={`cm-ev-dot${down ? " hold" : ""}${pulse ? " pop" : ""}`} aria-hidden="true" />
       <span className="cm-ev-t" title={`${who} ${did}${place?.cc ? ` · ${countryName(place.cc)}` : ""}${place?.provider ? ` · ${place.provider}` : ""} · ${utcWord(ev.time)}`}>
         <Link href={v ? valLink(v) : validatorHref(ev.operator_address, ev.address)}>{who}</Link> {did}
       </span>
@@ -633,10 +635,20 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
   useEffect(() => onTip((f) => {
     if (f.data?.server_time && f.fetchedAt) skew.current = Date.parse(f.data.server_time) - Date.parse(f.fetchedAt);
   }), []);
-  const ev = useEndpointEvent();
+  // An endpoint event is named once its endpoint has had its first check (within about a minute), so the pill's dot
+  // can say what the check found; until then the pill keeps the event before it.
+  const evNew = useEndpointEvent();
+  const evChecked = useRef<TipEndpointEvent | null | undefined>(undefined);
+  if (evNew !== undefined) {
+    const nv = evNew ? (rows ?? []).find((v) => v.address.toLowerCase() === evNew.address) : undefined;
+    if (!evNew || (nv && endpointState(nv) !== "none")) evChecked.current = evNew;
+    else if (evChecked.current === undefined) evChecked.current = null;
+  }
+  const ev = evChecked.current;
   const evKey = ev ? eventId(ev) : "";
   const firstEv = useRef<string | null>(null);
-  if (ev !== undefined && firstEv.current === null) firstEv.current = evKey;
+  // what the page opened with, once the validators are in to tell whether it was checked: there, not news
+  if (ev !== undefined && rows !== null && firstEv.current === null) firstEv.current = evKey;
   const evFresh = !!ev && evKey !== firstEv.current;
   const evVal = ev ? (rows ?? []).find((v) => v.address.toLowerCase() === ev.address) : undefined;
   const evHost = ev ? hosts.find((h) => h.v.address.toLowerCase() === ev.address) : undefined;
@@ -687,11 +699,12 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
     return v ? { name: name(v), href: valLink(v) } : { name: `${addr.slice(0, 8)}…`, href: validatorHref(undefined, addr) };
   };
   // a new or changed endpoint that comes while the page is open: the pill for 12 s, and its place bursts; one older
-  // than 30 s when seen (the page was hidden, or the observer caught up) is not news, and only waits its turn
+  // than 2 min when seen (the page was hidden, or the observer caught up; the first check takes up to a minute) is not
+  // news, and only waits its turn
   const [epAt, setEpAt] = useState(0);
   useEffect(() => {
     if (!evFresh || !ev) return;
-    if (Date.now() + skew.current - Date.parse(ev.time) > 30000) return;
+    if (Date.now() + skew.current - Date.parse(ev.time) > 120000) return;
     setEpAt(Date.now());
     const id = owners.current.get(ev.address);
     if (id) burst.current.fire([{ id, n: 1 }]);
