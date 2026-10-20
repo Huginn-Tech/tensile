@@ -14,11 +14,12 @@ export function Frac() {
 /* the dial: an open ring of 240°, its opening at the foot, angles from the top and clockwise */
 const SPAN = 240, A0 = -SPAN / 2;
 const SW = 6; // the ring's width, as the latest blob's bar is tall
-const TILE = 6; // a validator this long (px) or longer is a stretch of its own, the shorter ones run together
-const GAP = 1.5; // after a stretch of its own, before the next
+const TILE = 6; // without a Fibre provider, a validator this long (px) or longer is a stretch of its own, the shorter ones run together
+const GAP = 1.5; // after such a stretch of its own, before the next
+const CUT = 0.75; // after a Fibre provider's stretch: every provider is one of its own, however short
 
 type Tone = "on" | "hold" | "off";
-type Seg = { v: Validator; tone: Tone; l0: number; l1: number; big: boolean };
+type Seg = { v: Validator; tone: Tone; l0: number; l1: number; own: boolean };
 
 /** the ring's geometry at outer radius R: its box, its centre line's length, and the path along it between two lengths */
 function ring(R: number) {
@@ -42,14 +43,16 @@ function ring(R: number) {
  * round an open ring, one stretch per validator, as long as its voting power,
  * those with a Fibre provider first and lit, largest first, the ones whose
  * host did not answer this observer's latest check after them in amber, then
- * the others. The ⅔ a blob needs to settle is a needle across it. A validator
- * long enough to read on its own is a stretch of its own; the long tail of
- * small ones runs together, one stretch per tone, so it reads calm and not as
- * hatching. Pointing at the ring names the validator under it in the middle,
- * however short its stretch. Under the dial, one line per part that is not a
- * working Fibre provider, each only when there is one, in columns. Every
- * stretch is a validator and every length a share of the chain's own records
- * (x/staking, x/valaddr); see Readiness.tsx.
+ * the others. The ⅔ a blob needs to settle is a needle across it. Every
+ * validator with a Fibre provider is a stretch of its own, however short, cut
+ * from the next by a hairline taken from its own end, so the lengths stay true.
+ * Among the others, a validator long enough to read on its own is a stretch of
+ * its own; their long tail of small ones runs together, one stretch, so it
+ * reads calm and not as hatching. Pointing at the ring names the validator
+ * under it in the middle, however short its stretch. Under the dial, one line
+ * per part that is not a working Fibre provider, each only when there is one,
+ * in columns. Every stretch is a validator and every length a share of the
+ * chain's own records (x/staking, x/valaddr); see Readiness.tsx.
  *
  * The dial's size depends only on how many lines stand under it, so it has its
  * size before any data; without rows yet it is one quiet ring with a
@@ -75,16 +78,20 @@ export default function CurrentProviders({ rows }: { rows: Validator[] | null })
     const l0 = at;
     at += ((v.voting_power || 0) * g.len) / total;
     const tone: Tone = !reg.has(v.address) ? "off" : endpointState(v) === "unreachable" ? "hold" : "on";
-    return { v, tone, l0, l1: at, big: at - l0 >= TILE };
+    return { v, tone, l0, l1: at, own: tone !== "off" || at - l0 >= TILE };
   }) : [];
-  // what is drawn: a stretch per validator long enough to read, one per run of shorter ones of a tone
-  const runs: { tone: Tone; l0: number; l1: number; big: boolean }[] = [];
+  // what is drawn: a stretch per Fibre provider and per other validator long enough to read, one per run of the
+  // shorter others
+  const runs: { tone: Tone; l0: number; l1: number; own: boolean }[] = [];
   for (const s of segs) {
     const last = runs[runs.length - 1];
-    if (!s.big && last && !last.big && last.tone === s.tone) last.l1 = s.l1;
-    else runs.push({ tone: s.tone, l0: s.l0, l1: s.l1, big: s.big });
+    if (!s.own && last && !last.own && last.tone === s.tone) last.l1 = s.l1;
+    else runs.push({ tone: s.tone, l0: s.l0, l1: s.l1, own: s.own });
   }
-  const end = (l0: number, l1: number, gap: boolean) => Math.max(l0 + 0.6, gap && l1 - l0 > 2 * GAP ? l1 - GAP : l1);
+  // where a stretch's paint ends when it is cut from the next: a provider's CUT short of it, however short it is;
+  // any other's GAP short, when it is long enough to spare that. Every stretch keeps at least 0.6px.
+  const end = (s: { tone: Tone; l0: number; l1: number }, cut: boolean) => Math.max(s.l0 + 0.6,
+    !cut ? s.l1 : s.tone !== "off" ? s.l1 - CUT : s.l1 - s.l0 > 2 * GAP ? s.l1 - GAP : s.l1);
   const p = pick ? segs.find((s) => s.v.address === pick) ?? null : null;
   const lq = total > 0 ? Math.min(1, Math.max(0, quorum / total)) * g.len : 0;
   const [nx0, ny0] = g.at(g.deg(lq), g.R - SW - 5), [nx1, ny1] = g.at(g.deg(lq), g.R + 4);
@@ -121,11 +128,11 @@ export default function CurrentProviders({ rows }: { rows: Validator[] | null })
           onPointerOver={ready ? onOver : undefined} onPointerDown={ready ? onOver : undefined} onPointerLeave={ready ? onLeave : undefined}>
           {ready ? <>
             {runs.map((s, k) => (
-              <path key={`${s.tone}${s.l0}`} className={`cp-seg ${s.tone}`} d={g.arc(s.l0, end(s.l0, s.l1, k < runs.length - 1))} strokeWidth={SW} />
+              <path key={`${s.tone}${s.l0}:${k}`} className={`cp-seg ${s.tone}`} d={g.arc(s.l0, end(s, k < runs.length - 1))} strokeWidth={SW} />
             ))}
             <circle className={capTone(segs[0])} cx={sx} cy={sy} r={SW / 2} />
             <circle className={capTone(segs[segs.length - 1])} cx={ex} cy={ey} r={SW / 2} />
-            {p && <path className={`cp-pt ${p.tone}`} d={g.arc(p.l0, Math.max(p.l0 + 1.5, end(p.l0, p.l1, p.big)))} strokeWidth={SW} />}
+            {p && <path className={`cp-pt ${p.tone}`} d={g.arc(p.l0, Math.max(p.l0 + 1.5, end(p, p.own)))} strokeWidth={SW} />}
             <line className="cp-halo" x1={nx0} y1={ny0} x2={nx1} y2={ny1} />
             <line className="cp-needle" x1={nx0} y1={ny0} x2={nx1} y2={ny1} />
             {/* the pointer's targets: one per validator, its whole stretch and wider than the ring */}
