@@ -11,11 +11,12 @@ import type { Validator } from "@/lib/api";
  */
 
 /**
- * the endpoint's standing for a publisher: reachable with a certificate it accepts; down when it did not answer, or
- * answered without TLS or with a certificate that is not this validator's or has lapsed, so a publisher will not
- * upload to it; none before its first check. Reachability is the API's endpoint_state when it sends one.
+ * the endpoint's standing for a publisher: reachable with a certificate it accepts; unreachable when it did not
+ * answer; wrong certificate (cert) when it answered without TLS or with a certificate that is not this validator's
+ * or has lapsed, so a publisher will not upload to it either; none before its first check. Reachability is the API's
+ * endpoint_state when it sends one.
  */
-export type EndpointState = "reachable" | "down" | "none";
+export type EndpointState = "reachable" | "unreachable" | "cert" | "none";
 type WithState = Validator & { endpoint_state?: "reachable" | "unreachable" | "none" };
 const REJECTED = new Set(["no_tls", "expired", "mismatch"]);
 
@@ -24,9 +25,11 @@ export function endpointState(v: Validator): EndpointState {
   // a registered host this observer has not checked yet is no one's failure
   const reach: "reachable" | "unreachable" | "none" = s === "reachable" || s === "unreachable" || s === "none" ? s
     : !v.host || v.reachable == null ? "none" : v.reachable ? "reachable" : "unreachable";
-  if (reach === "none") return "none";
-  return reach === "reachable" && !REJECTED.has(v.identity_status) ? "reachable" : "down";
+  return reach === "reachable" && REJECTED.has(v.identity_status) ? "cert" : reach;
 }
+
+/** amber on the dial and the map: a publisher will not upload to it, whichever the reason */
+export const isDown = (s: EndpointState) => s === "unreachable" || s === "cert";
 
 export function bondedOf(rows: Validator[]): Validator[] {
   return rows.filter((v) => !v.jailed && (!v.bond_status || v.bond_status === "BOND_STATUS_BONDED"));

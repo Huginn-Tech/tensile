@@ -865,7 +865,7 @@ export const GROUPS: Group[] = [
         id: "network",
         path: "/v1/network",
         summary: "Network service rate, availability and endpoint reachability.",
-        desc: "`reachability` is the registered endpoints that answered their latest check, now; `reachability_window` is every endpoint check in the selected period that answered. `exclude` recomputes the figures without the named validators (availability still counts every validator), and `provisional_faults`, when present, counts the `broken` obligations that rest only on not-served readings under 30 minutes old, which can still be withdrawn.",
+        desc: "`reachability` is the registered endpoints that answered their latest check, now; `reachability_window` is every endpoint check in the selected period that answered with the validator's own certificate. `exclude` recomputes the figures without the named validators (availability still counts every validator), and `provisional_faults`, when present, counts the `broken` obligations that rest only on not-served readings under 30 minutes old, which can still be withdrawn.",
         params: [
           windowParam, asOf,
           { name: "exclude", in: "query", type: "string", desc: "Up to 8 validators in any address form, comma-separated or repeated." },

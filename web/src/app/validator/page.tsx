@@ -611,7 +611,7 @@ function Page() {
         {/* the period's other figures in one row under them, each in a frame of its own: separate measurements, read one
             by one */}
         <div className="vd-boxes">
-          <div className="vd-box" title={!bonded ? "Out of the bonded set: not checked." : reach ? `${int(reach.num)} of ${int(reach.den)} handshakes with the registered endpoint completed in the period; not signing uptime.${v.last_unreachable_at ? ` Last failed ${utcWord(v.last_unreachable_at)}.` : ""}` : "No handshake yet."}>
+          <div className="vd-box" title={!bonded ? "Out of the bonded set: not checked." : reach ? `${int(reach.num)} of ${int(reach.den)} checks in the period completed TLS with this validator’s certificate; not signing uptime.${v.last_unreachable_at ? ` Last unreachable ${utcWord(v.last_unreachable_at)}.` : ""}` : "No handshake yet."}>
             <span className="vd-lbl">Reachability</span>
             <span className="vd-fv"><b>{reach ? pctOf(reach.num, reach.den) : "—"}</b>{reach && <em>{int(reach.num)} / {int(reach.den)}</em>}</span>
           </div>

@@ -441,10 +441,12 @@ One sentence each, and what a reader should conclude.
   classification is a function of the wire result and the code; with these
   fields both halves are on the row.
 - **Reachability** (`reachability_window`) is heartbeats that completed TLS
-  over heartbeats sent, per validator and network-wide. The numerator is
-  `tcp_ok = 1 AND tls_ok = 1`; whether the certificate was the right one is
-  the separate identity rate ("Endorsed"), which is computed and no longer
-  served (`identity_status` is the published word). Heartbeats exist only
+  with a certificate the validator's consensus key endorsed, over heartbeats
+  sent, per validator and network-wide. The numerator is `tcp_ok = 1 AND
+  tls_ok = 1 AND identity_ok = 1`: a certificate a publisher rejects is no
+  more use to it than no answer. The identity rate ("Endorsed", over the
+  completed handshakes alone) is computed and no longer served
+  (`identity_status` is the published word). Heartbeats exist only
   while the validator is in `AllBondedFibreProviders`, so a jailed or
   unbonded validator's denominator stops growing and the table prints no
   percentage for it. The table's status word is liveness only: the chain's

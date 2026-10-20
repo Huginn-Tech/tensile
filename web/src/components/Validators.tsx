@@ -30,7 +30,7 @@ function isSelf(v: Validator): boolean {
   return [v.address, v.cons_address, v.operator_address].some((a) => !!a && a.toLowerCase() === SELF_VALIDATOR);
 }
 
-type Filter = "all" | "providers" | "down" | "nohost";
+type Filter = "all" | "providers" | "unreachable" | "cert" | "nohost";
 type SortKey = "power" | "shard" | "signed" | "last";
 
 /**
@@ -106,7 +106,8 @@ export default function Validators({ rows, window: win, notLive, loading, failed
   const counts = useMemo(() => ({
     all: rows.length,
     providers: rows.filter((v) => bonded(v) && !!v.host).length,
-    down: rows.filter((v) => bonded(v) && !!v.host && endpointState(v) === "down").length,
+    unreachable: rows.filter((v) => bonded(v) && !!v.host && endpointState(v) === "unreachable").length,
+    cert: rows.filter((v) => bonded(v) && !!v.host && endpointState(v) === "cert").length,
     nohost: rows.filter((v) => bonded(v) && !v.host).length,
   }), [rows]);
 
@@ -118,7 +119,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
     const pool = rows.filter((v) => {
       switch (filter) {
         case "providers": return bonded(v) && !!v.host;
-        case "down": return bonded(v) && !!v.host && endpointState(v) === "down";
+        case "unreachable": case "cert": return bonded(v) && !!v.host && endpointState(v) === filter;
         case "nohost": return bonded(v) && !v.host;
         default: return true;
       }
@@ -208,7 +209,8 @@ export default function Validators({ rows, window: win, notLive, loading, failed
             <select value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
               <option value="all">All validators · {counts.all}</option>
               <option value="providers">Fibre providers · {counts.providers}</option>
-              <option value="down">Not working now · {counts.down}</option>
+              <option value="unreachable">Unreachable now · {counts.unreachable}</option>
+              <option value="cert">Wrong certificate now · {counts.cert}</option>
               <option value="nohost">No endpoint · {counts.nohost}</option>
             </select>
           </label>
@@ -234,7 +236,8 @@ export default function Validators({ rows, window: win, notLive, loading, failed
                   : rows.length === 0 && failed ? `${failedWords(failed)}.`
                   : rows.length === 0 ? "No validators on record yet."
                   : needle ? `Nothing matches “${q}”.`
-                  : filter === "down" ? "Every registered endpoint answered its newest check with a certificate a publisher accepts."
+                  : filter === "unreachable" ? "Every registered endpoint answered its newest check."
+                  : filter === "cert" ? "No endpoint answered its newest check with a certificate a publisher rejects."
                   : filter === "providers" ? "No bonded validator has registered a Fibre provider yet."
                   : "Every bonded validator has registered a Fibre provider."}
               </td></tr>
