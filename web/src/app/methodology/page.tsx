@@ -230,6 +230,7 @@ export default function Methodology() {
             ]} />
             <p>A check asks for no blob data, so reachability says nothing about serving rows, and it is not signing uptime.</p>
             <p id="reachable-now">The status shown now, reachable or unreachable, is the newest check, with two allowances. One failed check after a success still shows reachable; two in a row show unreachable. An endpoint the main location cannot reach shows reachable when the second location completed a handshake with it in the last 15 minutes. Neither allowance changes the percentage.</p>
+            <p id="not-working">On the map, the providers dial and the validators&rsquo; Not working now filter, an endpoint that answers without TLS, or with a certificate that is not this validator&rsquo;s or has lapsed, counts as not working along with the unreachable ones: a publisher will not upload to it.</p>
           </Def>
 
           <Def id="throughput" name="Throughput" say="The median download speed of the validator’s served shards of 2 MiB or more.">

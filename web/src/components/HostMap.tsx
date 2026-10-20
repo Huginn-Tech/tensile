@@ -24,11 +24,12 @@ import { PillPicker, HOLD_MS, ROTATE_MS } from "@/lib/pillpick";
  *
  * Every place is a disc ringed in its state's colour carrying its count; a
  * lone host is a solid dot. Hosts close together on screen share one badge
- * (badges never touch). A badge with an unreachable host carries an amber pip
- * on its rim, and one whose hosts all stopped answering turns amber; the map
+ * (badges never touch). A badge with a host not working (no answer, or a
+ * certificate a publisher rejects) carries an amber pip on its rim, and one
+ * whose hosts all are turns amber; the map
  * shows reachability only, what was served is on each validator's page. Names
- * appear only on hover, focus or tap, in the place's popover (its unreachable
- * hosts first), and the other badges step back
+ * appear only on hover, focus or tap, in the place's popover (its hosts not
+ * working first), and the other badges step back
  * while one is open. A badge that holds several places zooms in on them; the
  * corner buttons, a double click, a pinch on a trackpad and a drag (once
  * zoomed) move the view, each in one eased flight.
@@ -51,9 +52,9 @@ type Cluster = { id: string; hosts: Host[]; ux: number; uy: number; locs: number
 /** the visible part of the map, in map units: top-left corner and width (height follows the box) */
 type View = { x: number; y: number; w: number };
 
-const STATE_WORD: Record<EndpointState, string> = { reachable: "reachable", unreachable: "unreachable", none: "not checked yet" };
-const STATE_VAR: Record<EndpointState, string> = { reachable: "var(--accent)", unreachable: "var(--hold)", none: "var(--pending)" };
-const ORDER: EndpointState[] = ["reachable", "unreachable", "none"];
+const STATE_WORD: Record<EndpointState, string> = { reachable: "reachable", down: "not working", none: "not checked yet" };
+const STATE_VAR: Record<EndpointState, string> = { reachable: "var(--accent)", down: "var(--hold)", none: "var(--pending)" };
+const ORDER: EndpointState[] = ["reachable", "down", "none"];
 
 /** the home view's top is 72°N, above every city anyone hosts in; a phone's crop runs from there to 50°S */
 const TOP = project(0, 72)[1], BOTTOM = project(0, -50)[1];
@@ -159,10 +160,10 @@ function cluster(hosts: Host[], pxPerUnit: number, narrow: boolean): Cluster[] {
     const merged: C = { hosts: [...a.hosts, ...b.hosts], ux: (a.ux * na + b.ux * nb) / (na + nb), uy: (a.uy * na + b.uy * nb) / (na + nb) };
     cs = cs.filter((_, i) => i !== best![0] && i !== best![1]).concat(merged);
   }
-  // a place's hosts as its popover lists them: the unreachable first, so a badge opened for its amber pip shows them at
+  // a place's hosts as its popover lists them: the ones not working first, so a badge opened for its amber pip shows them at
   // once, then the rest; each group by voting power
   return cs.map((c) => {
-    const hosts = [...c.hosts].sort((x, y) => Number(y.state === "unreachable") - Number(x.state === "unreachable") || (y.v.voting_power || 0) - (x.v.voting_power || 0));
+    const hosts = [...c.hosts].sort((x, y) => Number(y.state === "down") - Number(x.state === "down") || (y.v.voting_power || 0) - (x.v.voting_power || 0));
     const n = new Map<string, number>();
     for (const h of hosts) if (h.cc) n.set(h.cc, (n.get(h.cc) ?? 0) + 1);
     const ccs = [...n.entries()].sort((p, q) => q[1] - p[1]).map(([cc]) => cc);
@@ -255,8 +256,8 @@ function EventPill({ ev, pulse, v, place }: { ev: TipEndpointEvent; pulse: boole
   useEvery(30000);
   const who = v ? name(v) : ev.moniker || ev.operator_address || ev.address;
   const did = ev.outcome === "changed" ? "changed its endpoint" : "registered its endpoint";
-  // its dot says what the endpoint's check found: the map's reachable or unreachable
-  const down = !!v && endpointState(v) === "unreachable";
+  // its dot says what the endpoint's check found: the map's reachable or not working
+  const down = !!v && endpointState(v) === "down";
   return (
     <p className="cm-ev">
       <i className={`cm-ev-dot${down ? " hold" : ""}${pulse ? " pop" : ""}`} aria-hidden="true" />
@@ -805,10 +806,10 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
         </div>
         {/* no heading of its own: the counts on the bar say what the map shows, and "Current Fibre providers" below is the one heading */}
         <div className="cm-title">
-          <p className="cm-key" title="Observed by Tensile: whether each registered host answered its latest endpoint check">
+          <p className="cm-key" title="Observed by Tensile: whether each registered host answered its latest endpoint check with a certificate a publisher accepts">
             <Eye />
             <span><i className="k-ok" />reachable</span>
-            <span><i className="k-hold" />unreachable</span>
+            <span><i className="k-hold" />not working</span>
             {unchecked && <span><i className="k-none" />not checked yet</span>}
           </p>
         </div>
@@ -819,7 +820,7 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
             const isOpen = open === c.id;
             const place = placeLabel(c);
             const tally = ORDER.map((s) => [s, c.hosts.filter((h) => h.state === s).length] as const).filter(([, n]) => n > 0);
-            const unreach = c.hosts.filter((h) => h.state === "unreachable").length;
+            const unreach = c.hosts.filter((h) => h.state === "down").length;
             const none = c.hosts.filter((h) => h.state === "none").length;
             const n = c.hosts.length;
             const tone = unreach === n ? "hold" : none === n ? "none" : "ok";

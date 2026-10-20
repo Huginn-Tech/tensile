@@ -48,11 +48,11 @@ function ring(R: number) {
  * Current Fibre providers: the share of voting power held by validators with
  * a Fibre provider registered, in the middle of a dial: the bonded set once
  * round an open ring, one stretch per validator, as long as its voting power,
- * those with a Fibre provider first and lit, largest first, the ones whose
- * host did not answer this observer's latest check after them in amber, then
- * the others. The ⅔ a blob needs to settle is a needle across it. Every
+ * those with a Fibre provider first and lit, largest first, the ones not
+ * working at this observer's latest check (no answer, or a certificate a
+ * publisher rejects) after them in amber, then the others. The ⅔ a blob needs to settle is a needle across it. Every
  * validator with a Fibre provider is a stretch of its own, however short, cut
- * from the next by a hairline taken from its own end, so the lengths stay true.
+ * from the next by a thin cut taken from its own end, so the lengths stay true.
  * Among the others, a validator long enough to read on its own is a stretch of
  * its own; their long tail of small ones runs together, one stretch, so it
  * reads calm and not as hatching. Pointing at the ring names the validator
@@ -73,8 +73,8 @@ export default function CurrentProviders({ rows }: { rows: Validator[] | null })
 
   const byPower = (a: Validator, b: Validator) => (b.voting_power || 0) - (a.voting_power || 0);
   const reg = new Set(ready ? r!.registered.map((v) => v.address) : []);
-  const up = ready ? r!.registered.filter((v) => endpointState(v) !== "unreachable").sort(byPower) : [];
-  const down = ready ? r!.registered.filter((v) => endpointState(v) === "unreachable").sort(byPower) : [];
+  const up = ready ? r!.registered.filter((v) => endpointState(v) !== "down").sort(byPower) : [];
+  const down = ready ? r!.registered.filter((v) => endpointState(v) === "down").sort(byPower) : [];
   const unchecked = up.filter((v) => endpointState(v) === "none");
   const off = ready ? r!.bonded.filter((v) => !reg.has(v.address)).sort(byPower) : [];
 
@@ -85,7 +85,7 @@ export default function CurrentProviders({ rows }: { rows: Validator[] | null })
   const segs: Seg[] = ready ? [...up, ...down, ...off].map((v) => {
     const l0 = at;
     at += ((v.voting_power || 0) * g.len) / total;
-    const tone: Tone = !reg.has(v.address) ? "off" : endpointState(v) === "unreachable" ? "hold" : "on";
+    const tone: Tone = !reg.has(v.address) ? "off" : endpointState(v) === "down" ? "hold" : "on";
     return { v, tone, l0, l1: at, own: tone !== "off" || at - l0 >= TILE };
   }) : [];
   // what is drawn: a stretch per Fibre provider and per other validator long enough to read, one per run of the
@@ -106,7 +106,7 @@ export default function CurrentProviders({ rows }: { rows: Validator[] | null })
   const [qx, qy] = g.at(g.deg(lq), g.R - SW - 8);
   const capTone = (s?: Seg) => `cp-cap ${s?.tone ?? "off"}${p && s && p === s ? " lit" : ""}`;
   const name = (v: Validator) => v.moniker || shortMid(v.operator_address || v.address, 18, 4);
-  const standing = (s: Seg) => s.tone === "off" ? "no Fibre provider" : s.tone === "hold" ? "unreachable"
+  const standing = (s: Seg) => s.tone === "off" ? "no Fibre provider" : s.tone === "hold" ? "not working"
     : endpointState(s.v) === "none" ? "not checked yet" : "Fibre provider";
   // the pointer names the validator under it; a touch keeps it named until the next touch elsewhere on the dial
   const onOver = (e: React.PointerEvent<SVGSVGElement>) => setPick((e.target as Element).getAttribute("data-a"));
@@ -125,10 +125,10 @@ export default function CurrentProviders({ rows }: { rows: Validator[] | null })
     <div className="cp" aria-busy={!ready || undefined}>
       <h2 id="readiness-h" className="ov-eyebrow">
         Current Fibre providers
-        <Info label="Current Fibre providers"><p>Share of the stake held by validators with a Fibre provider. A blob needs signatures from ⅔ of the stake to settle.</p><p>The ring is the whole bonded stake. Each stretch is one validator, as long as its voting power: those with a Fibre provider first, largest first; point at one to see its name and share. Amber: its host did not answer Tensile&rsquo;s latest check.</p></Info>
+        <Info label="Current Fibre providers"><p>Share of the stake held by validators with a Fibre provider. A blob needs signatures from ⅔ of the stake to settle.</p><p>The ring is the whole bonded stake. Each stretch is one validator, as long as its voting power: those with a Fibre provider first, largest first; point at one to see its name and share. Amber: not working at Tensile&rsquo;s latest check: its host did not answer, or answered with a certificate a publisher rejects.</p></Info>
       </h2>
       <div className={`cp-dial${p ? " pick" : ""}`} style={{ width: g.w, height: g.h }} role="img"
-        aria-label={ready ? `${pct!(regPower)} of voting power with a Fibre provider, ${int(r!.registered.length)} of ${int(r!.bonded.length)} validators${down.length ? `, ${int(down.length)} of them unreachable` : ""}; ${pct!(quorum)} needed` : "Loading"}>
+        aria-label={ready ? `${pct!(regPower)} of voting power with a Fibre provider, ${int(r!.registered.length)} of ${int(r!.bonded.length)} validators${down.length ? `, ${int(down.length)} of them not working` : ""}; ${pct!(quorum)} needed` : "Loading"}>
         {/* drawn anew when the rows arrive, so the ring sweeps in once */}
         <svg key={ready ? "on" : "wait"} className={`cp-ring${ready ? " on" : ""}`} width={g.w} height={g.h} viewBox={`0 0 ${g.w} ${g.h}`} aria-hidden="true" focusable="false"
           style={{ "--cy": `${g.cy}px` } as React.CSSProperties}
@@ -155,12 +155,12 @@ export default function CurrentProviders({ rows }: { rows: Validator[] | null })
           <span>{p ? standing(p) : ready ? <><b>{int(r!.registered.length)}</b> of {int(r!.bonded.length)} validators</> : ""}</span>
         </p>
       </div>
-      {/* the parts of the stake that are not a working provider, one line each, the unreachable first: it opens the
+      {/* the parts of the stake that are not a working provider, one line each, the ones not working first: it opens the
           names of its validators, each a link to its page */}
       <ul className="cp-rest">
         {ready ? <>
           {down.length > 0 && <li>
-            <Info label="Unreachable" className="cp-it" title="Show the unreachable validators" trigger={part("hold", "unreachable", down, true)}>
+            <Info label="Not working" className="cp-it" title="Show the validators not working" trigger={part("hold", "not working", down, true)}>
               <ul className="cp-names">
                 {down.map((v) => (
                   <li key={v.address}>
