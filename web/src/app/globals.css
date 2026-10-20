@@ -2953,6 +2953,15 @@ button.warn:focus-visible { outline-offset: 0; }
 .bd-bh { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 16px; border-bottom: 1px solid var(--border); background: var(--paper); font-family: var(--mono); font-size: 11.5px; font-weight: 500; letter-spacing: .01em; color: var(--text); }
 :root[data-theme="dark"] .bd-bh { background: color-mix(in srgb, var(--paper) 55%, var(--seg-track)); }
 .bd-band + .bd-band .bd-bh { border-top: 1px solid var(--border); }
+/* a folded band: its head is the button, the share then a chevron that turns when it is open; closed, the head is the
+   band's last line, so it draws no line of its own under it */
+.bd-fold { width: 100%; border: 0; border-bottom: 1px solid var(--border); text-align: left; cursor: pointer; transition: color var(--dur); }
+.bd-fold[aria-expanded="false"] { border-bottom-color: transparent; }
+.bd-fold:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.bd-fr { display: inline-flex; align-items: center; gap: 8px; }
+.bd-chev { color: var(--text-3); transition: transform var(--dur), color var(--dur); }
+.bd-fold:hover .bd-chev { color: var(--text); }
+.bd-fold[aria-expanded="true"] .bd-chev { transform: rotate(180deg); }
 .bd-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(144px, 1fr)); gap: 8px; margin: 0; padding: 12px 14px; list-style: none; }
 /* a tile: the logo, then the name over the share; a mark only where something went wrong */
 .bd-tile { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--paper); color: var(--text); transition: border-color var(--dur), background var(--dur); }
