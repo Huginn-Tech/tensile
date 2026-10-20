@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -116,6 +117,42 @@ func TestTipAsksTheNode(t *testing.T) {
 	defer down.Close()
 	if b, _ := getTip(t, down); b.Height != 1351480 {
 		t.Errorf("a node that does not answer should leave the scanner's file to answer: %+v", b)
+	}
+}
+
+// The tip's answer is kept a quarter of a second from when its read came
+// back, not from when it began: a node that took longer than that made the
+// answer stale as it landed, and the next reader had the node asked again.
+func TestTipKeptFromWhenItsReadCameBack(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "observer.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	var clk atomic.Int64
+	clk.Store(time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC).UnixNano())
+	var asked atomic.Int32
+	node := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		asked.Add(1)
+		// the node takes 0.7 s to answer
+		clk.Add(int64(700 * time.Millisecond))
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":-1,"result":{"sync_info":{"latest_block_height":"1351482","latest_block_time":"2026-10-03T17:00:05.943Z"}}}`))
+	}))
+	defer node.Close()
+	srv := api.NewWithVantage(st, api.VantageInfo{Name: "test"}, nil, api.WithTipRPC(node.URL),
+		api.WithClock(func() time.Time { return time.Unix(0, clk.Load()).UTC() }))
+	defer srv.Close()
+	if b, _ := getTip(t, srv); b.Height != 1351482 {
+		t.Fatalf("tip from the node %+v", b)
+	}
+	getTip(t, srv)
+	if n := asked.Load(); n != 1 {
+		t.Fatalf("an ask right after a slow read had the node asked again: %d asks", n)
+	}
+	clk.Add(int64(250 * time.Millisecond))
+	getTip(t, srv)
+	if n := asked.Load(); n != 2 {
+		t.Fatalf("a quarter of a second after the read came back the node should be asked again: %d asks", n)
 	}
 }
 

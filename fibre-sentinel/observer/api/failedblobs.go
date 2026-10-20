@@ -209,6 +209,9 @@ type blobsAsk struct {
 	publisher     string // "" for none
 	// before is before_height and before_tx_index, nil without the cursor
 	before *[2]int64
+	// endorsers gives each blob its endorsers (endorsers=1, blobEndorsers);
+	// a failed payment settled no blob and has none
+	endorsers bool
 }
 
 // hashLanded reports whether the transaction hash h (lower-case hex) is a
@@ -366,6 +369,12 @@ func (s *Server) blobsWithFailed(w http.ResponseWriter, r *http.Request, a blobs
 		return
 	}
 	blobs, more := trim(blobs, a.limit-m)
+	if a.endorsers {
+		if err := s.blobEndorsers(ctx, blobs); err != nil {
+			s.writeInternal(w, r.URL.Path, err)
+			return
+		}
+	}
 	var total int64
 	countQ := `SELECT COUNT(*) FROM publications`
 	if a.where != "" {

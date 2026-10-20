@@ -185,12 +185,18 @@ func (s *Server) handleTip(w http.ResponseWriter, r *http.Request) {
 // so the node and the store are asked at the one pace however many read.
 // The lock is let go deferred: a read that panics leaves no later reader
 // waiting on it.
+//
+// An answer's age counts from when its read came back, and a reader's time
+// is taken once it holds the lock. Counted from when the read began, a read
+// longer than tipTTL (the node is given up to tipRPCTimeout) was stale as it
+// landed, and every reader queued behind it had the node asked again at once.
 func (s *Server) cachedTip() (tipResponse, uint64) {
-	now := s.now()
 	s.tip.mu.Lock()
 	defer s.tip.mu.Unlock()
+	now := s.now()
 	if now.Sub(s.tip.at) >= tipTTL {
 		s.tip.v = s.readTip(now)
+		now = s.now()
 		s.tip.at = now
 		s.tip.gen++
 	}

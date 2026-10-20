@@ -98,6 +98,32 @@ func TestBlobsListEndorsers(t *testing.T) {
 		t.Errorf("the list with its endorsers taken out is not the list:\n%v\n%v", a, b)
 	}
 
+	// with include_failed=1 as well: each blob has the same endorsers (a failed payment settled no blob and has none),
+	// and the list is otherwise the one include_failed=1 gives
+	code, both := get("/v1/blobs?limit=10&include_failed=1&endorsers=1")
+	_, failed := get("/v1/blobs?limit=10&include_failed=1")
+	if code != 200 {
+		t.Fatalf("include_failed with endorsers: %d %s", code, both)
+	}
+	var c, d map[string]any
+	if err := json.Unmarshal([]byte(both), &c); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(failed), &d); err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range c["blobs"].([]any) {
+		row := x.(map[string]any)
+		h, _ := row["promise_hash"].(string)
+		if got, ok := row["endorsers"].([]any); !ok || !reflect.DeepEqual(got, want[h]) {
+			t.Errorf("with include_failed, blob %s endorsers %v, want %v", h, row["endorsers"], want[h])
+		}
+		delete(row, "endorsers")
+	}
+	if !reflect.DeepEqual(c, d) {
+		t.Errorf("include_failed with its endorsers taken out is not include_failed alone:\n%v\n%v", c, d)
+	}
+
 	if code, body := get("/v1/blobs?endorsers=yes"); code != 400 || !strings.Contains(body, "endorsers must be 0 or 1") {
 		t.Errorf("a bad value: %d %s", code, body)
 	}

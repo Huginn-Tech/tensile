@@ -3529,7 +3529,8 @@ type blobRow struct {
 	// with. Absent, like AttestedPower, before signatures were verified.
 	AttestedWithRows *int `json:"attested_with_rows,omitempty"`
 	// Endorsers are the validators attested_with_rows counts, by consensus
-	// address (lower-case hex): on /v1/blobs?endorsers=1 alone (blobEndorsers).
+	// address (lower-case hex): only on /v1/blobs?endorsers=1 (blobEndorsers),
+	// with or without include_failed=1.
 	Endorsers *[]string `json:"endorsers,omitempty"`
 	// ProbeCount and Classes tally the blob's reading rows, the validators
 	// the reading never needed to ask included; kept with the verdict, not
@@ -4220,7 +4221,7 @@ func (s *Server) handleBlobs(w http.ResponseWriter, r *http.Request) {
 	case "1":
 		if commitment == "" && tx == "" {
 			s.blobsWithFailed(w, r, blobsAsk{where: where, args: args, limit: limit, offset: offset,
-				namespace: strings.ToLower(q.Get("namespace")), publisher: publisher, before: cursor})
+				namespace: strings.ToLower(q.Get("namespace")), publisher: publisher, before: cursor, endorsers: withEndorsers})
 			return
 		}
 	default:
