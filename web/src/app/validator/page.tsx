@@ -23,6 +23,7 @@ import { diagnose } from "@/components/Diagnosis";
 import { pageAddr } from "@/lib/addr";
 import { validatorAddr } from "@/lib/sitefind";
 import { useOther, OnOther } from "@/lib/othernet";
+import { usePhone } from "@/lib/phone";
 
 
 type Span = { window: Window; obligations: Obligations; provisional_faults?: ProvisionalFaults };
@@ -55,6 +56,9 @@ const pctFrac = (f: number) => (f >= 1 ? "100%" : `${(f * 100).toFixed(1)}%`);
 
 /** after the Endorsements count on hover: why a missing endorsement is not a fault, as the overview's definition says it */
 const ENDORSE_NOTE = "The first validators to answer fill the ⅔ a settlement needs.";
+
+/** Throughput without a reading: its hover, and on a phone its value */
+const NO_THROUGHPUT = "No shard of 2 MiB or more downloaded yet";
 
 /** the verdict as a word and a mark; the classification is the observer's, never re-derived here */
 const WORDS: Record<string, [string, string]> = {
@@ -349,6 +353,40 @@ function Page() {
   // there is a line with a link to this page there in place of the notice
   const other = useOther(path && !d.data && notFound(d) ? [{ route: path }] : null);
   const notLive = !!meta?.app_version && !meta.fibre_active;
+  // On a phone the bar under the header (the crumb and the period) stays while the page is read, and names the validator
+  // once its title has gone under the bar, so the name is never on screen twice. Read on scroll rather than by an
+  // IntersectionObserver: the bar's bottom moves as the header's tabs come and go. A name too long for the bar at its
+  // size is set a step smaller before it is cut.
+  const phone = usePhone();
+  const vdHead = useRef<HTMLDivElement>(null);
+  const vdTitle = useRef<HTMLHeadingElement>(null);
+  const named = d.data ? d.data.validator.moniker || d.data.validator.operator_address || d.data.validator.address : "";
+  useEffect(() => {
+    const bar = vdHead.current, h1 = vdTitle.current;
+    if (!phone || !bar || !h1) return;
+    const nm = bar.querySelector<HTMLElement>(".crumb-nm");
+    const fit = () => {
+      if (!nm) return;
+      delete nm.dataset.fit;
+      if (nm.scrollWidth > nm.clientWidth + 0.5) nm.dataset.fit = "1";
+    };
+    let raf = 0;
+    const read = () => { raf = 0; bar.toggleAttribute("data-named", h1.getBoundingClientRect().bottom < bar.getBoundingClientRect().bottom); };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(read); };
+    fit();
+    read();
+    const ro = new ResizeObserver(fit);
+    ro.observe(bar);
+    document.fonts?.ready.then(fit);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(raf);
+      bar.removeAttribute("data-named");
+      if (nm) delete nm.dataset.fit;
+    };
+  }, [phone, named]);
   if (!asked.trim()) return <p className="notice">Open a validator from the <Link href="/">overview</Link>, or add <code>?addr=</code> with its consensus, operator (<code>celestiavaloper1…</code>) or account address to the address.</p>;
   if (!addr) {
     return (
@@ -500,8 +538,8 @@ function Page() {
 
   return (
     <>
-      <div className="vd-head">
-        <p className="crumb"><Link href={win === "24h" ? "/" : `/?window=${win}`}>Validators</Link> › {v.moniker || shortMid(v.operator_address || cons, 18, 4)}</p>
+      <div className="vd-head" ref={vdHead}>
+        <p className="crumb"><Link href={win === "24h" ? "/" : `/?window=${win}`}>Validators</Link> › <span className="crumb-nm">{v.moniker || shortMid(v.operator_address || cons, 18, 4)}</span></p>
         <WindowSwitch value={win} onChange={setWin} />
       </div>
 
@@ -513,7 +551,7 @@ function Page() {
           <Avatar v={v} />
           <div className="vd-who-t">
             <div className="vd-title">
-              <h1>{v.moniker || <span className="mono">{shortMid(v.operator_address || cons, 22, 6)}</span>}{self && <span className="ours" title="Huginn Tech runs both this validator and Tensile. It is measured like every other validator.">runs Tensile</span>}</h1>
+              <h1 ref={vdTitle}>{v.moniker || <span className="mono">{shortMid(v.operator_address || cons, 22, 6)}</span>}{self && <span className="ours" title="Huginn Tech runs both this validator and Tensile. It is measured like every other validator.">runs Tensile</span>}</h1>
               <div className="chips vd-chips">
                 <span className="state" title={e.title}><i className={"dot " + e.dot} />{e.word}</span>
                 {v.host && <span title={v.identity_reason || "The consensus-key check on the newest handshake."}>TLS identity <b className="word">{identityWord[v.identity_status] ?? v.identity_status}</b></span>}
@@ -615,9 +653,10 @@ function Page() {
             <span className="vd-lbl">Reachability</span>
             <span className="vd-fv"><b>{reach ? pctOf(reach.num, reach.den) : "—"}</b>{reach && <em>{int(reach.num)} / {int(reach.den)}</em>}</span>
           </div>
-          <div className={"vd-box" + (v.serve_bytes_per_second == null ? " na" : "")} title={v.serve_bytes_per_second != null ? `Median download speed over ${int(v.serve_throughput_sample)} shards of 2 MiB or more.` : "No shard of 2 MiB or more downloaded yet."}>
+          <div className={"vd-box" + (v.serve_bytes_per_second == null ? " na" : "")} title={v.serve_bytes_per_second != null ? `Median download speed over ${int(v.serve_throughput_sample)} shards of 2 MiB or more.` : `${NO_THROUGHPUT}.`}>
             <span className="vd-lbl">Throughput</span>
-            <span className="vd-fv"><b>{v.serve_bytes_per_second != null ? unit(`${bytes(v.serve_bytes_per_second)}/s`) : "—"}</b></span>
+            {/* a phone's figures have no column to explain a dash: without a reading it says its title's words */}
+            <span className="vd-fv">{v.serve_bytes_per_second != null ? <b>{unit(`${bytes(v.serve_bytes_per_second)}/s`)}</b> : phone ? <em className="vd-nv">{NO_THROUGHPUT}</em> : <b>—</b>}</span>
           </div>
           <div className="vd-box" title={`Endorsed shards still in their retention window: read 10 minutes before it ends, counted once it closes.${notCountedText(o) ? ` Not counted in the period: ${notCountedText(o)}.` : ""}`}>
             <span className="vd-lbl">Awaiting check</span>

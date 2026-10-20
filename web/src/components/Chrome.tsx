@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useApi, type Meta, int, ago, since, span, utcWord } from "@/lib/api";
 import { useTip } from "@/lib/tip";
 import { SOURCE_URL, DISPUTE_URL } from "@/lib/site";
+import { usePhone } from "@/lib/phone";
 import HeaderSearch from "@/components/HeaderSearch";
 
 /**
@@ -190,10 +191,42 @@ function BlockTicker({ meta }: { meta: Meta | null }) {
   );
 }
 
+/** how far the page moves in one direction before the tabs follow it, so a finger's tremor never flicks them */
+const TUCK_PX = 8;
+/** near the top of a page the tabs always show */
+const TUCK_FROM = 60;
+
+/**
+ * On a phone the header is fixed (globals.css): its bar of the mark, the block, the network and the search always
+ * stays, and the tabs under it tuck away while the reader reads down and come back on the first move up, so a long
+ * list reads under a slim bar and the way to another page is one small scroll away. It is said on <html> as
+ * data-tabs="off", which the lists' sticky bands read to ride up and down with the tabs. One passive listener, read
+ * once a frame; nothing of it runs at desktop width.
+ */
+function useTabsTuck(on: boolean) {
+  useEffect(() => {
+    if (!on) return;
+    const root = document.documentElement;
+    let last = window.scrollY, raf = 0;
+    const read = () => {
+      raf = 0;
+      const y = window.scrollY;
+      if (y < TUCK_FROM) { delete root.dataset.tabs; last = y; return; }
+      if (Math.abs(y - last) < TUCK_PX) return;
+      if (y > last) root.dataset.tabs = "off"; else delete root.dataset.tabs;
+      last = y;
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(read); };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => { window.removeEventListener("scroll", onScroll); cancelAnimationFrame(raf); delete root.dataset.tabs; };
+  }, [on]);
+}
+
 export function Header() {
   const { data: meta, error } = useApi<Meta>("/v1/meta", 30000);
   const at = usePathname();
   const path = LIST_OF[at] ?? at;
+  useTabsTuck(usePhone());
   return (
     <header className="top">
       <div className="wrap">

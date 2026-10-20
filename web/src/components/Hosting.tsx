@@ -11,11 +11,14 @@ import { type Hosting, type HostingResponse, type HostingBucket, type Nakamoto, 
  * DB-IP's licence requires.
  */
 
-/** the validators-table cell: the country's flag and the provider, details in the tooltip */
-export function HostingCell({ h }: { h?: Hosting }) {
+/**
+ * the validators-table cell: the country's flag and the provider, details in the tooltip. full: a registry name whole,
+ * however long, for the phone's list, whose line wraps a long name rather than cut it
+ */
+export function HostingCell({ h, full }: { h?: Hosting; full?: boolean }) {
   if (!h) return <span className="muted" title="Not looked up: no open endpoint, or the lookup has not reached this host yet.">—</span>;
   if (h.status === "unresolved") return <span className="muted" title={hostingTitle(h)}>unresolved</span>;
-  const prov = h.status === "no_asn" ? "no network" : h.provider === "Other" ? (h.as_org ? shortOrg(h.as_org) : "Other") : h.provider;
+  const prov = h.status === "no_asn" ? "no network" : h.provider === "Other" ? (h.as_org ? shortOrg(h.as_org, full) : "Other") : h.provider;
   return (
     <span className="hosting" title={hostingTitle(h)}>
       {h.country ? <Flag cc={h.country} label /> : <span className="flag-none" aria-hidden="true" />}
@@ -25,8 +28,8 @@ export function HostingCell({ h }: { h?: Hosting }) {
   );
 }
 
-/** "HETZNER-AS" / "EXAMPLE-NET Example B.V." → a short readable handle */
-function shortOrg(org: string): string {
+/** "HETZNER-AS" / "EXAMPLE-NET Example B.V." → a short readable handle; whole: never cut to 16 characters */
+function shortOrg(org: string, whole = false): string {
   // Registry handles are shouted and suffixed ("SERVETHEWORLD-AS", "AS-30083-US-VELIA-NET",
   // "IS-AS-1"): drop the AS markers and numbers, and bring long all-caps words to a readable
   // case beside the named providers. Short tokens (RL5, IP, IS) stay as they are. The full
@@ -34,7 +37,7 @@ function shortOrg(org: string): string {
   let w = (org.split(/\s+/)[0] ?? org).replace(/^AS-/i, "").replace(/-ASN?(-\d+)?$/i, "").replace(/-\d+$/, "");
   w = w.split("-").map((p) => (p.length <= 3 || p !== p.toUpperCase() ? p : p.charAt(0) + p.slice(1).toLowerCase())).join("-");
   if (!w) w = org;
-  return w.length > 16 ? w.slice(0, 15) + "…" : w;
+  return !whole && w.length > 16 ? w.slice(0, 15) + "…" : w;
 }
 
 const pct = (v: number) => (v * 100 >= 10 || v === 0 ? (v * 100).toFixed(0) : (v * 100).toFixed(1)) + "%";
