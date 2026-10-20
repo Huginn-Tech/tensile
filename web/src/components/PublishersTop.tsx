@@ -239,7 +239,8 @@ export default function PublishersTop({ m, win, list, all, now, pre, onWin }: {
         {pre
           ? <p className="pp-none">No publisher has paid for a blob yet</p>
           : !ranked
-            ? <ol className="pp-rows is-wait">{[0, 1, 2].map((i) => <li key={i} className="pp-row"><span className="pp-who"><span className="wait">celestia ••• 0000</span></span><span className="pp-bar" /><span className="pp-v"><span className="wait">000.0 TIA</span></span><span className="pp-sh"><span className="wait">00.00%</span></span></li>)}</ol>
+            // as many rows as a period with more publishers than TOP shows (TOP, then the others), so the list under it stays put
+            ? <ol className="pp-rows is-wait">{Array.from({ length: TOP + 1 }, (_, i) => <li key={i} className="pp-row"><span className="pp-who"><span className="wait">celestia ••• 0000</span></span><span className="pp-bar" /><span className="pp-v"><span className="wait">000.0 TIA</span></span><span className="pp-sh"><span className="wait">00.00%</span></span></li>)}</ol>
             : ranked.length === 0
               ? <p className="pp-none">{metric === "escrow" ? "No escrow held" : `No publisher paid for a blob in ${per}`}</p>
               : <ol className="pp-rows">
