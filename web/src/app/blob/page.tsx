@@ -538,7 +538,7 @@ const Ban = () => (
  * those that did not, each a grid of small tiles (the name, its share of the voting power under it), every
  * validator shown. The voting power endorsed is in the figures above, so the card does not say it twice. Those that
  * had no endpoint registered when the promise settled are a band of their own: they could not have endorsed it, which
- * on a network whose Fibre has just gone live is most of them.
+ * on a network whose Fibre has just gone live is most of them, so that band is one line that opens on a click.
  */
 function Signers({ rows, marks, share, stake, table, onTable }: ListProps & { stake: number | null; table: boolean; onTable: () => void }) {
   const on = rows.filter((a) => a.attested === true), un = rows.filter((a) => a.attested == null);
@@ -553,20 +553,28 @@ function Signers({ rows, marks, share, stake, table, onTable }: ListProps & { st
       <div className="bd-bands">
         <Band label="Endorsed" list={on} marks={marks} share={share} vp={f} />
         <Band label="Not endorsed" list={off} marks={marks} share={share} off vp={un.length === 0 && bare.length === 0 && stake != null ? 1 - stake : undefined} />
-        <Band label="No Fibre provider" list={bare} marks={marks} share={share} off plain />
+        <Band label="No Fibre provider" list={bare} marks={marks} share={share} off plain fold />
         {un.length > 0 && <Band label="Signature not recorded" list={un} marks={marks} share={share} />}
       </div>
     </section>
   );
 }
 
-function Band({ label, list, marks, share, off, plain, vp: given }: { label: string; list: Assignment[]; marks: Map<string, Mark>; share: (vp: number) => number; off?: boolean; plain?: boolean; vp?: number }) {
+function Band({ label, list, marks, share, off, plain, fold, vp: given }: { label: string; list: Assignment[]; marks: Map<string, Mark>; share: (vp: number) => number; off?: boolean; plain?: boolean; fold?: boolean; vp?: number }) {
+  // a folded band shows its head alone until it is clicked
+  const [open, setOpen] = useState(!fold);
   if (list.length === 0) return null;
   const vp = given ?? list.reduce((s, a) => s + share(a.voting_power), 0);
+  const share$ = `${(vp * 100).toFixed(2)}%`;
   return (
     <div className={"bd-band" + (off ? " off" : "")}>
-      <div className="bd-bh"><span>{label} · {int(list.length)}</span><span>{(vp * 100).toFixed(2)}%</span></div>
-      <ul className="bd-tiles">
+      {fold
+        ? <button type="button" className="bd-bh bd-fold" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          <span>{label} · {int(list.length)}</span>
+          <span className="bd-fr">{share$}<svg className="bd-chev" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+        </button>
+        : <div className="bd-bh"><span>{label} · {int(list.length)}</span><span>{share$}</span></div>}
+      {open && <ul className="bd-tiles">
         {list.map((a) => {
           const m = marks.get(a.validator_address)!;
           return (
@@ -581,7 +589,7 @@ function Band({ label, list, marks, share, off, plain, vp: given }: { label: str
             </li>
           );
         })}
-      </ul>
+      </ul>}
     </div>
   );
 }
