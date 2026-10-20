@@ -200,8 +200,10 @@ export default function PublishersTop({ m, win, list, all, now, pre, onWin }: {
   const head = ranked ? (ranked.length <= TOP + 1 ? ranked : ranked.slice(0, TOP)) : [];
   const rest = ranked && ranked.length > TOP + 1 ? ranked.slice(TOP) : [];
   const restV = rest.reduce((s, r) => s + r.v, 0);
-  // a bar is its part of the whole: the track is the period's total, and anything above zero shows at least a sliver
+  // a bar is its part of the whole: the track is the period's total, and anything above zero shows at least a sliver;
+  // with a single row the bar would only ever be full, so its cell stays empty until there are two
   const w = (v: number) => (total > 0 ? Math.min(1, v / total) : 0);
+  const bars = head.length + rest.length > 1;
 
   // the tabs as a tab list, as on Blobs: one stop for Tab, the arrow keys (and Home / End) moving the choice and the focus
   const pick = (k: Metric) => { setMetric(k); tabsRef.current?.querySelector<HTMLElement>(`[data-k="${k}"]`)?.focus(); };
@@ -244,7 +246,7 @@ export default function PublishersTop({ m, win, list, all, now, pre, onWin }: {
                 {head.map((r) => (
                   <li key={r.p.publisher} className="pp-row" title={T.hover(r.p)}>
                     <span className="pp-who"><Name p={r.p} /></span>
-                    <span className="pp-bar" aria-hidden="true"><i style={{ "--w": w(r.v) } as CSSProperties} /></span>
+                    {bars ? <span className="pp-bar" aria-hidden="true"><i style={{ "--w": w(r.v) } as CSSProperties} /></span> : <span aria-hidden="true" />}
                     <span className="pp-v">{T.fmt(r.v)}</span>
                     <span className="pp-sh">{fmtShare(T.share(r.p, total))}</span>
                   </li>
