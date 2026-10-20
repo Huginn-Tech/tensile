@@ -28,17 +28,20 @@ export default function StatusLine({ meta, metaError, snap, client }: {
   measuring?: boolean;
 }) {
   // An answer that is not an outage (a 404 for a blob not recorded yet) is
-  // the page's to explain; only a network error or a 5xx is the API down.
-  const apiDown = apiFailing(client) || (!!metaError && !meta);
+  // the page's to explain; only a 5xx, or a refusal, is the API's. No answer
+  // at all (status 0) is the connection's, which can as well be the reader's:
+  // the page says it is reconnecting (Reconnecting.tsx), and nothing here.
+  const apiDown = (apiFailing(client) && client.status !== 0) || (!!metaError && !meta);
   if (!apiDown) return null;
   const err = client.error ?? metaError ?? "no answer";
+  const busy = throttled(client);
   return (
     <p className="notice" key="api">
-      {throttled(client) ? "The observer API is busy" : "The observer API is not answering"} (<b>{err}</b>).{" "}
+      {busy ? "The observer API is busy" : "The observer API is not answering"} (<b>{err}</b>).{" "}
       {client.fetchedAt && snap
         ? <>Everything below is the last successful snapshot, from {utcWord(client.fetchedAt)}{snap.computed_at ? <>, computed {utcWord(snap.computed_at)}</> : ""}.</>
-        : <>Nothing can be shown until it answers; the page retries every 30 seconds.</>}{" "}
-      This is an observer outage, not a Fibre network outage.
+        : <>Nothing can be shown until it answers; the page retries every 30 seconds.</>}
+      {!busy && <>{" "}This is an observer outage, not a Fibre network outage.</>}
     </p>
   );
 }

@@ -313,6 +313,12 @@ button.dis:hover, a.dis:hover { text-decoration: underline; }
 .disc b { color: var(--text); font-weight: 500; }
 .notice { margin: 12px 0 0; padding: 10px 14px; border: 1px solid var(--hold); border-left-width: 3px; border-radius: 6px; background: var(--hold-tint); font-size: var(--t-cell); color: var(--text); }
 .notice b { font-weight: 500; }
+/* while this browser does not reach Tensile (Reconnecting.tsx): one small pill at the foot of the screen, over the
+   page, which neither moves nor empties under it */
+.reconn { position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 50; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border: 1px solid var(--border); border-radius: 999px; background: var(--paper); box-shadow: var(--shadow-pop); font-size: var(--t-small); font-weight: 500; color: var(--text-2); white-space: nowrap; animation: tip-in 160ms ease-out; }
+.reconn-d { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--hold); animation: reconn-beat 1.4s ease-in-out infinite; }
+@keyframes reconn-beat { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .reconn, .reconn-d { animation: none; } }
 .notice a { font-weight: 500; }
 /* a record on the other network's site, where the page would say it is not on record here (lib/othernet.tsx) */
 .elsewhere { margin: 12px 0 0; font-size: var(--t-body); color: var(--text-2); }

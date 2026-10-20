@@ -992,6 +992,79 @@ function watchVisibility(): void {
     if (document.hidden) return;
     streams.forEach((st) => { if (st.due) st.load(); });
   });
+  // the connection back: every stream that missed an answer asks at once, not at the end of its back-off (one with a
+  // request out has its answer coming)
+  onBack(() => streams.forEach((st) => {
+    if (st.fails === 0 || st.busy > 0) return;
+    if (document.hidden) st.due = true;
+    else st.load();
+  }));
+}
+
+/**
+ * Whether this browser reaches Tensile right now, the way a chat or a mail app knows it. A request that gets any
+ * answer at all says it does, a 5xx included: that one is the observer's, and the pages say so. A request that gets
+ * no answer says it does not, until the next answer: the reader's Wi-Fi or VPN changing, or the network gone, which
+ * is as often the reader's side as Tensile's. Such a failure is not shown as an error: what is on screen stays, one
+ * small "Reconnecting…" line says the page is trying again (Reconnecting.tsx), and every reader that missed an
+ * answer asks again as soon as one comes back, or the browser says it is online again.
+ */
+let down = false;
+const downSubs = new Set<(down: boolean) => void>();
+const backs = new Set<() => void>();
+
+/** an answer came: the connection is there (again) */
+export function reached(): void {
+  if (!down) return;
+  down = false;
+  downSubs.forEach((f) => f(false));
+  backs.forEach((f) => f());
+}
+
+/** a request got no answer: the connection is gone, until the next answer */
+export function lost(): void {
+  if (down) return;
+  down = true;
+  downSubs.forEach((f) => f(true));
+}
+
+export const isDown = (): boolean => down;
+
+/** fn on every change of the connection: true when it is lost, false when it is back */
+export function onReach(fn: (down: boolean) => void): () => void {
+  downSubs.add(fn);
+  return () => { downSubs.delete(fn); };
+}
+
+/** fn when the connection comes back: the first answer after a loss, or the browser's own online event */
+export function onBack(fn: () => void): () => void {
+  backs.add(fn);
+  return () => { backs.delete(fn); };
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("offline", lost);
+  window.addEventListener("online", () => backs.forEach((f) => f()));
+}
+
+/**
+ * a failure that was no answer at all: fetch's TypeError ("Failed to fetch", "Load failed", "NetworkError…"), not an
+ * abort (a reader that left, or a time limit of the caller's own) and not an answer that said no
+ */
+export function noAnswer(e: unknown): boolean {
+  return e instanceof TypeError;
+}
+
+/** fetch from Tensile, noting whether it answered */
+export async function reach(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    const r = await fetch(url, init);
+    reached();
+    return r;
+  } catch (e) {
+    if (noAnswer(e)) lost();
+    throw e;
+  }
 }
 
 async function fetchOnce(path: string): Promise<Fetch<unknown> & { retryMs?: number }> {
@@ -999,9 +1072,9 @@ async function fetchOnce(path: string): Promise<Fetch<unknown> & { retryMs?: num
     // A hung API must read as unreachable rather than as a page that never
     // updates: every request is abandoned after 20 s.
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 20000);
+    const timer = setTimeout(() => { lost(); ctl.abort(); }, 20000);
     try {
-      const r = await fetch(API_BASE + path, { cache: "no-store", signal: ctl.signal });
+      const r = await reach(API_BASE + path, { cache: "no-store", signal: ctl.signal });
       if (!r.ok) {
         let msg = `${r.status}`;
         let body: { error?: string; computing?: boolean; retry_after_s?: number } | null = null;
@@ -1063,7 +1136,10 @@ export function subscribe(key: string, path: string, refreshMs: number, fn: (f: 
         // The error is carried beside the last good payload instead, for the
         // page to show, and the figures keep their own computed_at so nobody
         // reads stale numbers as fresh ones.
-        own.last = next.error && own.last.data !== null
+        // No answer at all (status 0) is the connection's, not the API's: it
+        // is no error to show. What is on screen stays as it is, loading
+        // included, while the page says it is reconnecting.
+        if (next.status !== 0) own.last = next.error && own.last.data !== null
           ? { data: own.last.data, error: next.error, loading: false, fetchedAt: own.last.fetchedAt, status: next.status }
           : next;
         // A failure of the API is asked again with a back-off of its own, not

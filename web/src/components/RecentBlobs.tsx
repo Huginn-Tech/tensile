@@ -2,7 +2,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { API_BASE, useApi, type Blob, int, pctOf, bytes, whenUTC, utcWord } from "@/lib/api";
+import { API_BASE, isDown, lost, noAnswer, onBack, onReach, reach, useApi, type Blob, int, pctOf, bytes, whenUTC, utcWord } from "@/lib/api";
 import { useTip } from "@/lib/tip";
 import RollNumber, { reducedMotion } from "@/components/RollNumber";
 import Info from "@/components/Info";
@@ -108,7 +108,7 @@ async function readPage(limit: number, named = false): Promise<Page> {
   const ctl = new AbortController();
   const t = window.setTimeout(() => ctl.abort(), 15000);
   try {
-    const r = await fetch(`${API_BASE}/v1/blobs?limit=${limit}${named ? "&endorsers=1" : ""}`, { cache: "no-store", signal: ctl.signal });
+    const r = await reach(`${API_BASE}/v1/blobs?limit=${limit}${named ? "&endorsers=1" : ""}`, { cache: "no-store", signal: ctl.signal });
     if (!r.ok) throw new Error(String(r.status));
     const j = await r.json();
     return { blobs: Array.isArray(j.blobs) ? j.blobs : [], total: typeof j.total === "number" ? j.total : NaN };
@@ -217,6 +217,9 @@ function useBlobFeed(mark: string | undefined) {
           limit.current = Math.min(CELLS, Math.max(2, Math.ceil(came * 1.5) + 2));
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
+          // No answer at all, within the read's 15 s, is the connection's: the grid keeps what it shows, its head
+          // says it is reconnecting, and the read goes again as soon as the connection is back (below).
+          if (noAnswer(e) || (e instanceof DOMException && e.name === "AbortError")) { lost(); break; }
           // A refusal (429: the site's proxy turned away more pages than it lets through at once) is asked again in
           // 1 to 3 s, at a time of the page's own, and only the third in a row says the API is not answering. Any
           // other failed read is not retried at once: the next blob the tip names, or the slow read, asks again.
@@ -233,7 +236,8 @@ function useBlobFeed(mark: string | undefined) {
   }, [apply]);
   self.current = read;
 
-  // the first read
+  // the first read; and one as soon as the connection is back after a read that got no answer
+  useEffect(() => onBack(() => self.current()), []);
   useEffect(() => {
     read();
     return () => { window.clearTimeout(retryT.current); window.clearTimeout(markT.current); };
@@ -377,6 +381,10 @@ export default function RecentBlobs() {
   const skew = tip.data?.server_time && tip.fetchedAt ? Date.parse(tip.data.server_time) - Date.parse(tip.fetchedAt) : 0;
   const mark = tip.data?.latest_blob?.promise_hash;
   const feed = useBlobFeed(mark);
+  // this browser not reaching Tensile (lib/api.ts, reached and lost): the head says it is reconnecting, which puts it
+  // on no one
+  const [away, setAway] = useState(false);
+  useEffect(() => { setAway(isDown()); return onReach(setAway); }, []);
 
   const [pointerIn, setPointerIn] = useState(false);
   const [focusIn, setFocusIn] = useState(false);
@@ -551,11 +559,12 @@ export default function RecentBlobs() {
     ? <p><b>{int(reads.ok)}</b> of {int(read)} blobs{reads.bad ? <>, {int(reads.bad)} unavailable</> : null}.</p>
     : null;
 
-  const state = feed.error ? "down" : !feed.loaded ? "wait" : "live";
-  const liveWord = feed.error ? "Not answering" : feed.loaded ? "Live" : "Connecting";
+  const state = feed.error ? "down" : away || !feed.loaded ? "wait" : "live";
+  const liveWord = feed.error ? "Not answering" : away ? "Reconnecting" : feed.loaded ? "Live" : "Connecting";
   // the tip names the newest blob from an API that knows to; from one that does not, only the slow read is left
   const liveTitle = feed.error
     ? `The observer API did not answer (${feed.error}); the grid shows the last read.`
+    : away ? "This browser is not reaching Tensile right now; the grid shows the last read and fills in once it does."
     : mark
       ? "New blobs come in a few seconds after their block, while this page is open."
       : `New blobs come in every ${FALLBACK_MS / 1000} s while this page is open.`;

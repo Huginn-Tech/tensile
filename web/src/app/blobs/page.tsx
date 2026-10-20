@@ -292,7 +292,7 @@ function Page() {
   const other = useOther(key && hit && !hit.error && hit.total === 0 && !hit.failedTx && !hit.noTx
     ? [{ blob: key, as: ALL, href: `/blobs/?blob=${encodeURIComponent(found)}` }] : null);
   const foundFeed: Feed | null = key
-    ? { path: `find:${found}`, rows: hit?.rows ?? [], total: hit?.rows.length ?? 0, failed: 0, loaded: !!hit && !hit.error && !other.asking, error: hit?.error ?? null, refused: false, lastNewAt: 0 }
+    ? { path: `find:${found}`, rows: hit?.rows ?? [], total: hit?.rows.length ?? 0, failed: 0, loaded: !!hit && !hit.error && !other.asking, error: hit?.error ?? null, refused: false, unanswered: !!hit?.unanswered, lastNewAt: 0 }
     : null;
   // nothing matched: the transaction failed in a block, as the chain recorded it (its page says why); or Tensile has not
   // indexed it yet, or the transaction carries no blob

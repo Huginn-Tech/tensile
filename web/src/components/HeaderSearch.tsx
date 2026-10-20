@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { API_BASE, type Blob, type Validator, type Publisher, type TxAnswer, type TxKind, type FailedTx, int, utcWord } from "@/lib/api";
+import { API_BASE, noAnswer, reach, type Blob, type Validator, type Publisher, type TxAnswer, type TxKind, type FailedTx, int, utcWord } from "@/lib/api";
 import { useNewestBlob } from "@/lib/tip";
 import { blobKey } from "@/lib/blobkey";
 import { useFind } from "@/lib/blobfind";
@@ -69,7 +69,12 @@ function whole(v: string, pasted: boolean): boolean {
  * so a transaction pasted a moment before its block was read is found once Tensile records it. The missing answer
  * stays shown until the new one is in.
  */
-type Got<T> = { data: T | null; missing: boolean; invalid: boolean; error: string | null };
+type Got<T> = { data: T | null; missing: boolean; invalid: boolean; error: string | null; unanswered?: boolean };
+
+/** a lookup that failed, in words: no answer at all is the connection's, and is not put on the observer */
+const noReply = (g: { error: string | null; unanswered?: boolean }): ReactNode => g.unanswered
+  ? <>Can&rsquo;t reach Tensile right now. Try again in a moment.</>
+  : <>The observer did not answer ({g.error}). Try again in a moment.</>;
 function useRecord<T>(path: string | null, again: number, retryOn: string | null = null): Got<T> | null {
   const [st, setSt] = useState<{ ask: string; got: Got<T> } | null>(null);
   // how many times this path was asked again on a new retryOn value
@@ -81,11 +86,11 @@ function useRecord<T>(path: string | null, again: number, retryOn: string | null
     (async () => {
       let got: Got<T>;
       try {
-        const r = await fetch(API_BASE + path);
+        const r = await reach(API_BASE + path);
         got = r.ok ? { data: (await r.json()) as T, missing: false, invalid: false, error: null }
           : { data: null, missing: r.status === 404 || r.status === 410, invalid: r.status === 400, error: `HTTP ${r.status}` };
       } catch (e) {
-        got = { data: null, missing: false, invalid: false, error: e instanceof Error ? e.message : String(e) };
+        got = { data: null, missing: false, invalid: false, error: e instanceof Error ? e.message : String(e), unanswered: noAnswer(e) };
       }
       if (live) setSt({ ask: `${again}|${path}`, got });
     })();
@@ -225,7 +230,7 @@ export default function HeaderSearch() {
   let note: ReactNode = null;
   if (asked?.kind === "blob") {
     if (!hit) note = <span className="hs-wait">Looking it up…</span>;
-    else if (hit.error && hit.rows.length === 0) note = <>The observer did not answer ({hit.error}). Try again in a moment.</>;
+    else if (hit.error && hit.rows.length === 0) note = noReply(hit);
     // a Fibre transaction that failed in a block for good: its page says why
     else if (hit.rows.length === 0 && hit.failedTx?.ante_passed) items = [failedItem(`/tx/?hash=${blob!.hex}`, blob!.hex, hit.failedTx)];
     // any other Fibre transaction by its hash, as the transaction lookup answers it, a success or a failure alike
@@ -241,7 +246,7 @@ export default function HeaderSearch() {
       // an API without the transaction lookup: the failure the blob lookup found opens on the blob page's address
       else if (tx.missing && hit.failedTx) items = [failedItem(`/blob/?tx=${blob!.hex}`, blob!.hex, hit.failedTx)];
       else if (tx.missing) note = notHere(<>Tensile has no blob or Fibre transaction with this hash on record yet.</>);
-      else note = <>The observer did not answer ({tx.error}). Try again in a moment.</>;
+      else note = noReply(tx);
     }
     else if (hit.total === 0) note = notHere(blob?.kind === "id"
       ? <>Tensile has not indexed a blob with this blob ID yet. A blob appears once Tensile has read the block that settled it.</>
@@ -261,7 +266,7 @@ export default function HeaderSearch() {
       }];
     } else if (val?.missing) note = notHere(<>No validator with this address is on record.</>);
     else if (val?.invalid) note = <>Not a valid validator address. Check it and paste it again.</>;
-    else if (val?.error) note = <>The observer did not answer ({val.error}). Try again in a moment.</>;
+    else if (val?.error) note = noReply(val);
     else note = <span className="hs-wait">Looking it up…</span>;
   } else if (asked?.kind === "publisher") {
     const p = pub?.data?.publisher;
@@ -273,7 +278,7 @@ export default function HeaderSearch() {
       }];
     } else if (pub?.missing) note = notHere(<>No publisher with this address is on record.</>);
     else if (pub?.invalid) note = <>Not a valid account address. Check it and paste it again.</>;
-    else if (pub?.error) note = <>The observer did not answer ({pub.error}). Try again in a moment.</>;
+    else if (pub?.error) note = noReply(pub);
     else note = <span className="hs-wait">Looking it up…</span>;
   }
 

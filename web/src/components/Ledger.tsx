@@ -2,7 +2,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { API_BASE, type Blob, type FailedPayment, type ListRow, int, bytes, tia, pctOf, nsDisplay, utcWord, isBlob, isFailed, failedTitle } from "@/lib/api";
+import { API_BASE, lost, noAnswer, onBack, reach, type Blob, type FailedPayment, type ListRow, int, bytes, tia, pctOf, nsDisplay, utcWord, isBlob, isFailed, failedTitle } from "@/lib/api";
 import { lane } from "@/lib/status";
 import { openRow } from "@/lib/row";
 import { unit } from "@/components/Unit";
@@ -69,10 +69,12 @@ export type Feed = {
   error: string | null;
   /** the API refused the request itself (a 400: a filter that is no namespace or account), which is no outage and is not asked again */
   refused: boolean;
+  /** the read got no answer at all, which is the connection's (lib/api.ts, reached and lost): no error to show */
+  unanswered: boolean;
   /** when the newest row arrived, on the observer's clock (when it settled, on the first read) */
   lastNewAt: number;
 };
-const empty = (path: string): Feed => ({ path, rows: [], total: 0, failed: 0, loaded: false, error: null, refused: false, lastNewAt: 0 });
+const empty = (path: string): Feed => ({ path, rows: [], total: 0, failed: 0, loaded: false, error: null, refused: false, unanswered: false, lastNewAt: 0 });
 
 /** a row's key: a blob's promise hash; a failed payment, which settled no blob, its place (its block, its index in it) */
 const keyOf = (r: ListRow) => (isFailed(r) ? `f${r.settlement_height}:${r.settlement_tx_index}` : r.promise_hash);
@@ -86,7 +88,7 @@ async function readPage(path: string): Promise<{ blobs: ListRow[]; total: number
   const ctl = new AbortController();
   const t = window.setTimeout(() => ctl.abort(), 15000);
   try {
-    const r = await fetch(API_BASE + path, { cache: "no-store", signal: ctl.signal });
+    const r = await reach(API_BASE + path, { cache: "no-store", signal: ctl.signal });
     if (!r.ok) {
       let msg = String(r.status);
       try { const j = await r.json(); if (j?.error) msg = j.error; } catch { /* keep the status */ }
@@ -136,11 +138,14 @@ export function useLedger(path: string, live: boolean, height: number | undefine
       const known = new Set(before?.rows.map(keyOf));
       const came = !!before && page.blobs.some((b) => !known.has(keyOf(b)));
       const lastNewAt = !before ? (page.blobs[0] ? Date.parse(page.blobs[0].settlement_time) : 0) : came ? Date.now() + skewRef.current : before.lastNewAt;
-      apply({ path: p, rows: page.blobs, total: page.total, failed: page.failed, loaded: true, error: null, refused: false, lastNewAt });
+      apply({ path: p, rows: page.blobs, total: page.total, failed: page.failed, loaded: true, error: null, refused: false, unanswered: false, lastNewAt });
     } catch (e) {
       if (p !== pathRef.current) return;
       const f = cur.current.path === p ? cur.current : empty(p);
-      apply({ ...f, error: e instanceof Error ? e.message : String(e), refused: e instanceof ReadError && e.status === 400 });
+      // no answer within its 15 s is no answer either
+      const unanswered = noAnswer(e) || (e instanceof DOMException && e.name === "AbortError");
+      if (unanswered) lost();
+      apply({ ...f, error: e instanceof Error ? e.message : String(e), refused: e instanceof ReadError && e.status === 400, unanswered });
     } finally {
       busy.current = false;
       // the page or a filter changed while this read was out: read the new one now
@@ -175,7 +180,9 @@ export function useLedger(path: string, live: boolean, height: number | undefine
     }, 5000);
     const onVis = () => { if (document.hidden) window.clearTimeout(later.current); else if (liveRef.current || !cur.current.loaded) request(); };
     document.addEventListener("visibilitychange", onVis);
-    return () => { window.clearInterval(t); window.clearTimeout(later.current); document.removeEventListener("visibilitychange", onVis); };
+    // the connection back after a read that got no answer: read again now
+    const offBack = onBack(() => { if (cur.current.unanswered) read(); });
+    return () => { window.clearInterval(t); window.clearTimeout(later.current); document.removeEventListener("visibilitychange", onVis); offBack(); };
   }, [read, request]);
 
   return feed;
@@ -430,7 +437,7 @@ export default function Ledger({ feed, size, live, skew, onePublisher = false, s
   useEffect(() => {
     setShown((v) => {
       // a new page or filter: the rows on screen stay, quieted, until its answer (or its error) comes, so the list keeps its size
-      if (feed.path !== v.path) return v.loaded && !feed.loaded && !feed.error ? v : take(v, feed);
+      if (feed.path !== v.path) return v.loaded && !feed.loaded && (!feed.error || feed.unanswered) ? v : take(v, feed);
       // new rows of the same list wait while the reader holds them
       return !v.loaded || !hold ? take(v, feed) : v;
     });
@@ -518,12 +525,12 @@ export default function Ledger({ feed, size, live, skew, onePublisher = false, s
           )}
         </div>
         <div className={`lg-tw${waiting ? " is-waiting" : ""}`} aria-busy={waiting || !shown.loaded}>
-          {!shown.loaded && !feed.error && <span className="sr-only">Loading…</span>}
+          {!shown.loaded && (!feed.error || feed.unanswered) && <span className="sr-only">Loading…</span>}
           {/* the Status column's room: the Blobs list's (lg-st), or one publisher's list's own (pst) */}
           <table ref={tableRef} className={`lg-t${onePublisher ? " lg-one" : ""}${status ? (onePublisher ? " pst" : " lg-st") : ""}`}>
             <LedgerHead one={onePublisher} status={status} />
             <tbody ref={bodyRef}>
-              {!shown.loaded && (feed.error
+              {!shown.loaded && (feed.error && !feed.unanswered
                 ? <tr className="lg-empty"><td colSpan={cols}>{feed.refused ? `${feed.error.charAt(0).toUpperCase()}${feed.error.slice(1)}.` : `The observer API is not answering (${feed.error}).`}</td></tr>
                 : <Placeholders rows={size} one={onePublisher} status={status} />)}
               {shown.loaded && shown.rows.length === 0 && <tr className="lg-empty"><td colSpan={cols}>{emptyText ?? <>No blob recorded{shown.path.includes("&namespace=") || (!onePublisher && shown.path.includes("&publisher=")) ? " with this filter" : ""}.</>}</td></tr>}
@@ -539,7 +546,7 @@ export default function Ledger({ feed, size, live, skew, onePublisher = false, s
       </div>
       {shown.loaded
         ? children?.(shown.total, shown.failed)
-        : !feed.error && (
+        : (!feed.error || feed.unanswered) && (
           <div className="pager" aria-hidden="true">
             <span className="count"><span className="wait">Showing 1–25 of 0,000 settlements on record</span></span>
             <span className="ctl"><span className="wait lg-ctl-wait">First ‹ Page 1 of 000 › Last</span></span>
