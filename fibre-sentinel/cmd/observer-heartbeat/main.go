@@ -43,7 +43,7 @@ func main() {
 		dnsTO    = flag.Duration("dns-timeout", 5*time.Second, "")
 		tcpTO    = flag.Duration("tcp-timeout", 5*time.Second, "")
 		tlsTO    = flag.Duration("tls-timeout", 10*time.Second, "")
-		newEvery = flag.Duration("new-every", 30*time.Second, "how often, between rounds, to read the registry for an endpoint registered or moved since the last read, which is dialled then rather than at the next round (0 = only at rounds)")
+		newEvery = flag.Duration("new-every", 30*time.Second, "how often, between rounds, to read the registry for an endpoint registered or moved since the last read, which is dialled then rather than at the next round, and to dial again an endpoint that was down at its last check (0 = only at rounds)")
 		parallel = flag.Int("parallel", 16, "handshakes in flight at once; one TLS handshake per endpoint per round either way")
 		logLines = flag.Int("log-ring", 300, "log lines kept in memory for the crash dump")
 	)
@@ -91,13 +91,17 @@ func main() {
 	st.Set(status.CadenceKey, int((*interval+2*time.Minute)/time.Second))
 
 	// dial runs the handshakes of provs at tip and appends each measurement
-	// to reachability.jsonl; it returns how many it wrote and how many of
-	// those were reachable. Only the read of the validator set can fail it.
-	dial := func(chainID string, tip int64, provs []scan.FibreProvider) (n, ok int, err error) {
+	// to reachability.jsonl; it returns how many it wrote, how many of those
+	// were reachable, and whether each provider dialled was reachable, by
+	// consensus address. With onlyUp it writes and logs only the reachable
+	// ones (the retry of endpoints that were down, in fresh). Only the read
+	// of the validator set can fail it.
+	dial := func(chainID string, tip int64, provs []scan.FibreProvider, onlyUp bool) (n, ok int, up map[string]bool, err error) {
 		members, err := chain.ValidatorSet(ctx, tip)
 		if err != nil {
-			return 0, 0, fmt.Errorf("validator set h=%d: %w", tip, err)
+			return 0, 0, nil, fmt.Errorf("validator set h=%d: %w", tip, err)
 		}
+		up = make(map[string]bool, len(provs))
 		keyByHex := map[string]ed25519.PublicKey{}
 		for _, m := range members {
 			if len(m.PubKey) == ed25519.PublicKeySize {
@@ -138,19 +142,24 @@ func main() {
 			}
 			wg.Add(1)
 			sem <- struct{}{}
-			go func(in probe.Input, who, host string) {
+			go func(in probe.Input, cons, host string) {
 				defer wg.Done()
 				defer func() { <-sem }()
 				rctx, cancel := context.WithTimeout(ctx, perRequest)
 				m := probe.Run(rctx, in, nil, timeouts)
 				cancel()
 				m.ValidatorSetHeight = tip
+				reached := m.Outcome == probe.OutcomeReachable
+				mu.Lock()
+				defer mu.Unlock()
+				up[cons] = reached
+				if onlyUp && !reached {
+					return
+				}
 				b, err := json.Marshal(m)
 				if err != nil {
 					log.Fatalf("marshal: %v", err)
 				}
-				mu.Lock()
-				defer mu.Unlock()
 				// one write + fsync per record, like the prober's store
 				if _, err := out.Write(append(b, '\n')); err != nil {
 					log.Fatalf("write: %v", err)
@@ -159,19 +168,24 @@ func main() {
 					log.Fatalf("sync: %v", err)
 				}
 				n++
-				if m.Outcome == probe.OutcomeReachable {
+				if reached {
 					ok++
 				}
-				log.Printf("%s %s -> %s (%d ms)", who, host, m.Outcome, m.TotalDurationMS)
-			}(in, pr.ConsAddressBech32[:20], pr.Host)
+				log.Printf("%s %s -> %s (%d ms)", cons[:20], host, m.Outcome, m.TotalDurationMS)
+			}(in, pr.ConsAddressBech32, pr.Host)
 		}
 		wg.Wait()
-		return n, ok, nil
+		return n, ok, up, nil
 	}
 
 	// the registry as the heartbeat last dialled it, each provider's host by
 	// its consensus address; nil until the first round has dialled it
 	var known map[string]string
+	// down: the endpoints whose last check did not reach them, by consensus
+	// address, at the host checked. back: those of them a retry between
+	// rounds reached again; each already has its row for this round, so the
+	// next round leaves it out (fresh).
+	down, back := map[string]string{}, map[string]string{}
 
 	// A round the chain side refuses writes nothing to reachability.jsonl:
 	// there is no validator to attribute a row to. The status file is where
@@ -204,19 +218,36 @@ func main() {
 			return
 		}
 		inactiveLogged = false
-		n, ok, err := dial(chainID, tip, provs)
+		var todo []scan.FibreProvider
+		for _, pr := range provs {
+			if h, ok := back[pr.ConsAddressBech32]; !ok || h != pr.Host {
+				todo = append(todo, pr)
+			}
+		}
+		skipped := len(provs) - len(todo)
+		n, ok, up, err := dial(chainID, tip, todo, false)
 		if err != nil {
 			log.Printf("%v", err)
 			st.Error(err.Error())
 			return
 		}
 		known = hostsOf(provs)
+		down, back = map[string]string{}, map[string]string{}
+		for _, pr := range todo {
+			if r, seen := up[pr.ConsAddressBech32]; seen && !r {
+				down[pr.ConsAddressBech32] = pr.Host
+			}
+		}
 
-		log.Printf("round done: h=%d registered=%d probed=%d reachable=%d", tip, len(provs), n, ok)
+		if skipped > 0 {
+			log.Printf("round done: h=%d registered=%d probed=%d reachable=%d, %d left out: reached again since the last round", tip, len(provs), n, ok, skipped)
+		} else {
+			log.Printf("round done: h=%d registered=%d probed=%d reachable=%d", tip, len(provs), n, ok)
+		}
 		st.OK()
 		st.Progress(tip)
 		st.Set("registered", len(provs))
-		st.Set("reachable", ok)
+		st.Set("reachable", ok+skipped)
 	}
 
 	// A Fibre provider that registers, or moves to another host, is dialled
@@ -226,6 +257,13 @@ func main() {
 	// dialled. Their rows are like a round's, at the time they were dialled.
 	// A read or a dial that fails is left to the next read, and to the
 	// round, which reports failures.
+	//
+	// An endpoint that was down at its last check is dialled again at each
+	// read too, so that one put right shows as reachable within a read
+	// rather than at the next round. Only the try that reaches it is
+	// written, and the next round leaves that endpoint out: each endpoint
+	// still gets one row a round, so the retries put no extra weight on the
+	// share of checks that reached it, which is what the site shows.
 	fresh := func() {
 		if known == nil {
 			return
@@ -234,23 +272,51 @@ func main() {
 		if err != nil {
 			return
 		}
-		var add []scan.FibreProvider
+		var add, again []scan.FibreProvider
 		for _, pr := range provs {
-			if known[pr.ConsAddressBech32] != pr.Host {
+			switch c := pr.ConsAddressBech32; {
+			case known[c] != pr.Host:
 				add = append(add, pr)
+			case down[c] == pr.Host:
+				again = append(again, pr)
 			}
 		}
+		if len(add)+len(again) == 0 {
+			known = hostsOf(provs)
+			return
+		}
+		chainID, tip, err := chain.Status(ctx)
+		if err != nil {
+			return
+		}
 		if len(add) > 0 {
-			chainID, tip, err := chain.Status(ctx)
-			if err != nil {
-				return
-			}
-			n, ok, err := dial(chainID, tip, add)
+			n, ok, up, err := dial(chainID, tip, add, false)
 			if err != nil {
 				log.Printf("new endpoints: %v", err)
 				return
 			}
+			for _, pr := range add {
+				c := pr.ConsAddressBech32
+				if r, seen := up[c]; seen && !r {
+					down[c] = pr.Host
+				} else {
+					delete(down, c)
+				}
+			}
 			log.Printf("new endpoints: h=%d probed=%d reachable=%d", tip, n, ok)
+		}
+		if len(again) > 0 {
+			if n, _, up, err := dial(chainID, tip, again, true); err == nil {
+				for _, pr := range again {
+					if up[pr.ConsAddressBech32] {
+						delete(down, pr.ConsAddressBech32)
+						back[pr.ConsAddressBech32] = pr.Host
+					}
+				}
+				if n > 0 {
+					log.Printf("reached again: h=%d %d of the %d down", tip, n, len(again))
+				}
+			}
 		}
 		known = hostsOf(provs)
 	}

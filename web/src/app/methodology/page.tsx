@@ -287,7 +287,7 @@ export default function Methodology() {
             </More>
           </Def>
 
-          <Def id="endpoint-checks" name="Endpoint checks" say="Every five minutes, the registered Fibre endpoint of each bonded validator gets DNS, TCP, a TLS 1.3 handshake and a check that its certificate is signed by the validator’s consensus key. An endpoint newly registered, or moved to another host, gets its first check within about a minute.">
+          <Def id="endpoint-checks" name="Endpoint checks" say="Every five minutes, the registered Fibre endpoint of each bonded validator gets DNS, TCP, a TLS 1.3 handshake and a check that its certificate is signed by the validator’s consensus key. An endpoint newly registered, or moved to another host, gets its first check within about a minute. One that could not be reached is tried again every half minute; only the try that reaches it is recorded, and it then sits out its next five-minute check, so every endpoint is counted the same number of times.">
             <p>No blob data is asked for. The checks give <a href="#reachability">Reachability</a> and the validator&rsquo;s TLS identity:</p>
             <Rules rows={[
               ["verified", "The certificate is signed by this validator’s consensus key."],
