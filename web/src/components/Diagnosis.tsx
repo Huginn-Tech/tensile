@@ -75,7 +75,7 @@ export function diagnose(v: ValidatorDetail, c: EndpointCheck | undefined, decid
     const chk = c && c.host === v.host ? c : undefined;
     const at = chk ? `At ${whenUTC(chk.at)}` : "At the newest check";
     const err = chk?.raw_error ? ` (${chk.raw_error})` : "";
-    const notFault = `${v.also_failed_from ? " Also failed from a second location." : ""}${v.last_reachable_at ? ` Last handshake ${ago(v.last_reachable_at)}.` : ""}`;
+    const notFault = `${v.also_failed_from ? " Also failed from a second location." : ""}${v.last_reachable_at ? ` Last handshake ${ago(v.last_reachable_at)}.` : ""} Tried again every half minute, so a fix shows here within about a minute.`;
     const refused = chk && (chk.outcome === "TCP_REFUSED" || /refused/i.test(chk.raw_error ?? ""));
     if (chk && !chk.dns_ok) {
       return {
