@@ -401,8 +401,9 @@ a.go-other { font-weight: 500; white-space: nowrap; }
 .search:hover, .select:hover { border-color: var(--border); }
 .search:focus-within, .select:focus-within { border-color: color-mix(in srgb, var(--accent) 60%, transparent); background: var(--paper); }
 /* Pick: the select's pill with the site's own list instead of the OS's, which Windows drew as a plain system menu.
-   The button fills the pill; the list is the network menu's, opened under the pill and flush with its right edge, the
-   counts in a column of their own and a check at the choice. */
+   The button fills the pill; the list is the network menu's, opened under the pill and flush with its right edge, a
+   choice's state dot (the table's colours) in the left margin, the counts in a column of their own and a check after
+   the choice. */
 .pick { padding: 0; }
 .pick > button { display: flex; align-items: center; height: 100%; padding: 0 34px 0 15px; border: 0; border-radius: inherit; background: transparent; color: inherit; font: inherit; line-height: 30px; text-align: left; white-space: nowrap; cursor: pointer; }
 .pick > button:focus { outline: none; }
@@ -411,10 +412,11 @@ a.go-other { font-weight: 500; white-space: nowrap; }
 .pick-v > .off { visibility: hidden; }
 .pick.open::after { transform: translateY(3px) rotate(225deg); }
 .pick .list { position: absolute; right: -1px; top: calc(100% + 6px); z-index: 30; width: max-content; min-width: calc(100% + 2px); margin: 0; padding: 4px; list-style: none; display: grid; gap: 2px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgb(0 0 0 / .12); font-weight: 400; line-height: 20px; }
-.pick .list li { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 6px 10px 6px 28px; border-radius: 6px; color: var(--text); cursor: pointer; }
+.pick .list li { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 6px 30px 6px 28px; border-radius: 6px; color: var(--text); cursor: pointer; }
+.pick .list li > .dot { position: absolute; left: 11px; top: 50%; margin: 0; transform: translateY(-50%); }
 .pick .list li.at { background: var(--wash); }
 .pick .list li[aria-selected="true"] { font-weight: 500; }
-.pick .list li[aria-selected="true"]::before { content: ""; position: absolute; left: 11px; top: 50%; width: 4px; height: 8px; border-right: 1.5px solid var(--accent); border-bottom: 1.5px solid var(--accent); transform: translateY(-65%) rotate(45deg); }
+.pick .list li[aria-selected="true"]::before { content: ""; position: absolute; right: 13px; top: 50%; width: 4px; height: 8px; border-right: 1.5px solid var(--accent); border-bottom: 1.5px solid var(--accent); transform: translateY(-65%) rotate(45deg); }
 .pick .list .n { color: var(--text-2); font-variant-numeric: tabular-nums; }
 
 /* ---------------------------------------------------------------- tables --- */

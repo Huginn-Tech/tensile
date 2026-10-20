@@ -1,15 +1,17 @@
 "use client";
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 
-export type PickOption<T extends string> = { value: T; label: string; count?: number };
+/** dot: a state dot's class (ok, hold, none), the one the table draws for the choice's rows */
+export type PickOption<T extends string> = { value: T; label: string; count?: number; dot?: string };
 
 /**
  * A choice of one from a few, in the site's own list rather than the
  * browser's: the closed control is the pill a select was ("All validators ·
  * 107"); its list opens under it, right-aligned, in the network menu's style,
- * with each choice's count in a column of its own and a check at the one
- * chosen. A select-only combobox to assistive technology: the arrows, Home
- * and End move, Enter or Space picks, Escape, Tab and a click elsewhere close.
+ * with a choice's state dot at its left, each choice's count in a column of
+ * its own and a check after the one chosen. A select-only combobox to
+ * assistive technology: the arrows, Home and End move, Enter or Space picks,
+ * Escape, Tab and a click elsewhere close.
  */
 export default function Pick<T extends string>({ value, options, onChange, label }: {
   value: T;
@@ -71,6 +73,7 @@ export default function Pick<T extends string>({ value, options, onChange, label
           {options.map((x, i) => (
             <li key={x.value} id={`${id}-${i}`} role="option" aria-selected={i === cur} className={i === at ? "at" : undefined}
               onPointerEnter={() => setAt(i)} onClick={() => pick(i)}>
+              {x.dot && <i className={"dot " + x.dot} />}
               <span>{x.label}</span>
               {x.count !== undefined && <span className="n">{x.count}</span>}
             </li>
