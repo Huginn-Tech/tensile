@@ -717,7 +717,8 @@ GET /v1/blobs                 publication list (?limit=, ?offset=, ?before_heigh
                               (status failed, failed_total) among the blobs (status success), but
                               for one not final whose hash has since landed; ?endorsers=1 gives
                               each blob its endorsers, the validators attested_with_rows counts,
-                              by consensus address (one query for the page)
+                              by consensus address (one query for the page), with or without
+                              ?include_failed=1 (a failed payment has none)
 GET /v1/blobs/{hash}          one blob: its reading, each assigned validator's service word, the rows
                               (?rows=1 adds each reading's row_indices and rows_sha256); tx_cost,
                               the settlement transaction's gas and fee when recorded
