@@ -249,3 +249,25 @@ test("the back-off: 2 s doubling, up to the interval, a fast stream to 8 interva
   assert.equal(failRetryMs(1, 30000, 5000), 5000);
   assert.equal(failRetryMs(1, 30000, 3600000), 300000, "a Retry-After is waited out up to 5 minutes");
 });
+
+test("a page opened again shows its stream's last answer at once, asks again, and not after a few minutes", async () => {
+  const path = "/v1/again";
+  answer(path, ok({ v: 1 }), ok({ v: 2 }), ok({ v: 3 }));
+  const s = watch(path, 30000);
+  await settle();
+  s.stop();
+  await pass(60000);
+  const t = watch(path, 30000);
+  assert.deepEqual(t.seen[0]?.data, { v: 1 }, "the kept answer, before any request");
+  assert.equal(t.seen[0].loading, false);
+  await settle();
+  assert.equal(count(path), 2, "and asked again at once");
+  assert.deepEqual(t.seen.at(-1).data, { v: 2 });
+  t.stop();
+  await pass(5 * 60000);
+  const u = watch(path, 30000);
+  assert.equal(u.seen.length, 0, "over 5 min old: not kept");
+  await settle();
+  assert.deepEqual(u.seen.at(-1).data, { v: 3 });
+  u.stop();
+});

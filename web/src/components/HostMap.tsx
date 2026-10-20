@@ -19,8 +19,7 @@ import { PillPicker, HOLD_MS, ROTATE_MS } from "@/lib/pillpick";
  * one, by its country's label point, over Natural Earth country outlines
  * (Equal Earth) drawn as land of one neutral shade: no grid, no outline of the
  * world, and no country coloured, so the only colour on the map is at its
- * places. While the map is at rest the land carries its material: a fine
- * grain, a coastline hairline and a short shadow.
+ * places. The land is smooth, at rest as in a move.
  *
  * Every place is a disc ringed in its state's colour carrying its count; a
  * lone host is a solid dot. Hosts close together on screen share one badge
@@ -43,8 +42,9 @@ import { PillPicker, HOLD_MS, ROTATE_MS } from "@/lib/pillpick";
  * of its own: the counts say what
  * it shows, and the panel's one heading on the subject is "Current Fibre
  * providers" under it. The box (its shape set in the stylesheet) and the bar
- * are in the prerendered page and the land is drawn as soon as the box is
- * measured, all before the list arrives, so nothing moves when it does.
+ * are in the prerendered page, so nothing around the map moves when the list
+ * arrives; the land waits for the list and fades in once, at the view its
+ * hosts give it, so it never opens at one size and steps back to another.
  */
 
 type Host = { v: Validator; state: EndpointState; share: number; cc: string; city: string; loc: string; lon: number; lat: number; ux: number; uy: number; provider: string };
@@ -171,39 +171,8 @@ function cluster(hosts: Host[], pxPerUnit: number, narrow: boolean): Cluster[] {
   }).sort((x, y) => x.ux - y.ux);
 }
 
-/** every country once, all in the land's one shade: the land draws these, and at rest its material draws them again */
+/** every country once, all in the land's one shade */
 const LAND = COUNTRIES.map(([cc, d], i) => <path key={cc || i} d={d} />);
-
-/** px: the side of the land's grain tile, which repeats without a seam */
-const GRAIN = 96;
-/**
- * The land's grain: one tile of soft white noise (each speck averaged a little with its four neighbours, wrapping so
- * the tile repeats without a seam), split into its light specks and its dark ones, so the stylesheet lays each on the
- * land's shade at its own strength in either theme. It is made at the screen's resolution, a speck to a device pixel;
- * on a 1x screen, where a speck is a whole CSS pixel, at a little over half.
- */
-function grainTiles(dpr: number): { hi: string; lo: string } | null {
-  const n = Math.round(GRAIN * dpr), k = dpr >= 1.5 ? 1 : 0.55;
-  let s = 11;
-  const w = new Float32Array(n * n);
-  for (let i = 0; i < w.length; i++) w[i] = (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296;
-  const at = (i: number, j: number) => w[((j + n) % n) * n + ((i + n) % n)];
-  const hi = document.createElement("canvas"), lo = document.createElement("canvas");
-  hi.width = hi.height = lo.width = lo.height = n;
-  const hx = hi.getContext("2d"), lx = lo.getContext("2d");
-  if (!hx || !lx) return null;
-  const hd = hx.createImageData(n, n), ld = lx.createImageData(n, n);
-  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-    // -0.5 to 0.5: above the middle a light speck, below it a dark one
-    const g = 0.7 * at(i, j) + 0.075 * (at(i - 1, j) + at(i + 1, j) + at(i, j - 1) + at(i, j + 1)) - 0.5;
-    const o = (j * n + i) * 4, a = Math.min(255, Math.round(Math.abs(g) * 510 * k));
-    hd.data[o] = hd.data[o + 1] = hd.data[o + 2] = 255;
-    if (g > 0) hd.data[o + 3] = a; else ld.data[o + 3] = a;
-  }
-  hx.putImageData(hd, 0, 0);
-  lx.putImageData(ld, 0, 0);
-  return { hi: hi.toDataURL("image/png"), lo: lo.toDataURL("image/png") };
-}
 
 /** px: about how tall a place's popover is, to choose its side: its header, its list (it scrolls past 196 px) and its zoom button */
 const popHeight = (n: number, split: boolean) => 58 + Math.min(196, n * 49) + (split ? 38 : 0);
@@ -715,30 +684,16 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
   const hosted = useMemo(() => new Set(hosts.map((h) => h.cc)), [hosts]);
   const unchecked = hosts.some((h) => h.state === "none");
 
-  // ---- the land's material: its grain tiles, made for the screen's resolution (again when the window moves to a screen
-  // of another), and the view it is drawn for: the one the map last came to rest at. While the map moves only the plain
-  // land moves with it; 140 ms after the last step the material is drawn for the new view and fades in. ----
-  const [grain, setGrain] = useState<{ hi: string; lo: string; dpr: number } | null>(null);
+  // ---- the land waits for the list: drawn once, at the view its hosts give it. A list that has not come in 2.5 s (the
+  // API not answering) lets it be drawn at the view without them. ----
+  const [ready, setReady] = useState(!loading);
   useEffect(() => {
-    let mq: MediaQueryList | undefined;
-    const make = () => {
-      const dpr = window.devicePixelRatio || 1, t = grainTiles(dpr);
-      setGrain(t && { ...t, dpr });
-      mq?.removeEventListener("change", make);
-      mq = window.matchMedia(`(resolution: ${dpr}dppx)`);
-      mq.addEventListener("change", make);
-    };
-    make();
-    return () => mq?.removeEventListener("change", make);
-  }, []);
-  const [rest, setRest] = useState<View | null>(null);
-  const [still, setStill] = useState(false);
-  useEffect(() => {
-    setStill(false);
-    const t = window.setTimeout(() => { setRest(viewRef.current); setStill(true); }, 140);
+    if (ready) return;
+    if (!loading) { setReady(true); return; }
+    const t = window.setTimeout(() => setReady(true), 2500);
     return () => window.clearTimeout(t);
-  }, [view, width]);
-  /** closer than half the home view: country borders show, faintly, and the grain steps back */
+  }, [loading, ready]);
+  /** closer than half the home view: country borders show, faintly */
   const near = target.w < home.w / 2;
 
   // ---- badges on screen ----
@@ -761,28 +716,6 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
   const registered = hosts.length + unplaced;
   const shownCounts = loading || (countries > 0 || providers > 0) ? counts : counts.slice(0, 1);
 
-  // ---- the land's material at rest: its grain (tied to the world's origin on the device's pixel grid, so it never
-  // resamples and a pan carries it with the land), its coastline under it and its shadow under that ----
-  let material: React.ReactNode = null;
-  if (grain && rest && width > 0) {
-    const s = width / rest.w, u = 1 / s, t = GRAIN * u;
-    const gx = rest.x + (Math.round(-rest.x * s * grain.dpr) / grain.dpr) * u, gy = rest.y + (Math.round(-rest.y * s * grain.dpr) / grain.dpr) * u;
-    material = (
-      <svg className={`cm-mat${still ? "" : " moving"}`} viewBox={`${rest.x} ${rest.y} ${rest.w} ${rest.w * aspect}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
-        <defs>
-          <pattern id="cm-grain" className="cm-grain" patternUnits="userSpaceOnUse" x={gx} y={gy} width={t} height={t}>
-            <rect width={t} height={t} />
-            <image className="hi" href={grain.hi} width={t} height={t} preserveAspectRatio="none" />
-            <image className="lo" href={grain.lo} width={t} height={t} preserveAspectRatio="none" />
-          </pattern>
-        </defs>
-        <g className="shade" transform={`translate(0 ${(1.4 * u).toFixed(3)})`}>{LAND}</g>
-        <g className="coast">{LAND}</g>
-        <g className="fill">{LAND}</g>
-      </svg>
-    );
-  }
-
   // ---- the burst's places as drawn now: each badge's centre and radius, and the place each validator's host is in ----
   spots.current = new Map(placed.map((p) => [p.c.id, { x: p.x, y: p.y, r: Math.max(p.bw, p.bh) / 2, one: p.c.hosts.length === 1 }]));
   owners.current = new Map(placed.flatMap((p) => p.c.hosts.map((h) => [h.v.address.toLowerCase(), p.c.id] as [string, string])));
@@ -796,13 +729,12 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
         onDoubleClick={onDoubleClick}>
         <div className="cm-vp">
-          {/* drawn once the box is measured: the prerendered page holds the box, not the 100 kB of outlines */}
-          {width > 0 && (
+          {/* drawn once the box is measured and the list is in: the prerendered page holds the box, not the 100 kB of outlines */}
+          {width > 0 && ready && (
             <svg className="cm-land" viewBox={`${view.x} ${view.y} ${view.w} ${view.w * aspect}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
               {LAND}
             </svg>
           )}
-          {material}
         </div>
         {/* no heading of its own: the counts on the bar say what the map shows, and "Current Fibre providers" below is the one heading */}
         <div className="cm-title">
