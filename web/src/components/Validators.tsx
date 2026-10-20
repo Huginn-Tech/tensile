@@ -6,6 +6,7 @@ import { type Validator, int, pctOf, bytes, ago, utcWord, shortMid, failedWords,
 import { WINDOWS, periodName } from "@/lib/window";
 import Avatar from "./Avatar";
 import Info from "./Info";
+import Pick from "./Pick";
 import { endpointState } from "./Readiness";
 import { HostingCell } from "./Hosting";
 import { SELF_VALIDATOR } from "@/lib/site";
@@ -205,15 +206,13 @@ export default function Validators({ rows, window: win, notLive, loading, failed
         {periodSwitch}
         <div className="tools">
           <label className="search">{FIND}<span className="sr-only">Search validators</span><input type="search" placeholder="Search name or address" value={q} onChange={(e) => setQ(e.target.value)} /></label>
-          <label className="select"><span className="sr-only">Filter</span>
-            <select value={filter} onChange={(e) => setFilter(e.target.value as Filter)}>
-              <option value="all">All validators · {counts.all}</option>
-              <option value="providers">Fibre providers · {counts.providers}</option>
-              <option value="unreachable">Unreachable now · {counts.unreachable}</option>
-              <option value="cert">Wrong certificate now · {counts.cert}</option>
-              <option value="nohost">No endpoint · {counts.nohost}</option>
-            </select>
-          </label>
+          <Pick label="Filter validators" value={filter} onChange={setFilter} options={[
+            { value: "all", label: "All validators", count: counts.all },
+            { value: "providers", label: "Fibre providers", count: counts.providers },
+            { value: "unreachable", label: "Unreachable now", count: counts.unreachable },
+            { value: "cert", label: "Wrong certificate now", count: counts.cert },
+            { value: "nohost", label: "No endpoint", count: counts.nohost },
+          ]} />
         </div>
       </div>
       <div className="tablewrap framed">
