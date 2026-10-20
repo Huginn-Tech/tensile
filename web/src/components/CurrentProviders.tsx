@@ -33,11 +33,14 @@ function ring(R: number) {
     const d0 = deg(l0), d1 = deg(l1), [x0, y0] = at(d0, rc), [x1, y1] = at(d1, rc);
     return `M${x0.toFixed(2)} ${y0.toFixed(2)}A${rc} ${rc} 0 ${d1 - d0 > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
   };
-  // a round cap on the ring's end at d: half a disc, outside the ring only (forward: past the end, else before the
-  // start), so the stretch under it is not painted twice where the ring's tone is see-through
-  const cap = (d: number, forward: boolean) => {
+  // a round cap on the ring's end at d: half a disc outside the ring (forward: past the end, else before the start),
+  // reaching `over` px back into it. A see-through tone takes none, so the stretch under it is not painted twice; a
+  // solid one takes a little, so no hairline of the panel shows where the two edges meet.
+  const cap = (d: number, forward: boolean, over = 0) => {
     const [ox, oy] = at(d, R), [ix, iy] = at(d, R - SW);
-    return `M${ox.toFixed(2)} ${oy.toFixed(2)}A${SW / 2} ${SW / 2} 0 0 ${forward ? 1 : 0} ${ix.toFixed(2)} ${iy.toFixed(2)}Z`;
+    const back = (((forward ? -1 : 1) * over) / rc) * (180 / Math.PI);
+    const [bx, by] = at(d + back, R), [jx, jy] = at(d + back, R - SW);
+    return `M${bx.toFixed(2)} ${by.toFixed(2)}L${ox.toFixed(2)} ${oy.toFixed(2)}A${SW / 2} ${SW / 2} 0 0 ${forward ? 1 : 0} ${ix.toFixed(2)} ${iy.toFixed(2)}L${jx.toFixed(2)} ${jy.toFixed(2)}Z`;
   };
   // the box reaches down past the ring's ends to hold the share's second line, which sits in the opening, and past
   // the ends' round caps
@@ -81,9 +84,11 @@ export default function CurrentProviders({ rows }: { rows: Validator[] | null })
   const off = ready ? r!.bonded.filter((v) => !reg.has(v.address)).sort(byPower) : [];
 
   // as large a ring as the window holds without growing, with up to two lines under it; three lines take a smaller
-  // ring, so the window keeps its height (four, all at once, are rare and let it grow a line)
-  const lines = 1 + [unreach, cert, unchecked].filter((vs) => vs.length > 0).length;
-  const g = ring(ready && lines > 2 ? 94 : 109);
+  // ring, so the window keeps its height. Not checked yet, which lasts only until a new endpoint's first check (half a
+  // minute), gives way to two amber lines, so there are never four; its stretches still say so when pointed at.
+  const amberLines = [unreach, cert].filter((vs) => vs.length > 0).length;
+  const showUnchecked = unchecked.length > 0 && amberLines < 2;
+  const g = ring(ready && 1 + amberLines + (showUnchecked ? 1 : 0) > 2 ? 94 : 109);
   let at = 0;
   const segs: Seg[] = ready ? [...up, ...down, ...off].map((v) => {
     const l0 = at;
@@ -153,8 +158,8 @@ export default function CurrentProviders({ rows }: { rows: Validator[] | null })
             {runs.map((s, k) => (
               <path key={`${s.tone}${s.l0}:${k}`} className={`cp-seg ${s.tone}`} d={g.arc(s.l0, end(s, k < runs.length - 1))} strokeWidth={SW} />
             ))}
-            <path className={capTone(segs[0])} d={g.cap(A0, false)} />
-            <path className={capTone(segs[segs.length - 1])} d={g.cap(A0 + SPAN, true)} />
+            <path className={capTone(segs[0])} d={g.cap(A0, false, segs[0]?.tone === "off" ? 0 : 0.75)} />
+            <path className={capTone(segs[segs.length - 1])} d={g.cap(A0 + SPAN, true, segs[segs.length - 1]?.tone === "off" ? 0 : 0.75)} />
             {p && <path className={`cp-pt ${p.tone}`} d={g.arc(p.l0, Math.max(p.l0 + 1.5, end(p, p.own)))} strokeWidth={SW} />}
             <line className="cp-halo" x1={nx0} y1={ny0} x2={nx1} y2={ny1} />
             <line className="cp-needle" x1={nx0} y1={ny0} x2={nx1} y2={ny1} />
@@ -178,7 +183,7 @@ export default function CurrentProviders({ rows }: { rows: Validator[] | null })
           {amber("Unreachable", "Show the unreachable validators", unreach)}
           {amber("Wrong certificate", "Show the validators with a wrong certificate", cert)}
           <li><span className="cp-it">{part("", "no Fibre provider", off)}</span></li>
-          {unchecked.length > 0 && <li><span className="cp-it">{part("none", "not checked yet", unchecked)}</span></li>}
+          {showUnchecked && <li><span className="cp-it">{part("none", "not checked yet", unchecked)}</span></li>}
         </> : <li className="cp-none" />}
       </ul>
     </div>

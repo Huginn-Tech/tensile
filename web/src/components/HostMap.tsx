@@ -713,7 +713,7 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
 
   // ---- the countries hosting someone, for the counts; and whether any host is still to be checked, for the key ----
   const hosted = useMemo(() => new Set(hosts.map((h) => h.cc)), [hosts]);
-  const unchecked = hosts.some((h) => h.state === "none"), wrongCert = hosts.some((h) => h.state === "cert");
+  const unchecked = hosts.some((h) => h.state === "none");
 
   // ---- the land's material: its grain tiles, made for the screen's resolution (again when the window moves to a screen
   // of another), and the view it is drawn for: the one the map last came to rest at. While the map moves only the plain
@@ -810,7 +810,6 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
             <Eye />
             <span><i className="k-ok" />reachable</span>
             <span><i className="k-hold" />unreachable</span>
-            {wrongCert && <span><i className="k-hold" />wrong certificate</span>}
             {unchecked && <span><i className="k-none" />not checked yet</span>}
           </p>
         </div>
