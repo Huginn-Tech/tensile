@@ -29,6 +29,16 @@ SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
 # only this instance's data directory, not the service user's whole home
 ReadWritePaths=/var/lib/fibre-observer/%i
+# The API is the one service the internet reaches (through the site), so it
+# is given none of what the others keep beside it: not the alert and backup
+# settings of the env file, and not the keys and credentials in
+# /etc/fibre-observer (the backup's SSH key and rclone.conf, the export
+# signing key, a keyring), which is an empty directory to it but for this
+# instance's publishers file. It reads the signing key's public half from the
+# exports directory.
+UnsetEnvironment=ALERT_WEBHOOK TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID BACKUP_REMOTE TENSILE_EXPORT_SIGNING_KEY
+TemporaryFileSystem=/etc/fibre-observer:ro
+BindReadOnlyPaths=-/etc/fibre-observer/publishers-%i.yaml
 
 [Install]
 WantedBy=multi-user.target

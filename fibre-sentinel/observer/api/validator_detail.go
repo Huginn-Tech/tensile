@@ -6,7 +6,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"runtime/debug"
 	"sync"
 	"time"
 )
@@ -214,6 +216,12 @@ func (s *Server) serveValidatorDetail(w http.ResponseWriter, r *http.Request, ad
 // waiting on call.
 func (s *Server) computeDetail(c *detailCache, key, fkey string, call *detailCall, addr string, win Window, now time.Time, rev string) {
 	defer func() {
+		// It runs on its own goroutine, where a panic would end the whole
+		// API rather than one answer: odd chain data becomes this
+		// computation's error instead, as in rebuildFeed.
+		if p := recover(); p != nil {
+			call.err = fmt.Errorf("panic: %v\n%s", p, debug.Stack())
+		}
 		// Kept only if no hold landed while it ran. Its readers asked before
 		// the hold and get it; the next one did not, and a late answer from
 		// before the hold would also replace the one computed after it.

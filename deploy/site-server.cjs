@@ -92,20 +92,29 @@ const SECURITY = {
 // in the one bucket the tips of about nine pages behind one address (an
 // office, a demo's Wi-Fi, a carrier's NAT) spent RATE and their data requests
 // were refused; and the API answers it from a quarter-second cache however
-// many ask. TIP_RATE is about thirty shown pages' worth. Avatars are exempt:
-// the overview asks for one per validator in a burst, and the API serves them
-// from its own cache.
+// many ask. TIP_RATE is about thirty shown pages' worth. Avatars have an
+// allowance of their own, AVATAR_RATE, and hold no places: the overview asks
+// for one per validator in a burst, and the API serves them from its own
+// cache; a loop of them is refused like any other.
 //
-// The two in-flight caps count different things. INFLIGHT_TOTAL is the API's
-// work: a request holds its place from admission until the API's answer
-// begins (its headers), so a client that reads an answer slowly, a day's
-// export over half an hour, holds none of the places every other client's
-// requests need. INFLIGHT_PER_CLIENT is one client's share of the site: a
-// request holds its place until both its halves, the client's and the API's,
-// are over, so slow downloads cost only the client that makes them.
+// The in-flight caps count different things. INFLIGHT_TOTAL is the API's
+// work: a request holds its place from the moment it is sent to the API until
+// the API's answer begins (its headers), so a client that reads an answer
+// slowly, a day's export over half an hour, holds none of the places every
+// other client's requests need. INFLIGHT_PER_CLIENT is one client's share of
+// the site: a request holds its place until both its halves, the client's and
+// the API's, are over, so slow downloads cost only the client that makes them.
+// WORKING_PER_CLIENT is one client's share of the API's work: of its data
+// requests at most this many are at the API at once, and the rest wait their
+// turn here (turn()), holding none of INFLIGHT_TOTAL's places. A page's burst
+// (six at once on the live site) waits a few milliseconds behind its own
+// first four; a client whose requests are slow, or never answered, waits on
+// itself alone, and it takes INFLIGHT_TOTAL / WORKING_PER_CLIENT clients, not
+// three, to take every place the API has.
 const RATE = { burst: 120, perSec: 10 };        // token bucket per client
 const TIP_RATE = { burst: 60, perSec: 30 };     // the same, for /v1/tip alone
-const INFLIGHT_PER_CLIENT = 16, INFLIGHT_TOTAL = 48;
+const AVATAR_RATE = { burst: 300, perSec: 30 }; // the same, for avatars alone
+const INFLIGHT_PER_CLIENT = 16, INFLIGHT_TOTAL = 48, WORKING_PER_CLIENT = 4;
 // The tip stream (/v1/tip/stream, server-sent events) is one long request per
 // shown page, in front of its polling of /v1/tip. Opening one spends a
 // TIP_RATE token; an open one holds none of INFLIGHT_PER_CLIENT's places (a
@@ -122,8 +131,8 @@ let closing = false;                            // set at SIGTERM: no stream is 
 // every new one shares one allowance: a flood of new addresses neither grows
 // the map without end nor gets a burst for each address.
 const CLIENTS_MAX = 50_000;
-const buckets = new Map();                      // client -> { tokens, tips, at, inflight, streams }
-const newBucket = (now) => ({ tokens: RATE.burst, tips: TIP_RATE.burst, at: now, inflight: 0, streams: 0 });
+const buckets = new Map();                      // client -> { tokens, tips, avatars, at, inflight, streams, working, waiting }
+const newBucket = (now) => ({ tokens: RATE.burst, tips: TIP_RATE.burst, avatars: AVATAR_RATE.burst, at: now, inflight: 0, streams: 0, working: 0, waiting: [] });
 const overflow = newBucket(Date.now());
 let inflight = 0;
 setInterval(() => {
@@ -197,38 +206,76 @@ function refuse(res) {
   return null;
 }
 
-// kind: "data"; "tip", the request is for /v1/tip, and spends TIP_RATE's
-// tokens instead of RATE's; "stream", for /v1/tip/stream, spends one of
-// TIP_RATE's too, and holds a place of STREAMS_PER_CLIENT and STREAMS_TOTAL
-// instead of INFLIGHT_PER_CLIENT. The places it holds are given back through
-// what it returns: answered() when the API's answer begins or the request to
-// it is over (the global place), over() when both halves are (the client's
-// own).
-function admit(req, res, kind) {
-  const who = clientOf(req), now = Date.now();
+// A client's allowance, its tokens topped up for the time since it last asked.
+function bucketOf(who, now) {
   let b = buckets.get(who);
   if (!b) {
-    // refused anyway: no entry is made for it
-    if (inflight >= INFLIGHT_TOTAL) return refuse(res);
     if (buckets.size >= CLIENTS_MAX) b = overflow;
     else buckets.set(who, b = newBucket(now));
   }
   const s = (now - b.at) / 1000;
   b.tokens = Math.min(RATE.burst, b.tokens + s * RATE.perSec);
   b.tips = Math.min(TIP_RATE.burst, b.tips + s * TIP_RATE.perSec);
+  b.avatars = Math.min(AVATAR_RATE.burst, b.avatars + s * AVATAR_RATE.perSec);
   b.at = now;
-  const stream = kind === "stream";
-  const spend = kind === "data" ? "tokens" : "tips";
+  return b;
+}
+
+// kind: "data"; "tip", the request is for /v1/tip, and spends TIP_RATE's
+// tokens instead of RATE's; "stream", for /v1/tip/stream, spends one of
+// TIP_RATE's too, and holds a place of STREAMS_PER_CLIENT and STREAMS_TOTAL
+// instead of INFLIGHT_PER_CLIENT. A data request past its client's
+// WORKING_PER_CLIENT waits its turn. What it returns starts the request,
+// start(run), at once or when its turn comes, and gives back the places it
+// holds: answered() when the API's answer begins or the request to it is over
+// (the global place, and the client's turn), over() when both halves are, or
+// when the client leaves while it waits (the client's own).
+function admit(req, res, kind) {
+  const who = clientOf(req);
+  // refused anyway: no entry is made for it
+  if (!buckets.has(who) && inflight >= INFLIGHT_TOTAL) return refuse(res);
+  const b = bucketOf(who, Date.now());
+  const stream = kind === "stream", data = kind === "data";
+  const spend = data ? "tokens" : "tips";
   const own = stream ? "streams" : "inflight";
-  if (b[spend] < 1 || b[own] >= (stream ? STREAMS_PER_CLIENT : INFLIGHT_PER_CLIENT) || inflight >= INFLIGHT_TOTAL) return refuse(res);
+  const waits = data && b.working >= WORKING_PER_CLIENT;
+  if (b[spend] < 1 || b[own] >= (stream ? STREAMS_PER_CLIENT : INFLIGHT_PER_CLIENT) || (!waits && inflight >= INFLIGHT_TOTAL)) return refuse(res);
   if (stream && streams.size >= STREAMS_TOTAL) return full(res);
   b[spend] -= 1;
-  b[own]++; inflight++;
+  b[own]++;
   if (stream) streams.add(res);
-  let working = true, open = true;
-  const answered = () => { if (working) { working = false; inflight--; } };
-  const over = () => { answered(); if (open) { open = false; b[own]--; streams.delete(res); } };
-  return { answered, over };
+  // at: "waiting" for its turn, "working" at the API, "done" once the API has answered or the request is over
+  let at = "waiting", open = true, run = null;
+  const slot = {
+    start(fn) { run = fn; if (waits) b.waiting.push(slot); else slot.begin(); },
+    begin() { at = "working"; inflight++; if (data) b.working++; run(); },
+    answered() {
+      if (at === "working") { at = "done"; inflight--; if (data) { b.working--; turn(b); } }
+      else if (at === "waiting") { at = "done"; const i = b.waiting.indexOf(slot); if (i >= 0) b.waiting.splice(i, 1); }
+    },
+    over() { slot.answered(); if (open) { open = false; b[own]--; streams.delete(res); } },
+    refuse() { refuse(res); slot.over(); },
+  };
+  return slot;
+}
+
+// One of b's data requests is answered: its waiting ones begin while it has
+// turns free, each if a place of the API's is free, else refused, as it would
+// have been on arrival.
+function turn(b) {
+  while (b.working < WORKING_PER_CLIENT && b.waiting.length) {
+    const next = b.waiting.shift();
+    if (inflight >= INFLIGHT_TOTAL) next.refuse();
+    else next.begin();
+  }
+}
+
+// An avatar spends AVATAR_RATE's tokens alone and holds no place.
+function avatarAdmitted(req, res) {
+  const b = bucketOf(clientOf(req), Date.now());
+  if (b.avatars < 1) { refuse(res); return false; }
+  b.avatars -= 1;
+  return true;
 }
 
 // Next's hashed build output never changes under a name; everything else can.
@@ -345,6 +392,14 @@ function proxy(req, res, u) {
     res.writeHead(405, { ...SECURITY, allow: "GET, HEAD" });
     return res.end();
   }
+  // A GET or HEAD has no body, and none is passed to the API: one that says
+  // it has is refused here. Its length, passed on with no bytes behind it,
+  // held the API waiting for them until its read timeout (10 s), and a place
+  // of INFLIGHT_TOTAL with it.
+  if (Number(req.headers["content-length"] || 0) > 0 || req.headers["transfer-encoding"] !== undefined) {
+    res.writeHead(400, { ...SECURITY, "content-type": "application/json" });
+    return res.end('{"error":"a GET or HEAD request has no body"}');
+  }
   // The tip stream passes like any answer, each event as it comes: nothing
   // here buffers or compresses an API answer.
   const stream = u.pathname === "/api/v1/tip/stream";
@@ -354,9 +409,9 @@ function proxy(req, res, u) {
     res.writeHead(503, { ...SECURITY, "content-type": "application/json", "retry-after": "5" });
     return res.end('{"error":"the site is restarting: ask /v1/tip"}');
   }
-  const counted = !u.pathname.startsWith("/api/v1/avatars/");
-  const slot = counted ? admit(req, res, stream ? "stream" : u.pathname === "/api/v1/tip" ? "tip" : "data") : null;
-  if (counted && !slot) return;
+  const avatar = u.pathname.startsWith("/api/v1/avatars/");
+  const slot = avatar ? null : admit(req, res, stream ? "stream" : u.pathname === "/api/v1/tip" ? "tip" : "data");
+  if (avatar ? !avatarAdmitted(req, res) : !slot) return;
   // A page waiting on the API is the thing to catch before a visitor does:
   // every answer slower than SLOW_MS goes to the journal with its time; a
   // stream is long by design.
@@ -365,46 +420,56 @@ function proxy(req, res, u) {
     const ms = Date.now() - t0;
     if (ms >= SLOW_MS && !stream) console.log(`site-server: slow ${u.pathname}${u.search} ${res.statusCode} ${ms} ms`);
   });
-  const headers = {};
-  for (const [k, v] of Object.entries(req.headers)) if (!HOP.has(k)) headers[k] = v;
   // gone: the client went away before its answer was whole
   let up, gone = false;
-  try {
-    up = http.request({ host: API.host, port: API.port, method: req.method, path: u.pathname.slice(4) + u.search, headers, timeout: IDLE_MS }, (r) => {
-      // The API has answered: carrying the answer to the client is no work of the API's.
-      slot?.answered();
-      if (gone) return r.destroy();
-      const out = {};
-      for (const [k, v] of Object.entries(r.headers)) if (!HOP.has(k)) out[k] = v;
-      res.writeHead(r.statusCode || 502, { ...SECURITY, ...out });
-      res.setTimeout(IDLE_MS, () => res.destroy());
-      // pipeline, not pipe: an API that closes mid-answer (a restart, its write deadline) ends the client's answer
-      // too, where a pipe left it open, and a client that goes away ends the API's.
-      pipeline(r, res, () => {});
+  // A client that goes away while its request waits its turn takes it out of
+  // the line; one that goes after cancels its request to the API (below).
+  if (slot) res.on("close", () => { if (!up) slot.over(); });
+  const forward = () => {
+    const headers = {};
+    for (const [k, v] of Object.entries(req.headers)) if (!HOP.has(k)) headers[k] = v;
+    try {
+      up = http.request({ host: API.host, port: API.port, method: req.method, path: u.pathname.slice(4) + u.search, headers, timeout: IDLE_MS }, (r) => {
+        // The API has answered: carrying the answer to the client is no work of the API's.
+        slot?.answered();
+        if (gone) return r.destroy();
+        const out = {};
+        for (const [k, v] of Object.entries(r.headers)) if (!HOP.has(k)) out[k] = v;
+        res.writeHead(r.statusCode || 502, { ...SECURITY, ...out });
+        res.setTimeout(IDLE_MS, () => res.destroy());
+        // pipeline, not pipe: an API that closes mid-answer (a restart, its write deadline) ends the client's answer
+        // too, where a pipe left it open, and a client that goes away ends the API's.
+        pipeline(r, res, () => {});
+      });
+    } catch (e) {
+      // a request that cannot be made, perhaps when its turn came, long after it arrived: answered here
+      console.error(`site-server: api ${u.pathname}: ${e.message}`);
+      slot?.over();
+      if (!res.headersSent) { res.writeHead(502, { ...SECURITY, "content-type": "application/json" }); res.end('{"error":"observer API unavailable"}'); }
+      return;
+    }
+    // A client that goes away cancels its request to the API, whose handler's
+    // context is cancelled with it, rather than leaving it to run out its time.
+    res.on("close", () => { if (!res.writableFinished) { gone = true; up.destroy(); } });
+    // The places follow the request to the API: the global one is given back
+    // when the request is over at the latest, the client's own when both
+    // halves are.
+    let halves = 2;
+    const half = () => { if (--halves === 0) slot?.over(); };
+    up.on("close", () => { slot?.answered(); half(); });
+    res.on("close", half);
+    up.on("timeout", () => up.destroy(new Error("upstream timeout")));
+    up.on("error", (e) => {
+      // a request cancelled for a client that went away: nothing to answer, and nothing for the journal
+      if (gone) return;
+      console.error(`site-server: api ${u.pathname}: ${e.message}`);
+      if (!res.headersSent) { res.writeHead(502, { ...SECURITY, "content-type": "application/json" }); res.end('{"error":"observer API unavailable"}'); }
+      else res.destroy();
     });
-  } catch (e) {
-    slot?.over();
-    throw e;
-  }
-  // A client that goes away cancels its request to the API, whose handler's
-  // context is cancelled with it, rather than leaving it to run out its time.
-  res.on("close", () => { if (!res.writableFinished) { gone = true; up.destroy(); } });
-  // The places follow the request to the API: the global one is given back
-  // when the request is over at the latest, the client's own when both
-  // halves are.
-  let halves = 2;
-  const half = () => { if (--halves === 0) slot?.over(); };
-  up.on("close", () => { slot?.answered(); half(); });
-  res.on("close", half);
-  up.on("timeout", () => up.destroy(new Error("upstream timeout")));
-  up.on("error", (e) => {
-    // a request cancelled for a client that went away: nothing to answer, and nothing for the journal
-    if (gone) return;
-    console.error(`site-server: api ${u.pathname}: ${e.message}`);
-    if (!res.headersSent) { res.writeHead(502, { ...SECURITY, "content-type": "application/json" }); res.end('{"error":"observer API unavailable"}'); }
-    else res.destroy();
-  });
-  up.end();
+    up.end();
+  };
+  if (slot) slot.start(forward);
+  else forward();
 }
 
 const server = http.createServer(async (req, res) => {

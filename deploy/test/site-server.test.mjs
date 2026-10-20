@@ -24,13 +24,14 @@ async function freePort() {
   return port;
 }
 
-// What the fake API was asked, for the tests that watch it: "hold" when a request for /v1/hold arrives, "hold-closed"
-// when its connection closes.
+// What the fake API was asked, for the tests that watch it: "asked" with the path of every request, "hold" when a
+// request for /v1/hold arrives, "hold-closed" when its connection closes.
 const seen = new EventEmitter();
 // a day's export: more bytes than any buffer between the API and a client holds, sent for as long as it is read
 const CHUNK = Buffer.alloc(64 * 1024, 7);
 function apiAnswer(req, res) {
   const p = req.url.split("?")[0];
+  seen.emit("asked", p);
   if (p.startsWith("/v1/exports/")) {
     res.writeHead(200, { "content-type": "application/gzip" });
     const more = () => { while (res.write(CHUNK)); };
@@ -178,6 +179,121 @@ test("an API that goes away mid-answer ends the client's answer too", async () =
   });
   req.destroy();
   assert.equal(got, "cut");
+});
+
+// A request the fake API never answers, from who, sent on its own connection: resolves with it once it has reached
+// the API.
+async function held(who) {
+  const arrived = once(seen, "hold");
+  const req = http.get(base + "/api/v1/hold", { headers: { "x-forwarded-for": who }, agent: false });
+  req.on("error", () => {});
+  await arrived;
+  return req;
+}
+// The same, without waiting for it to reach the API.
+function sent(who) {
+  const req = http.get(base + "/api/v1/hold", { headers: { "x-forwarded-for": who }, agent: false });
+  req.on("error", () => {});
+  return req;
+}
+// Every place given back after a test's requests are gone: a new client is answered again.
+async function settled() {
+  for (let i = 0; i < 50 && (await ask("/api/v1/meta", "198.51.100.99")) !== 200; i++) await delay(100);
+  await delay(200);
+}
+
+test("a GET that says it has a body is refused at once, and not passed to the API", async () => {
+  const asked = [];
+  const note = (p) => asked.push(p);
+  seen.on("asked", note);
+  try {
+    // as curl -X GET -d x sends it: a length, and a byte behind it
+    const t0 = Date.now();
+    const status = await new Promise((ok, no) => {
+      const req = http.request(base + "/api/v1/body-check", { method: "GET", headers: { "x-forwarded-for": "198.51.100.32", "content-length": "1" }, agent: false }, (res) => {
+        res.resume();
+        res.on("end", () => ok(res.statusCode));
+      });
+      req.on("error", no);
+      req.end("x");
+    });
+    assert.equal(status, 400);
+    assert.ok(Date.now() - t0 < 2000, `answered in ${Date.now() - t0} ms`);
+    // chunked, the other way to say it
+    const sock = net.connect(Number(new URL(base).port), "127.0.0.1");
+    sock.write("GET /api/v1/body-check HTTP/1.1\r\nHost: site\r\nX-Forwarded-For: 198.51.100.32\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n1\r\nx\r\n0\r\n\r\n");
+    const [first] = await once(sock, "data");
+    sock.destroy();
+    assert.match(String(first), /^HTTP\/1\.1 400 /);
+    assert.deepEqual(asked.filter((p) => p === "/v1/body-check"), []);
+    // the same client's requests without one are answered
+    assert.equal(await ask("/api/v1/meta", "198.51.100.32"), 200);
+  } finally {
+    seen.off("asked", note);
+  }
+});
+
+test("past four of its data requests at the API, a client's next ones wait their turn, and one that leaves waiting is never sent", async () => {
+  const who = "198.51.100.33";
+  let holds = 0;
+  const count = () => holds++;
+  const reqs = [];
+  try {
+    for (let i = 0; i < 4; i++) reqs.push(await held(who));
+    seen.on("hold", count);
+    for (let i = 0; i < 6; i++) { reqs.push(sent(who)); await delay(50); }
+    await delay(300);
+    assert.equal(holds, 0, "the four at the API are all it is sent");
+    // the waiting ones hold none of the API's places: another client is answered
+    assert.equal(await ask("/api/v1/meta", "198.51.100.34"), 200);
+    // one at the API is over (its client leaves): the first waiting one takes its turn
+    reqs[0].destroy();
+    await delay(300);
+    assert.equal(holds, 1);
+    // the five still waiting leave, then the four at the API: none of the five is sent
+    reqs.slice(5).forEach((r) => r.destroy());
+    await delay(300);
+    reqs.slice(1, 5).forEach((r) => r.destroy());
+    await delay(300);
+    assert.equal(holds, 1);
+  } finally {
+    seen.off("hold", count);
+    reqs.forEach((r) => r.destroy());
+  }
+  await settled();
+  // and every place of the client's is given back
+  const again = await Promise.race([ask("/api/v1/meta", who), delay(2000).then(() => "waiting")]);
+  assert.equal(again, 200);
+});
+
+test("a page's burst of data requests is answered in full, none refused", async () => {
+  const got = await Promise.all(Array.from({ length: 12 }, (_, i) => ask(`/api/v1/burst/${i}`, "198.51.100.35")));
+  assert.deepEqual(got, Array(12).fill(200));
+});
+
+test("a client's requests the API is slow to answer take four of its places, so eleven such clients leave room for others", async () => {
+  const reqs = [];
+  try {
+    for (let c = 0; c < 11; c++) for (let i = 0; i < 4; i++) reqs.push(await held(`198.51.100.${60 + c}`));
+    // each asks for more: those wait, and take none of the places
+    for (let c = 0; c < 11; c++) for (let i = 0; i < 8; i++) reqs.push(sent(`198.51.100.${60 + c}`));
+    await delay(300);
+    assert.equal(await ask("/api/v1/meta", "198.51.100.71"), 200, "44 of 48 places taken: a twelfth client is answered");
+  } finally {
+    // the waiting first, so none of them is sent when the ones before it go
+    reqs.reverse().forEach((r) => r.destroy());
+  }
+  await settled();
+});
+
+test("avatars have an allowance of their own: a list's burst is answered, a loop is refused, and data requests are not spent", async () => {
+  const who = "198.51.100.36";
+  const burst = await Promise.all(Array.from({ length: 100 }, (_, i) => ask(`/api/v1/avatars/a${i}`, who)));
+  assert.ok(burst.every((s) => s === 200), "a validator list's avatars at once");
+  const loop = [];
+  for (let i = 0; i < 400; i++) loop.push(await ask(`/api/v1/avatars/b${i}`, who));
+  assert.ok(loop.includes(429), "a loop of avatars is refused past its allowance");
+  assert.equal(await ask("/api/v1/meta", who), 200, "and the same client's data requests are still answered");
 });
 
 // A tip stream opened through the site as a page opens it: resolves once its headers are in, with the events that

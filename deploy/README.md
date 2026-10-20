@@ -1134,8 +1134,14 @@ address or an IPv6 /64 (one host is given a whole /64), has a token bucket
 at most 16 requests in flight; the site as a whole has at most 48 requests
 at the API at once. A request holds its place in those 48 only until the
 API's answer begins, so a client reading an answer slowly (a day's export)
-costs only its own 16. An answer with no byte moving for 60 s is given up,
-and a client that goes away cancels its request to the API. Past 50,000
+costs only its own 16. Of one client's data requests at most four are at
+the API at once; the rest wait their turn in site-server, holding none of
+the 48, so a page's burst (six at once) waits milliseconds and a client
+whose requests are slow takes four places, not sixteen. Avatars have a
+bucket of their own (300, 30 a second) and hold no places. A GET with a
+body is refused with a 400: none is passed to the API. An answer with no
+byte moving for 60 s is given up, and a client that goes away cancels its
+request to the API, or leaves the line before it is sent. Past 50,000
 clients in ten minutes, new ones share one allowance, so the table of
 clients stays bounded. An answer refused by these limits is a 429 with
 `retry-after: 5`.
