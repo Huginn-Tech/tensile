@@ -278,6 +278,7 @@ button { font: inherit; color: inherit; }
 .net.menu .list { position: absolute; right: 0; top: 36px; z-index: 30; min-width: 160px; background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 6px; display: grid; gap: 2px; box-shadow: 0 8px 24px rgb(0 0 0 / .12); }
 .net.menu .list a, .net.menu .list span { display: block; padding: 6px 10px; border-radius: 6px; color: var(--text); font-weight: 400; text-align: left; }
 .net.menu .list a:hover { background: var(--wash); text-decoration: none; }
+.net.menu .list a { display: flex; align-items: center; gap: 8px; }
 .net.menu .list span { color: var(--text); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .net.menu .list span.soon { color: var(--text-3); cursor: default; }
 .net.menu .list .tagx { font: 500 10px/1 var(--sans); letter-spacing: .04em; text-transform: uppercase; color: var(--text-2); background: var(--tag-bg); border-radius: 3px; padding: 3px 5px; }
@@ -1359,7 +1360,7 @@ body { background: var(--canvas); }
 }
 /* the three instruments' heads share one 24px line */
 .cp > .ov-eyebrow { justify-content: center; min-height: 24px; }
-.cp-dial { position: relative; flex: none; margin: 16px 0 10px; }
+.cp-dial { position: relative; flex: none; margin: 6px 0; }
 /* the ring sweeps in once, from its start, as the rows arrive */
 @property --cp-sweep { syntax: "<angle>"; inherits: false; initial-value: 360deg; }
 .cp-ring {

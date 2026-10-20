@@ -96,8 +96,9 @@ export function netName(id: string | undefined): string {
 
 /**
  * The network chip: which chain this observer watches, with the observer's
- * own state as its dot. It opens as a menu: this site's network, any sibling
- * deployment configured in NEXT_PUBLIC_NETWORKS as a link, and Mainnet as a
+ * own state as its dot. It opens as a menu of where else to go: each sibling
+ * deployment configured in NEXT_PUBLIC_NETWORKS as a link with Celestia's
+ * mark (the chip already names this site's network), and Mainnet as a
  * placeholder until Fibre is there and an observer follows it.
  */
 function NetworkChip({ meta, error }: { meta: Meta | null; error: string | null }) {
@@ -131,8 +132,7 @@ function NetworkChip({ meta, error }: { meta: Meta | null; error: string | null 
       {/* Celestia's mark; a small dot on it only while the observer is not known healthy */}
       <summary><span className="net-mark"><CelestiaMark />{dot !== "ok" && <i className={"net-st " + dot} />}</span>{label}</summary>
       <div className="list" role="menu">
-        <span aria-current="true">{label}</span>
-        {others.map(([name, url]) => <a key={name} href={url} role="menuitem">{netName(name)}</a>)}
+        {others.map(([name, url]) => <a key={name} href={url} role="menuitem"><i className="net-mark"><CelestiaMark /></i>{netName(name)}</a>)}
         {!mainnetHere && !mainnetLinked && (
           <span className="soon" aria-disabled="true" title="Fibre is not on mainnet yet. This observer will follow it there.">Mainnet<i className="tagx">soon</i></span>
         )}
