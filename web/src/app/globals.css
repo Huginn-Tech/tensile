@@ -3627,28 +3627,33 @@ button.cp-it { min-height: 44px; margin-top: -4px; margin-bottom: -4px; }
 /* recent blobs: only the rows that hold a blob (the first always), so a young network is not a page of empty squares */
 .rb-row:not(:first-child):not(:has(a.rb-c)) { display: none; }
 .rb-head { width: 100%; justify-content: space-between; }
-.rb-grid { width: 100%; padding: 4px 0 6px; }
+/* ten squares a row at any width: a square is 28 px, or a tenth of the row less its gaps where the row is narrower (the
+   slide reads its pitch off the squares, RecentBlobs.tsx) */
+.rb-grid { width: 100%; padding: 4px 0 6px; container-type: inline-size; }
 .rb { --rb-cell: 28px; --rb-gap: 5.3px; }
-.rb-tape { align-items: center; }
+.rb-tape { --rb-cell: min(28px, (100cqw - 9 * var(--rb-gap)) / 10); align-items: center; }
 .rb-c { border-radius: 6px; }
 /* a blob's square is a 44 px tall target, its square drawn inside, its width reaching to the middle of each gap: the row
    is one strip where every point opens the nearest blob */
 a.rb-c, a.rb-c:hover, a.rb-c.rb-on, a.rb-c.rb-newest { height: 44px; background: none; box-shadow: none; transform: none; }
-a.rb-c::before { content: ""; position: absolute; left: 0; right: 0; top: 8px; height: 28px; border-radius: 6px; background: var(--rb-fill); transition: box-shadow 160ms ease-out; }
+a.rb-c::before { content: ""; position: absolute; left: 0; right: 0; top: calc((44px - var(--rb-cell)) / 2); height: var(--rb-cell); border-radius: 6px; background: var(--rb-fill); transition: box-shadow 160ms ease-out; }
 a.rb-c.rb-newest::before, a.rb-c:hover::before, a.rb-c.rb-on::before { background: var(--rb-lit); }
 a.rb-c.rb-newest::before { box-shadow: 0 0 0 2px var(--paper), 0 0 0 3.5px var(--accent); }
 a.rb-c:hover::before, a.rb-c.rb-on::before { box-shadow: 0 0 0 2px var(--paper), 0 0 0 3.5px var(--text-2); }
 .rb-grid.rb-pick a.rb-c.rb-newest:not(.rb-on)::before { background: var(--rb-fill); box-shadow: none; }
 a.rb-c::after { inset: 0 calc(var(--rb-gap) / -2); }
-/* the two figures on one line, each figure before its label; "settlements on record" on one line (RecentBlobs.tsx) */
-.rb-foot { grid-template-columns: 1fr 1px 1fr; justify-content: stretch; margin-top: 0; }
+/* the two figures on one line, each figure before its label; "settlements on record" on one line (RecentBlobs.tsx), on
+   two under 380 px. Each figure as wide as it is, the space shared evenly around them and the line between them, so a
+   long count never runs into the line; the (i) inside its figure's width */
+.rb-foot { grid-template-columns: auto 1px auto; justify-content: space-evenly; margin-top: 0; }
 .rb-fig { display: flex; align-items: baseline; justify-content: center; gap: 7px; padding: 12px 0 0; }
 .rb-fig > span:last-child:not(.rb-avl) { display: inline; white-space: nowrap; }
 .rb-fig > span:last-child { margin-top: 0; font-size: 12.5px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--text-2); }
 .rb-br { display: none; }
 .rb-div { margin-top: 10px; }
 .rb-total { font-size: 17px; }
-.rb-avl { padding-right: 16px; }
+.rb-avl { padding-right: 22px; }
+.rb-i { left: auto; right: 0; }
 .rb-st { height: 22px; padding: 0 8px; font-size: 12px; }
 
 /* ------------------------------------------------------- validators ---- */
@@ -3909,7 +3914,8 @@ a.rb-c::after { inset: 0 calc(var(--rb-gap) / -2); }
 }
 
 /* a narrow phone: the Blobs list's tabs and its publisher filter a little tighter, so both keep one line; the header's
-   tabs a little tighter, so the last of them stays clear of the theme button, and the block a step closer to the network */
+   tabs a little tighter, so the last of them stays clear of the theme button, and the block a step closer to the network;
+   "settlements on record" on two lines, as on a wider screen, so both figures keep clear of the line between them */
 @media (max-width: 379px) {
   .lg-list:not(.pb-list):not(.vd-list) > .list-head { column-gap: 6px; }
   .lg-list:not(.pb-list):not(.vd-list) > .list-head > .tabs button { padding: 0 10px; }
@@ -3917,6 +3923,7 @@ a.rb-c::after { inset: 0 calc(var(--rb-gap) / -2); }
   .top nav { gap: 0; }
   .top nav a, .top nav a:hover { padding: 0 10px; }
   .top .blocktick { margin-right: 4px; }
+  .rb-br { display: inline; }
 }
 /* under 360 px the header's words a step smaller, so its bar and its tabs keep one line each, every word kept */
 @media (max-width: 359px) {
@@ -3931,10 +3938,13 @@ a.rb-c::after { inset: 0 calc(var(--rb-gap) / -2); }
   .top .hs-cancel { padding: 0 10px; }
   .top .hs.on .hs-field input[type=search]::placeholder { font-size: clamp(12px, calc((100vw - 136px) / 15.8), 14px); }
 }
-/* under 340 px the bar has no room for the block beside the network: the pages that need a height show their own */
+/* under 340 px the bar has no room for the block beside the network: the pages that need a height show their own; the
+   recent blobs' two figures a step smaller */
 @media (max-width: 339px) {
   .top .blocktick { display: none; }
   .top nav a, .top nav a:hover { padding: 0 7px; font-size: 13.5px; }
+  .rb-fig { gap: 5px; }
+  .rb-total { font-size: 15px; }
 }
 /* the phone's header and bands slide; with reduced motion they move at once */
 @media (max-width: 720px) and (prefers-reduced-motion: reduce) {
