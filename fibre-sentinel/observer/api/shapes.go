@@ -166,6 +166,11 @@ type validatorOut struct {
 	IdentityReason   string             `json:"identity_reason,omitempty"`
 	ConfirmedFrom    string             `json:"confirmed_from,omitempty"`
 	AlsoFailedFrom   string             `json:"also_failed_from,omitempty"`
+	Readiness        string             `json:"readiness,omitempty"`
+	Ready            *bool              `json:"ready"`
+	ReadinessAt      *string            `json:"readiness_checked_at,omitempty"`
+	ReadinessLast    string             `json:"readiness_last_answer,omitempty"`
+	ReadinessLastAt  *string            `json:"readiness_last_answer_at,omitempty"`
 	Reachability     *Rate              `json:"reachability_window,omitempty"`
 	LastReachableAt  *string            `json:"last_reachable_at"`
 	Obligations      obligationStats    `json:"obligations"`
@@ -247,7 +252,7 @@ func hostingOf(h *hosting.Info) *hostingOut {
 
 // listOf is a row as /v1/validators lists it.
 func listOf(v validatorRow) validatorOut {
-	return validatorOut{
+	out := validatorOut{
 		Address: v.Address, ConsAddress: v.ConsAddress, Moniker: v.Moniker, Operator: v.Operator, AvatarURL: v.AvatarURL,
 		Jailed: v.Jailed, BondStatus: v.BondStatus, SignaledUpgrade: v.SignaledUpgrade,
 		Host: v.Host, LastHost: v.LastHost, EndpointClosedAt: v.EndpointClosedAt, VotingPower: v.VotingPower, LastSeenAt: v.LastSeenAt,
@@ -261,6 +266,9 @@ func listOf(v validatorRow) validatorOut {
 		Hosting:     hostingOf(v.Hosting),
 		Provisional: v.ProvisionalFaults,
 	}
+	out.Readiness, out.Ready, out.ReadinessAt = v.Readiness, v.Ready, v.ReadinessCheckedAt
+	out.ReadinessLast, out.ReadinessLastAt = v.ReadinessLastAnswer, v.ReadinessLastAnswerAt
+	return out
 }
 
 // listedRows is the rows a validator list publishes: every row but a

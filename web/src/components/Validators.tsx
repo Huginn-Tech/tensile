@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { type Validator, int, pctOf, bytes, ago, utcWord, shortMid, failedWords } from "@/lib/api";
+import { type Validator, int, pctOf, bytes, ago, utcWord, whenUTC, shortMid, failedWords } from "@/lib/api";
 import { WINDOWS, periodName } from "@/lib/window";
 import Avatar from "./Avatar";
 import Copy from "./Copy";
@@ -33,7 +33,7 @@ function isSelf(v: Validator): boolean {
   return [v.address, v.cons_address, v.operator_address].some((a) => !!a && a.toLowerCase() === SELF_VALIDATOR);
 }
 
-type Filter = "all" | "providers" | "unreachable" | "cert" | "nohost";
+type Filter = "all" | "providers" | "unreachable" | "cert" | "notready" | "nohost";
 type SortKey = "power" | "shard" | "signed" | "last";
 
 /** each order's heading; per: it counts the selected period, which follows it in brackets */
@@ -79,7 +79,25 @@ export function endpoint(v: Validator): { dot: string; word: string; title: stri
   // failed check after it still counts as reachable); a host only a second
   // location reached has no handshake of ours to date.
   const when = v.confirmed_from ? ", reached from a second location" : v.last_reachable_at ? ` · last handshake ${ago(v.last_reachable_at)}` : checked;
-  return { dot: "ok", word: "Reachable", title: `${v.host}: TLS with this validator's key${when}` };
+  const says = `${v.host}: TLS with this validator's key${when}.`;
+  // Upload readiness, the server's own answer on the same heartbeats: a record beside the endpoint's state that never
+  // moves it. Not ready only after two answers in a row; one is in the words, as one timeout is not an outage.
+  const at = whenUTC(v.readiness_checked_at);
+  switch (v.readiness) {
+    case "ready":
+      return { dot: "ok", word: "Ready", title: `${says} The server reports itself ready for uploads: its own checks of the app node, Fibre module, signer, active set, provider registration and store all pass. Checked ${at}.` };
+    case "not_ready":
+      return { dot: "hold", word: "Not ready", title: `${says} The server reported itself not ready for uploads in its last two checks, the latest at ${at}. A server says so when at least one of its own checks fails: app node, Fibre module, signer, active set, provider registration or store. Which one is in the operator's log. Uploads to it may fail.`, warn: true };
+    case "not_ready_once":
+      return { dot: "ok", word: "Reachable", title: `${says} At ${at} the server reported itself not ready for uploads; it shows as Not ready if the next check says so too.` };
+    case "not_reported":
+      return { dot: "ok", word: "Reachable", title: `${says} This endpoint does not report upload readiness.` };
+    case "unchecked": {
+      const last = v.readiness_last_answer === "ready" ? "ready" : v.readiness_last_answer === "not_ready" ? "not ready" : "readiness not reported";
+      return { dot: "ok", word: "Reachable", title: `${says} Upload readiness could not be checked at ${at}${v.readiness_last_answer ? `; last answer ${last} at ${whenUTC(v.readiness_last_answer_at)}` : ""}.` };
+    }
+  }
+  return { dot: "ok", word: "Reachable", title: says.slice(0, -1) };
 }
 
 const time = (s: string | null | undefined) => (s ? new Date(s).getTime() : null);
@@ -172,6 +190,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
     providers: rows.filter((v) => bonded(v) && !!v.host).length,
     unreachable: rows.filter((v) => bonded(v) && !!v.host && endpointState(v) === "unreachable").length,
     cert: rows.filter((v) => bonded(v) && !!v.host && endpointState(v) === "cert").length,
+    notready: rows.filter((v) => bonded(v) && !!v.host && endpointState(v) === "reachable" && v.readiness === "not_ready").length,
     nohost: rows.filter((v) => bonded(v) && !v.host).length,
   }), [rows]);
 
@@ -184,6 +203,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
       switch (filter) {
         case "providers": return bonded(v) && !!v.host;
         case "unreachable": case "cert": return bonded(v) && !!v.host && endpointState(v) === filter;
+        case "notready": return bonded(v) && !!v.host && endpointState(v) === "reachable" && v.readiness === "not_ready";
         case "nohost": return bonded(v) && !v.host;
         default: return true;
       }
@@ -293,6 +313,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
             { value: "providers", label: "Fibre providers", count: counts.providers, dot: "ok" },
             { value: "unreachable", label: "Unreachable now", count: counts.unreachable, dot: "hold" },
             { value: "cert", label: "Wrong certificate now", count: counts.cert, dot: "hold" },
+            { value: "notready", label: "Not ready now", count: counts.notready, dot: "hold" },
             { value: "nohost", label: "No endpoint", count: counts.nohost, dot: "none" },
           ]} />
         </div>
@@ -313,7 +334,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
             )}
             <tr id={phone ? sortId : undefined}>
               <th className="col-pin">Validator</th>
-              <th className="c-ep" title="Whether the validator's Fibre server answered Tensile's latest check.">Endpoint now</th>
+              <th className="c-ep" title="Whether the validator's Fibre server answered Tensile's latest check, and, from celestia-app v10.5, whether it reports itself ready for uploads.">Endpoint now</th>
               {showHosting && <th className="c-host" title="Where the validator's Fibre server is hosted.">Hosting</th>}
               <Th col="c-power" k="power" dflt={-1} label={ORDERS.power.label} title="The default order. Not a performance ranking." />
               <Th col="c-shard" k="shard" dflt={-1} label={ORDERS.shard.label} per info="Row data of the shards this validator stored and endorsed over the period's settled blobs: blob_size / 4096 per row, padding included. The row proofs stored beside them are not counted." />

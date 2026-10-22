@@ -139,6 +139,9 @@ func main() {
 				Target:        probe.Target{Address: a, AddressHex: addrHex, PubKey: keyByHex[addrHex], Host: pr.Host},
 				SchedulePoint: probe.SchedulePoint{At: scheduled, Label: "heartbeat", Phase: probe.PhasePost},
 				SkipDownload:  true,
+				// and, once the identity is verified, whether it is ready to
+				// take uploads, on the same connection
+				AskReadiness: true,
 			}
 			wg.Add(1)
 			sem <- struct{}{}
@@ -376,13 +379,13 @@ func openOutput(path string) (out *record.Appender, cut int64, err error) {
 }
 
 // requestBound is the most one heartbeat request may take: its lookup, its
-// connect and its handshake with the identity check inside it, each at its
-// bound (probe.DefaultStepTimeouts' where to sets none, as probe.Run takes
-// it), and five seconds more.
+// connect, its handshake with the identity check inside it and its readiness
+// question, each at its bound (probe.DefaultStepTimeouts' where to sets none,
+// as probe.Run takes it), and five seconds more.
 func requestBound(to probe.StepTimeouts) time.Duration {
 	d := probe.DefaultStepTimeouts()
 	sum := 5 * time.Second
-	for _, s := range [][2]time.Duration{{to.DNS, d.DNS}, {to.TCP, d.TCP}, {to.TLS, d.TLS}, {to.Identity, d.Identity}} {
+	for _, s := range [][2]time.Duration{{to.DNS, d.DNS}, {to.TCP, d.TCP}, {to.TLS, d.TLS}, {to.Identity, d.Identity}, {to.Health, d.Health}} {
 		if s[0] > 0 {
 			sum += s[0]
 		} else {

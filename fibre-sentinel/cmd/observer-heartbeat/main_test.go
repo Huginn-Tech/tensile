@@ -48,10 +48,11 @@ func TestTheNextRunCutsATornTail(t *testing.T) {
 }
 
 // One request is bounded as a whole: its steps' bounds and a few seconds,
-// the identity check's at probe's default when the heartbeat sets none.
+// the identity check's and the readiness question's at probe's defaults when
+// the heartbeat sets none.
 func TestARequestIsBoundedAsAWhole(t *testing.T) {
 	got := requestBound(probe.StepTimeouts{DNS: 5 * time.Second, TCP: 5 * time.Second, TLS: 10 * time.Second})
-	if want := 20*time.Second + probe.DefaultStepTimeouts().Identity + 5*time.Second; got != want {
+	if want := 20*time.Second + probe.DefaultStepTimeouts().Identity + probe.DefaultStepTimeouts().Health + 5*time.Second; got != want {
 		t.Fatalf("bound %s, want %s", got, want)
 	}
 }

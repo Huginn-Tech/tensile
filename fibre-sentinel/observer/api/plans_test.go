@@ -246,6 +246,18 @@ func TestHotQueriesUseIndexes(t *testing.T) {
 		c{"probes not served", probeRowsSQL(rollup.NotServedSQL("probes")+` AND started_at >= ?`, 100, false), []any{lo},
 			[]string{"probes_started (started_at>?)"}},
 	)
+	// An endpoint's newest heartbeats for its readiness: the partial index
+	// walked in rowid order from the validator's last entry, never sorted.
+	for _, asOf := range []string{"", hi} {
+		args := []any{"ab", "h:7980", "ut-1"}
+		if asOf != "" {
+			args = append(args, asOf)
+		}
+		name := "readiness heartbeats asOf=" + asOf
+		cases = append(cases, c{name, readinessRowsSQL(asOf), args,
+			[]string{"USING INDEX reachability_latest_answer (validator_address=?)"}})
+		noSort[name] = true
+	}
 	for _, tc := range cases {
 		plan, err := st.QueryPlan(ctx, tc.q, tc.args...)
 		if err != nil {

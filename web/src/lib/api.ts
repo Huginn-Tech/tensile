@@ -253,6 +253,23 @@ export type Validator = {
    */
   confirmed_from?: string;
   also_failed_from?: string;
+  /**
+   * What the endpoint answered when this observer's newest heartbeats asked
+   * whether it is ready to take uploads (the gRPC health check of
+   * celestia-app v10.5's Fibre server), on the connection whose identity
+   * they verified. not_ready: its server reported at least one of its own
+   * checks failing at two heartbeats in a row; not_ready_once: at the newest
+   * only; not_reported: it does not answer the question; unchecked: the
+   * newest heartbeat could not ask or got no answer (readiness_last_answer is
+   * then the one before it). Absent unless reachable with a verified identity
+   * and asked. A record of its own: reachable and every rate stay as they are.
+   */
+  readiness?: UploadReadiness;
+  /** true when readiness is ready, false when not_ready, else null */
+  ready?: boolean | null;
+  readiness_checked_at?: string;
+  readiness_last_answer?: "ready" | "not_ready" | "not_reported";
+  readiness_last_answer_at?: string;
   last_reachable_at: string | null;
   /** one per (validator, blob) endorsed, judged on the validator's own answers at the blob's reading; the headline */
   obligations: Obligations;
@@ -1547,7 +1564,12 @@ export type EndpointCheck = {
   identity_reason?: string;
   raw_error?: string;
   vantage: string;
+  /** what this check got when it asked whether the endpoint is ready to take uploads; absent when nothing was asked */
+  readiness?: "serving" | "not_serving" | "not_reported" | "unmeasured";
 };
+
+/** a validator row's upload readiness (see Validator.readiness) */
+export type UploadReadiness = "ready" | "not_ready" | "not_ready_once" | "not_reported" | "unchecked";
 
 /**
  * Provisional faults: not-served obligations whose every failed reading is

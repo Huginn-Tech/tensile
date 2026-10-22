@@ -124,7 +124,7 @@ export default function Methodology() {
               <p className="ref-scope-k"><b>Endpoint checks</b><span>every five minutes · two locations</span></p>
               <div className="ref-scope-v">
                 <p>Every registered Fibre endpoint is checked for DNS, TCP, a TLS 1.3 handshake and a certificate signed by the validator&rsquo;s consensus key. No blob data is asked for.</p>
-                <p className="ref-scope-g"><a href="#reachability">Reachability</a><a href="#endpoint-checks">TLS identity</a></p>
+                <p className="ref-scope-g"><a href="#reachability">Reachability</a><a href="#endpoint-checks">TLS identity</a><a href="#readiness">Upload readiness</a></p>
               </div>
             </div>
             <div role="listitem">
@@ -296,6 +296,15 @@ export default function Methodology() {
               ["expired", "The right key signed it, outside its validity window."],
               ["not this validator’s key", "Signed by another key: no client downloads from this endpoint."],
               ["no TLS", "The TLS handshake did not complete."],
+            ]} />
+          </Def>
+
+          <Def id="readiness" name="Upload readiness" say="Once a check has verified the validator’s identity, it asks on the same connection whether the Fibre server is ready to take uploads: the standard gRPC health check, which celestia-app’s Fibre server answers from v10.5 on.">
+            <p>The answer is the server&rsquo;s own and enters no percentage: Reachability and the service rate stay as they are. In Endpoint now:</p>
+            <Rules rows={[
+              ["Ready", "The server reports that all of its own checks pass: app node, Fibre module, signer, active set, provider registration and store."],
+              ["Not ready", "The server reported at least one of those checks failing, in two checks in a row. The answer does not say which; the operator’s log does. Uploads to it may fail. It still counts as reachable."],
+              ["Reachable", "The server does not answer the question, as one before v10.5 does not; or the newest check could not ask it; or the server answered not ready once."],
             ]} />
           </Def>
 
