@@ -9,11 +9,13 @@ export const windowLabel = (w: string) => (w === "all" ? "All" : w);
 export const periodName = (w: string) => (w === "all" ? "all" : w);
 /**
  * The period the overview's validator list, the Blobs page and the Publishers
- * page open on. 7d while Fibre is new on mainnet and a day can pass without a
- * blob (from 2026-10-22); back to "24h" once blobs come every day. A validator's
- * own page keeps 24h.
+ * page open on. On mainnet 7d while Fibre is new there and a day can pass
+ * without a blob (from 2026-10-22); back to "24h" once blobs come every day.
+ * Mocha, with blobs every day, keeps 24h: its build names its network
+ * (NEXT_PUBLIC_NETWORK_LABEL), mainnet's gives it empty. A validator's own
+ * page keeps 24h.
  */
-export const LIST_WINDOW: WindowName = "7d";
+export const LIST_WINDOW: WindowName = process.env.NEXT_PUBLIC_NETWORK_LABEL ? "24h" : "7d";
 
 /**
  * The selected period, carried in the URL (?window=7d) so a link to a page
