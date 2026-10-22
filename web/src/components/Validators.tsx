@@ -333,6 +333,10 @@ export default function Validators({ rows, window: win, notLive, loading, failed
             )}
             <tr id={phone ? sortId : undefined}>
               <th className="col-pin">Validator</th>
+              {/* the order explorers keep: who, their weight, how they did, where, and the server's state now at the row's end */}
+              <Th col="c-power" k="power" dflt={-1} label={ORDERS.power.label} title="The default order. Not a performance ranking." />
+              <Th col="c-end" k="signed" dflt={-1} label={ORDERS.signed.label} per info="How often this validator’s signature is in the settlement, counted while it had a Fibre provider. A settlement needs signatures from ⅔ of the stake, and the first validators to respond fill it." />
+              {showHosting && <th className="c-host" title="Where the validator's Fibre server is hosted.">Hosting</th>}
               <th className="c-ep" title="Whether the validator's Fibre server answered Tensile's latest check.">Endpoint now</th>
               <th className="num c-rd has-i">
                 <span className="thi">
@@ -340,9 +344,6 @@ export default function Validators({ rows, window: win, notLive, loading, failed
                   <span className="thi-i"><Info label="Upload readiness"><p>Whether the validator’s Fibre server reports itself ready to take uploads: its own checks of the app node, Fibre module, signer, active set, provider registration and store. Servers answer from celestia-app v10.5 on; a dash means no current answer, with the reason on hover. Not ready comes after two such answers in a row, and the server still counts as reachable.</p></Info></span>
                 </span>
               </th>
-              {showHosting && <th className="c-host" title="Where the validator's Fibre server is hosted.">Hosting</th>}
-              <Th col="c-power" k="power" dflt={-1} label={ORDERS.power.label} title="The default order. Not a performance ranking." />
-              <Th col="c-end" k="signed" dflt={-1} label={ORDERS.signed.label} per info="How often this validator’s signature is in the settlement, counted while it had a Fibre provider. A settlement needs signatures from ⅔ of the stake, and the first validators to respond fill it." />
             </tr>
           </thead>
           <tbody ref={body}>
@@ -392,12 +393,12 @@ export default function Validators({ rows, window: win, notLive, loading, failed
                       </span>
                     </span>
                   </td>
+                  <td className="num fig vt-vp">{named(ORDERS.power.label)}{int(v.voting_power)}</td>
+                  <td className="num soft-col fig vt-en">{signed(v, e.dot === "none")}</td>
+                  {showHosting && <td className="vt-ho"><HostingCell h={v.hosting} /></td>}
                   <td className="vt-ep"><span className="state" title={e.title}><i className={"dot " + e.dot} />{e.word}</span></td>
                   {/* a phone's row shows only a word: a lone dash there has no column to explain it */}
                   <td className="num vt-rd">{named("Upload readiness")}{(r.tone || !phone) && <span className={r.tone ? "rd " + r.tone : "rd muted"} title={r.title}>{r.word}</span>}</td>
-                  {showHosting && <td className="vt-ho"><HostingCell h={v.hosting} /></td>}
-                  <td className="num fig vt-vp">{named(ORDERS.power.label)}{int(v.voting_power)}</td>
-                  <td className="num soft-col fig vt-en">{signed(v, e.dot === "none")}</td>
                   {/* the last endorsement is on the validator page and in the share's title; a phone's open row says it too */}
                   {phone && <td className="num vt-le">{named("Last endorsement")}{last(v)}</td>}
                   {isOpen && <td className="vt-go"><Link href={href(v)}>Validator page <span aria-hidden="true">→</span></Link></td>}
