@@ -25,6 +25,9 @@ import { usePhone } from "@/lib/phone";
  */
 
 const bonded = (v: Validator) => !v.jailed && (!v.bond_status || v.bond_status === "BOND_STATUS_BONDED");
+// Out of the bonded set (jailed, unbonding) with nothing in the period: no promise assigned it rows, no obligation, no
+// endorsed shard. Its row would only say so; the list leaves it out unless a search names it, and its page stays.
+const idle = (v: Validator) => !bonded(v) && !v.obligations?.total && !(v.signing && (v.signing.assigned > 0 || v.signing.unknown > 0)) && !(v.load && v.load.promises > 0);
 
 // Whether a row is the validator this observer's own operator runs. It marks
 // and nothing else: no filter, no exclusion, no adjustment.
@@ -180,7 +183,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
   }, [sortOpen]);
 
   const counts = useMemo(() => ({
-    all: rows.length,
+    all: rows.filter((v) => !idle(v)).length,
     providers: rows.filter((v) => bonded(v) && !!v.host).length,
     unreachable: rows.filter((v) => bonded(v) && !!v.host && endpointState(v) === "unreachable").length,
     cert: rows.filter((v) => bonded(v) && !!v.host && endpointState(v) === "cert").length,
@@ -199,7 +202,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
         case "unreachable": case "cert": return bonded(v) && !!v.host && endpointState(v) === filter;
         case "notready": return bonded(v) && !!v.host && endpointState(v) === "reachable" && v.readiness === "not_ready";
         case "nohost": return bonded(v) && !v.host;
-        default: return true;
+        default: return !idle(v) || !!needle;
       }
     }).filter((v) => !needle
       || v.address.toLowerCase().includes(needle)
