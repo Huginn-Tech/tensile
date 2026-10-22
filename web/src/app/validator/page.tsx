@@ -567,7 +567,6 @@ function Page() {
               <div className="chips vd-chips">
                 <span className="state" title={e.title}><i className={"dot " + e.dot} />{e.word}</span>
                 {v.host && <span title={v.identity_reason || "The consensus-key check on the newest handshake."}>TLS identity <b className="word">{identityWord[v.identity_status] ?? v.identity_status}</b></span>}
-                {e.ready && <span className={"vd-rd" + (e.ready.hold ? " hold" : "")} title={e.ready.title}>{e.ready.word}</span>}
               </div>
             </div>
             <p className="vd-own">

@@ -503,17 +503,8 @@ td a.plain:hover, td a.fault:hover { text-decoration: underline; }
 .vt tbody td { font-family: var(--font-table); font-weight: 400; }
 .vt tbody .mon { font-weight: 600; }
 .vt tbody .fig, .vt tbody .fig .rate, .vt tbody .state { font-weight: 500; }
-/* the endpoint's word starts at one width in every row, so the dots keep a column; the server's upload readiness is a
-   second line under Reachable, at the address line's size, starting under the word */
-@media (min-width: 721px) {
-  .vlist .vt-ep .state { min-width: 5.9em; }
-  .vlist .vt-ep .ep { display: inline-grid; justify-items: start; text-align: left; }
-  .vlist .vt tbody .vt-ep .rd { display: block; padding-left: 15px; font-size: 13px; line-height: 15.6px; font-weight: 400; color: var(--text-2); }
-  .vlist .vt tbody .vt-ep .rd.hold { color: var(--hold-ink); font-weight: 500; }
-}
-/* the validator page's chip of it, beside the state's and the identity's */
-.chips > span.vd-rd { color: var(--text); font-weight: 500; }
-.chips > span.vd-rd.hold { color: var(--hold-ink); }
+/* the endpoint's word starts at one width in every row, so Ready, Reachable and Not ready keep their dots in a column */
+@media (min-width: 721px) { .vlist .vt-ep .state { min-width: 5.9em; } }
 /* the list's cell text a pixel over the site's table text, each line at its old height so the rows keep theirs; the
    headings keep theirs */
 @media (min-width: 721px) {
@@ -3770,10 +3761,6 @@ a.rb-c::after { inset: 0 calc(var(--rb-gap) / -2); }
 .tablewrap.framed .vt tbody tr > td.vt-ep { grid-area: st; align-self: start; margin-left: 10px; line-height: 17px; }
 .tablewrap.framed .vt tbody tr > td.vt-ep .state { font-size: 12.5px; font-weight: 500; line-height: 17px; color: var(--text-2); }
 .tablewrap.framed .vt tbody tr > td.vt-ep .dot { width: 7px; height: 7px; margin-right: 5px; }
-/* a phone's row has the readiness on the state's line, after a dot */
-.tablewrap.framed .vt tbody tr > td.vt-ep .rd { font-size: 12.5px; font-weight: 500; line-height: 17px; color: var(--text-2); }
-.tablewrap.framed .vt tbody tr > td.vt-ep .rd::before { content: "·"; margin: 0 5px; color: var(--text-3); }
-.tablewrap.framed .vt tbody tr > td.vt-ep .rd.hold { color: var(--hold-ink); }
 .tablewrap.framed .vt tbody tr > td.vt-ho { grid-area: ho; align-self: start; display: flex; align-items: flex-start; min-width: 0; font-size: 12.5px; line-height: 17px; color: var(--text-2); }
 .tablewrap.framed .vt tbody tr > td.vt-ho::before { content: "·"; flex: none; margin: 0 5px; color: var(--text-3); }
 .tablewrap.framed .vt tbody tr > td.vt-ho:has(> .muted) { display: none; }
