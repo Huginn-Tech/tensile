@@ -3770,10 +3770,9 @@ a.rb-c::after { inset: 0 calc(var(--rb-gap) / -2); }
 .tablewrap.framed .vt tbody tr > td.vt-ep { grid-area: st; align-self: start; margin-left: 10px; line-height: 17px; }
 .tablewrap.framed .vt tbody tr > td.vt-ep .state { font-size: 12.5px; font-weight: 500; line-height: 17px; color: var(--text-2); }
 .tablewrap.framed .vt tbody tr > td.vt-ep .dot { width: 7px; height: 7px; margin-right: 5px; }
-/* a phone's row has the readiness under the state, as a desktop's has: on the state's line it left a long hosting name
-   too little room, which then broke inside a word */
-.tablewrap.framed .vt tbody tr > td.vt-ep .ep { display: block; }
-.tablewrap.framed .vt tbody tr > td.vt-ep .rd { display: block; padding-left: 12px; font-size: 12.5px; font-weight: 500; line-height: 17px; color: var(--text-2); }
+/* a phone's row has the readiness on the state's line, after a dot */
+.tablewrap.framed .vt tbody tr > td.vt-ep .rd { font-size: 12.5px; font-weight: 500; line-height: 17px; color: var(--text-2); }
+.tablewrap.framed .vt tbody tr > td.vt-ep .rd::before { content: "·"; margin: 0 5px; color: var(--text-3); }
 .tablewrap.framed .vt tbody tr > td.vt-ep .rd.hold { color: var(--hold-ink); }
 .tablewrap.framed .vt tbody tr > td.vt-ho { grid-area: ho; align-self: start; display: flex; align-items: flex-start; min-width: 0; font-size: 12.5px; line-height: 17px; color: var(--text-2); }
 .tablewrap.framed .vt tbody tr > td.vt-ho::before { content: "·"; flex: none; margin: 0 5px; color: var(--text-3); }
