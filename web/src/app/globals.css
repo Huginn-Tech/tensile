@@ -470,11 +470,9 @@ td a.plain:hover, td a.fault:hover { text-decoration: underline; }
   .vt { table-layout: fixed; min-width: 1100px; }
   .vt th:first-child { width: 22.25%; }
   /* widths follow what the cells hold; the Shard data column's share, since dropped, went to the six alike */
-  .vt .c-ep { width: 13.75%; } .vt .c-host { width: 15.25%; } .vt .c-power { width: 12.75%; }
+  .vt .c-ep { width: 13.75%; } .vt .c-rd { width: 15.25%; } .vt .c-power { width: 12.75%; }
   .vt .c-end { width: 17.75%; } .vt .c-last { width: 18.25%; }
   .vt td:not(:first-child) { overflow: hidden; text-overflow: ellipsis; }
-  .vt .hosting { max-width: 100%; vertical-align: middle; }
-  .vt .hosting > span:not(.flag):not(.flag-none):not(.cc) { overflow: hidden; text-overflow: ellipsis; }
 }
 /* the period after a heading keeps its own case: "(24h)", not "(24H)" */
 .vt th .per { text-transform: none; letter-spacing: .03em; }
@@ -503,8 +501,17 @@ td a.plain:hover, td a.fault:hover { text-decoration: underline; }
 .vt tbody td { font-family: var(--font-table); font-weight: 400; }
 .vt tbody .mon { font-weight: 600; }
 .vt tbody .fig, .vt tbody .fig .rate, .vt tbody .state { font-weight: 500; }
-/* the endpoint's word starts at one width in every row, so Ready, Reachable and Not ready keep their dots in a column */
+/* the endpoint's word starts at one width in every row, so the dots keep a column */
 @media (min-width: 721px) { .vlist .vt-ep .state { min-width: 5.9em; } }
+/* upload readiness: its two words in the calm tones of the state dots, a dash muted */
+.rd.ok { color: var(--ok-ink); font-weight: 500; }
+.rd.hold { color: var(--hold-ink); font-weight: 500; }
+/* the flag after a validator's name: a button that opens the provider and the place */
+.vt .nmw { display: inline; }
+.vt button.nm-flag { appearance: none; display: inline-flex; align-items: center; margin: 0 0 0 8px; padding: 3px; margin-block: -3px; border: 0; border-radius: 3px; background: none; cursor: pointer; vertical-align: 0; line-height: 0; }
+.vt button.nm-flag .flag { margin: 0; }
+.vt button.nm-flag:hover .flag { box-shadow: 0 0 0 1px var(--text-3); }
+.vt button.nm-flag:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
 /* the list's cell text a pixel over the site's table text, each line at its old height so the rows keep theirs; the
    headings keep theirs */
 @media (min-width: 721px) {
@@ -3737,14 +3744,14 @@ a.rb-c::after { inset: 0 calc(var(--rb-gap) / -2); }
 .tablewrap.framed .vt.sort-open thead .per, .tablewrap.framed .vt.sort-open thead .per span { font-size: 14px; letter-spacing: 0; }
 .tablewrap.framed .vt.sort-open thead .thi-i { margin-right: 8px; }
 
-/* a row: avatar; the name over the state and hosting; on the right the Endorsements share, its bar under it, and under
-   that the figure the list is ordered by, when the row does not already show it. A long hosting name wraps whole */
+/* a row: avatar; the name and its flag over the state and upload readiness; on the right the Endorsements share, its
+   bar under it, and under that the figure the list is ordered by, when the row does not already show it */
 .tablewrap.framed .vt tbody tr {
   display: grid; grid-template-columns: 30px max-content minmax(0, 1fr) auto; grid-template-rows: 20px 5px minmax(17px, auto); grid-auto-rows: auto;
   grid-template-areas: "av nm nm en" "av . . en" "av st ho sv"; align-items: center;
   padding: 8px 12px; border-bottom: 1px solid var(--border);
 }
-/* ordered by the last endorsement, whose times are long: the time on a line of its own, so the hosting name has the room */
+/* ordered by the last endorsement, whose times are long: the time on a line of its own */
 .tablewrap.framed .vt[data-by="last"] tbody tr:not(.open) { grid-template-rows: 20px 5px minmax(17px, auto) 17px; grid-template-areas: "av nm nm en" "av . . en" "av st ho ." "av sv sv sv"; }
 .tablewrap.framed .vt tbody tr:last-child { border-bottom: 0; border-radius: 0 0 13px 13px; }
 .tablewrap.framed .vt tbody tr > td { display: block; min-width: 0; padding: 0; border: 0; background: none !important; text-align: left; overflow: visible; box-shadow: none; }
@@ -3755,19 +3762,17 @@ a.rb-c::after { inset: 0 calc(var(--rb-gap) / -2); }
 .tablewrap.framed .vt tbody tr:has(.vt-tg:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
 .tablewrap.framed .vt .avatar { display: block; grid-area: av; width: 30px; height: 30px; border-radius: 8px; font-size: 12px; }
 .tablewrap.framed .vt span.avatar { display: grid; place-items: center; }
-.tablewrap.framed .vt tbody .mon { grid-area: nm; display: block; max-width: none; min-width: 0; margin: -12px 0 -12px 10px; padding: 12px 0; font-size: 15px; line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tablewrap.framed .vt tbody .nmw { grid-area: nm; display: flex; align-items: center; min-width: 0; margin-left: 10px; }
+.tablewrap.framed .vt tbody .mon { display: block; flex: 0 1 auto; max-width: none; min-width: 0; margin: -12px 0; padding: 12px 0; font-size: 15px; line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tablewrap.framed .vt tbody .nmw button.nm-flag { flex: none; margin: -10px 0 -10px 4px; padding: 10px 6px; }
 .tablewrap.framed .vt tbody .ours { grid-area: nm; justify-self: end; }
 .tablewrap.framed .vt tbody .addr { display: none; }
 .tablewrap.framed .vt tbody tr > td.vt-ep { grid-area: st; align-self: start; margin-left: 10px; line-height: 17px; }
 .tablewrap.framed .vt tbody tr > td.vt-ep .state { font-size: 12.5px; font-weight: 500; line-height: 17px; color: var(--text-2); }
 .tablewrap.framed .vt tbody tr > td.vt-ep .dot { width: 7px; height: 7px; margin-right: 5px; }
-.tablewrap.framed .vt tbody tr > td.vt-ho { grid-area: ho; align-self: start; display: flex; align-items: flex-start; min-width: 0; font-size: 12.5px; line-height: 17px; color: var(--text-2); }
-.tablewrap.framed .vt tbody tr > td.vt-ho::before { content: "·"; flex: none; margin: 0 5px; color: var(--text-3); }
-.tablewrap.framed .vt tbody tr > td.vt-ho:has(> .muted) { display: none; }
-.tablewrap.framed .vt tbody tr > td.vt-ho .hosting { align-items: flex-start; min-width: 0; gap: 5px; color: var(--text-2); }
-.tablewrap.framed .vt tbody tr > td.vt-ho .hosting > span:not(.flag):not(.flag-none):not(.cc) { min-width: 0; white-space: normal; overflow-wrap: break-word; }
-.tablewrap.framed .vt tbody tr > td.vt-ho .hosting > .flag { margin-top: 3px; }
-.tablewrap.framed .vt tbody tr > td.vt-ho .hosting > .cc { margin-top: 1px; }
+.tablewrap.framed .vt tbody tr > td.vt-rd { grid-area: ho; align-self: start; display: flex; align-items: flex-start; min-width: 0; font-size: 12.5px; line-height: 17px; }
+.tablewrap.framed .vt tbody tr > td.vt-rd::before { content: "·"; flex: none; margin: 0 5px; color: var(--text-3); }
+.tablewrap.framed .vt tbody tr > td.vt-rd:not(:has(> .rd)) { display: none; }
 .tablewrap.framed .vt tbody tr > td.vt-vp, .tablewrap.framed .vt tbody tr > td.vt-le { display: none; }
 /* the share on the name's line, its bar under it */
 .tablewrap.framed .vt tbody tr > td.vt-en { grid-area: en; justify-self: end; align-self: start; padding-left: 10px; }
@@ -3795,6 +3800,8 @@ a.rb-c::after { inset: 0 calc(var(--rb-gap) / -2); }
 .tablewrap.framed .vt tbody tr.open > td.vt-le { grid-area: le; }
 .tablewrap.framed .vt tbody tr.open .vt-l { position: static; width: auto; height: auto; margin: 0; overflow: visible; clip: auto; font-family: var(--sans); font-size: 13px; font-weight: 400; color: var(--text-2); }
 .tablewrap.framed .vt tbody tr.open > td > .muted { color: var(--text-3); }
+/* upload readiness keeps its name unseen in an open row: its word sits after the state, not on a line of its own */
+.tablewrap.framed .vt tbody tr.open > td.vt-rd .vt-l { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); }
 .tablewrap.framed .vt tbody tr.open > td.vt-go { grid-area: go; margin: 6px 0 2px 10px; }
 .tablewrap.framed .vt tbody tr.open > td.vt-go a { display: flex; align-items: center; justify-content: center; gap: 6px; height: 44px; border-radius: 10px; background: var(--accent-tint); color: var(--accent-ink); font-family: var(--sans); font-size: 13.5px; font-weight: 500; }
 .tablewrap.framed .vt tbody tr.open > td.vt-go a:hover { text-decoration: none; }

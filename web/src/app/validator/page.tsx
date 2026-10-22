@@ -15,7 +15,7 @@ import { openRow } from "@/lib/row";
 import { CopyMark } from "@/components/Ledger";
 import EndpointHistory, { endpointTxCount } from "@/components/EndpointHistory";
 import Avatar from "@/components/Avatar";
-import { endpoint } from "@/components/Validators";
+import { endpoint, readiness } from "@/components/Validators";
 import { HostingFact } from "@/components/Hosting";
 import { SELF_VALIDATOR } from "@/lib/site";
 import PreLive from "@/components/PreLive";
@@ -413,6 +413,7 @@ function Page() {
   const decided = o ? o.served + o.broken : 0;
   const broken = o?.broken ?? 0;
   const e = endpoint(v);
+  const rd = readiness(v, e.dot === "ok");
   const bonded = !v.jailed && (!v.bond_status || v.bond_status === "BOND_STATUS_BONDED");
   const rw = v.reachability_window;
   const self = !!SELF_VALIDATOR && [v.address, v.cons_address, v.operator_address].some((a) => !!a && a.toLowerCase() === SELF_VALIDATOR);
@@ -567,6 +568,7 @@ function Page() {
               <div className="chips vd-chips">
                 <span className="state" title={e.title}><i className={"dot " + e.dot} />{e.word}</span>
                 {v.host && <span title={v.identity_reason || "The consensus-key check on the newest handshake."}>TLS identity <b className="word">{identityWord[v.identity_status] ?? v.identity_status}</b></span>}
+                {rd.tone && <span title={rd.title}>Upload readiness <b className={"word rd " + rd.tone}>{rd.tone === "ok" ? "ready" : "not ready"}</b></span>}
               </div>
             </div>
             <p className="vd-own">

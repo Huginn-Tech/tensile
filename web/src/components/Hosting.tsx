@@ -2,6 +2,7 @@
 import { useApi, int, ago, utcWord } from "@/lib/api";
 import { Flag, countryName } from "./Flag";
 import { type Hosting, type HostingResponse, type HostingBucket, type Nakamoto, FDP_NAMED, hostingTitle } from "@/lib/hosting";
+import Info from "./Info";
 
 /**
  * Hosting on the site: a compact cell for the validators table and the
@@ -18,7 +19,7 @@ import { type Hosting, type HostingResponse, type HostingBucket, type Nakamoto, 
 export function HostingCell({ h, full }: { h?: Hosting; full?: boolean }) {
   if (!h) return <span className="muted" title="Not looked up: no open endpoint, or the lookup has not reached this host yet.">—</span>;
   if (h.status === "unresolved") return <span className="muted" title={hostingTitle(h)}>unresolved</span>;
-  const prov = h.status === "no_asn" ? "no network" : h.provider === "Other" ? (h.as_org ? shortOrg(h.as_org, full) : "Other") : h.provider;
+  const prov = providerName(h, full);
   return (
     <span className="hosting" title={hostingTitle(h)}>
       {h.country ? <Flag cc={h.country} label /> : <span className="flag-none" aria-hidden="true" />}
@@ -29,6 +30,28 @@ export function HostingCell({ h, full }: { h?: Hosting; full?: boolean }) {
 }
 
 /** "HETZNER-AS" / "EXAMPLE-NET Example B.V." → a short readable handle; whole: never cut to 16 characters */
+/** the provider a resolved host is named by: its bucket, or for Other its network's short handle */
+export function providerName(h: Hosting, full?: boolean): string {
+  return h.status === "no_asn" ? "no network" : h.provider === "Other" ? (h.as_org ? shortOrg(h.as_org, full) : "Other") : h.provider;
+}
+
+/**
+ * the validators list's mark of where a validator's Fibre server is: the country's flag beside the name, the provider
+ * and the place on hover and in a panel on a click or a tap. Nothing for a host with no country on record. No address:
+ * the validator page has the endpoint.
+ */
+export function HostFlag({ h }: { h?: Hosting }) {
+  if (!h || h.status === "unresolved" || !h.country) return null;
+  const prov = providerName(h, true);
+  const place = [h.city, countryName(h.country)].filter(Boolean).join(", ");
+  return (
+    <Info label={prov} trigger={<Flag cc={h.country} />} className="nm-flag" title={`${prov} · ${place}`}>
+      <p>{place}</p>
+      <p>{h.country_basis === "as_registry" ? "Where the provider’s network is registered; the server’s own location is not on record." : "The Fibre server’s location, from its address."}</p>
+    </Info>
+  );
+}
+
 function shortOrg(org: string, whole = false): string {
   // Registry handles are shouted and suffixed ("SERVETHEWORLD-AS", "AS-30083-US-VELIA-NET",
   // "IS-AS-1"): drop the AS markers and numbers, and bring long all-caps words to a readable

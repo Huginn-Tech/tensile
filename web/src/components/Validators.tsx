@@ -9,7 +9,7 @@ import Copy from "./Copy";
 import Info from "./Info";
 import Pick from "./Pick";
 import { endpointState } from "./Readiness";
-import { HostingCell } from "./Hosting";
+import { HostFlag } from "./Hosting";
 import { SELF_VALIDATOR } from "@/lib/site";
 import { isOperatorAccount, validatorHref } from "@/lib/addr";
 import { openRow } from "@/lib/row";
@@ -82,24 +82,33 @@ export function endpoint(v: Validator): { dot: string; word: string; title: stri
   // location reached has no handshake of ours to date.
   const when = v.confirmed_from ? ", reached from a second location" : v.last_reachable_at ? ` · last handshake ${ago(v.last_reachable_at)}` : checked;
   const says = `${v.host}: TLS with this validator's key${when}.`;
-  // Upload readiness, the server's own answer on the same heartbeats: a record beside the endpoint's state that never
-  // moves it. Not ready only after two answers in a row; one is in the words, as one timeout is not an outage.
+  return { dot: "ok", word: "Reachable", title: says.slice(0, -1) };
+}
+
+/**
+ * Upload readiness, a column of its own beside the endpoint's state, which it never moves: the server's own answer on
+ * the newest checks, asked only of an endpoint reachable with its identity verified. Ready, and Not ready after two
+ * answers in a row (one is in the words, as one timeout is not an outage), are words; anything else is a dash with its
+ * reason, never an older answer shown as current.
+ */
+export function readiness(v: Validator, reachable: boolean): { word: string; tone?: "ok" | "hold"; title: string } {
+  if (!reachable) return { word: "—", title: "Asked only of an endpoint that is reachable, with its identity verified." };
   const at = whenUTC(v.readiness_checked_at);
   switch (v.readiness) {
     case "ready":
-      return { dot: "ok", word: "Ready", title: `${says} The server reports itself ready for uploads: its own checks of the app node, Fibre module, signer, active set, provider registration and store all pass. Checked ${at}.` };
+      return { word: "Ready", tone: "ok", title: `The server reports itself ready for uploads: its own checks of the app node, Fibre module, signer, active set, provider registration and store all pass. Checked ${at}.` };
     case "not_ready":
-      return { dot: "hold", word: "Not ready", title: `${says} The server reported itself not ready for uploads in its last two checks, the latest at ${at}. A server says so when at least one of its own checks fails: app node, Fibre module, signer, active set, provider registration or store. Which one is in the operator's log. Uploads to it may fail.`, warn: true };
+      return { word: "Not ready", tone: "hold", title: `The server reported itself not ready for uploads in its last two checks, the latest at ${at}. A server says so when at least one of its own checks fails: app node, Fibre module, signer, active set, provider registration or store. Which one is in the operator's log. Uploads to it may fail; it is still reachable.` };
     case "not_ready_once":
-      return { dot: "ok", word: "Reachable", title: `${says} At ${at} the server reported itself not ready for uploads; it shows as Not ready if the next check says so too.` };
+      return { word: "—", title: `At ${at} the server reported itself not ready for uploads; it shows as Not ready if the next check says so too.` };
     case "not_reported":
-      return { dot: "ok", word: "Reachable", title: `${says} This endpoint does not report upload readiness.` };
+      return { word: "—", title: "This endpoint does not report upload readiness." };
     case "unchecked": {
       const last = v.readiness_last_answer === "ready" ? "ready" : v.readiness_last_answer === "not_ready" ? "not ready" : "readiness not reported";
-      return { dot: "ok", word: "Reachable", title: `${says} Upload readiness could not be checked at ${at}${v.readiness_last_answer ? `; last answer ${last} at ${whenUTC(v.readiness_last_answer_at)}` : ""}.` };
+      return { word: "—", title: `Upload readiness could not be checked at ${at}${v.readiness_last_answer ? `; last answer ${last} at ${whenUTC(v.readiness_last_answer_at)}` : ""}.` };
     }
   }
-  return { dot: "ok", word: "Reachable", title: says.slice(0, -1) };
+  return { word: "—", title: "No upload readiness answer from this endpoint yet." };
 }
 
 const time = (s: string | null | undefined) => (s ? new Date(s).getTime() : null);
@@ -191,9 +200,6 @@ export default function Validators({ rows, window: win, notLive, loading, failed
     nohost: rows.filter((v) => bonded(v) && !v.host).length,
   }), [rows]);
 
-  // The hosting column only exists while the lookup is on (observer/hosting):
-  // a column of dashes would read as "nobody knows", which is not what off means.
-  const showHosting = useMemo(() => rows.some((v) => !!v.hosting), [rows]);
   const needle = q.trim().toLowerCase();
   const list = useMemo(() => {
     const pool = rows.filter((v) => {
@@ -324,8 +330,13 @@ export default function Validators({ rows, window: win, notLive, loading, failed
             )}
             <tr id={phone ? sortId : undefined}>
               <th className="col-pin">Validator</th>
-              <th className="c-ep" title="Whether the validator's Fibre server answered Tensile's latest check, and, from celestia-app v10.5, whether it reports itself ready for uploads.">Endpoint now</th>
-              {showHosting && <th className="c-host" title="Where the validator's Fibre server is hosted.">Hosting</th>}
+              <th className="c-ep" title="Whether the validator's Fibre server answered Tensile's latest check.">Endpoint now</th>
+              <th className="num c-rd has-i">
+                <span className="thi">
+                  <span>Upload readiness</span>
+                  <span className="thi-i"><Info label="Upload readiness"><p>Whether the validator’s Fibre server reports itself ready to take uploads: its own checks of the app node, Fibre module, signer, active set, provider registration and store. Servers answer from celestia-app v10.5 on; a dash means no answer, with the reason on hover. Not ready comes after two such answers in a row, and the server still counts as reachable.</p></Info></span>
+                </span>
+              </th>
               <Th col="c-power" k="power" dflt={-1} label={ORDERS.power.label} title="The default order. Not a performance ranking." />
               <Th col="c-end" k="signed" dflt={-1} label={ORDERS.signed.label} per info="How often this validator’s signature is in the settlement, counted while it had a Fibre provider. A settlement needs signatures from ⅔ of the stake, and the first validators to respond fill it." />
               <Th col="c-last" k="last" dflt={-1} label={ORDERS.last.label} info="The last time this validator signed a blob, in any period." />
@@ -333,7 +344,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
           </thead>
           <tbody ref={body}>
             {list.length === 0 && (
-              <tr className="empty"><td colSpan={5 + (showHosting ? 1 : 0)}>
+              <tr className="empty"><td colSpan={6}>
                 {loading && rows.length === 0 ? "Loading…"
                   : rows.length === 0 && failed ? `${failedWords(failed)}.`
                   : rows.length === 0 ? "No validators on record yet."
@@ -346,6 +357,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
             )}
             {list.map((v) => {
               const e = endpoint(v);
+              const r = readiness(v, e.dot === "ok");
               const isOpen = phone && open === v.address;
               const toggle = () => setOpen((o) => (o === v.address ? null : v.address));
               const addr = v.moniker ? (v.operator_address || v.cons_address || v.address) : (v.cons_address || v.address);
@@ -364,7 +376,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
                     <span className="who">
                       <Avatar v={v} />
                       <span>
-                        <Link className="mon" href={href(v)}>{v.moniker || shortMid(v.operator_address || v.cons_address || v.address, 18, 4)}</Link>
+                        <span className="nmw"><Link className="mon" href={href(v)}>{v.moniker || shortMid(v.operator_address || v.cons_address || v.address, 18, 4)}</Link><HostFlag h={v.hosting} /></span>
                         {isSelf(v) && <span className="ours" title="Huginn Tech runs both this validator and Tensile. It is measured like every other validator.">runs Tensile</span>}
                         {notLive && v.signaled_upgrade === true && <span className="ours" title="Signalled on chain for the app version that brings Fibre.">signalled</span>}
                         {notLive && v.signaled_upgrade === false && <span className="ours" title="Has not signalled on chain for the app version that brings Fibre.">not signalled</span>}
@@ -378,7 +390,8 @@ export default function Validators({ rows, window: win, notLive, loading, failed
                     </span>
                   </td>
                   <td className="vt-ep"><span className="state" title={e.title}><i className={"dot " + e.dot} />{e.word}</span></td>
-                  {showHosting && <td className="vt-ho"><HostingCell h={v.hosting} full={phone} /></td>}
+                  {/* a phone's row shows only a word: a lone dash there has no column to explain it */}
+                  <td className="num vt-rd">{named("Upload readiness")}{(r.tone || !phone) && <span className={r.tone ? "rd " + r.tone : "rd muted"} title={r.title}>{r.word}</span>}</td>
                   <td className="num fig vt-vp">{named(ORDERS.power.label)}{int(v.voting_power)}</td>
                   <td className="num soft-col fig vt-en">{signed(v, e.dot === "none")}</td>
                   <td className="num vt-le">{named(ORDERS.last.label)}{last(v)}</td>
