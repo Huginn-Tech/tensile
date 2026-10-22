@@ -16,7 +16,7 @@ func fullRow() validatorRow {
 	n := func(v int64) *int64 { return &v }
 	f := func(v float64) *float64 { return &v }
 	yes, no := true, false
-	return validatorRow{
+	r := validatorRow{
 		Address: "aa", ConsAddress: "celestiavalcons1aa", Moniker: "m", Operator: "celestiavaloper1aa", KeybaseIdentity: "K",
 		AvatarURL: "/v1/avatars/K", Website: "https://example.org", Jailed: true, BondStatus: "BOND_STATUS_BONDED", SignaledUpgrade: &yes,
 		Host: "h:7980", EndpointSince: s("2026-09-01T00:00:00Z"), ProviderSince: s("2026-08-01T00:00:00Z"), LastHost: "old:7980",
@@ -38,6 +38,9 @@ func fullRow() validatorRow {
 			ResolvedAt: "2026-09-07T00:00:00Z", ResolvedBy: "heartbeat", LookedUpAt: "2026-09-07T00:00:00Z"},
 		ProvisionalFaults: &provisionalFaults{Obligations: 1, Until: "2026-09-08T00:00:00Z", SettlingSeconds: 1800, Note: "n"},
 	}
+	r.Readiness, r.Ready, r.ReadinessCheckedAt = readinessUnchecked, &yes, s("2026-09-07T12:00:00Z")
+	r.ReadinessLastAnswer, r.ReadinessLastAnswerAt = readinessReady, s("2026-09-07T11:55:00Z")
+	return r
 }
 
 func jsonMap(t *testing.T, v any) map[string]any {
@@ -90,6 +93,7 @@ func TestValidatorProjectionsCopyTheRow(t *testing.T) {
 	flat := []string{"address", "cons_address", "moniker", "operator_address", "avatar_url", "jailed", "bond_status",
 		"signaled_upgrade", "host", "last_host", "endpoint_closed_at", "voting_power", "last_seen_at", "last_served_at", "reachable", "endpoint_state",
 		"identity_status", "identity_reason", "confirmed_from", "also_failed_from", "last_reachable_at",
+		"readiness", "ready", "readiness_checked_at", "readiness_last_answer", "readiness_last_answer_at",
 		"obligations", "provisional_faults"}
 	split := func(m map[string]any) (signing, load, hosting map[string]any) {
 		signing, load, hosting = m["signing"].(map[string]any), m["load"].(map[string]any), m["hosting"].(map[string]any)

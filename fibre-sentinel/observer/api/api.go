@@ -2433,6 +2433,26 @@ type validatorRow struct {
 	// it recently.
 	ConfirmedFrom  string `json:"confirmed_from,omitempty"`
 	AlsoFailedFrom string `json:"also_failed_from,omitempty"`
+	// Readiness is what the endpoint answered when this observer's newest
+	// heartbeats asked, on the connection whose identity they verified,
+	// whether it is ready to take uploads (the gRPC health check celestia-app's
+	// Fibre server answers from v10.5 on): ready; not_ready, its server
+	// reporting at least one of its own checks failing at two heartbeats in a
+	// row; not_ready_once, at the newest only; not_reported, the question not
+	// answered by the server at all; unchecked, the newest heartbeat could not
+	// ask or got no answer (ReadinessLastAnswer then says what the one before
+	// it got). Absent unless the endpoint is reachable with a verified
+	// identity and a heartbeat has asked. It is a record of its own: Reachable,
+	// Reachability and every rate stay as they are, whatever it says.
+	Readiness string `json:"readiness,omitempty"`
+	// Ready is true when Readiness is ready, false when not_ready, else null.
+	Ready              *bool   `json:"ready"`
+	ReadinessCheckedAt *string `json:"readiness_checked_at,omitempty"`
+	// ReadinessLastAnswer and ReadinessLastAnswerAt, on an unchecked row, are
+	// the newest answer before it (ready, not_ready or not_reported) and when
+	// it was given; absent when there is none.
+	ReadinessLastAnswer   string  `json:"readiness_last_answer,omitempty"`
+	ReadinessLastAnswerAt *string `json:"readiness_last_answer_at,omitempty"`
 	// Reachability is how often this observer completed a TLS conversation with the
 	// endpoint over the window, with a certificate the validator's consensus
 	// key endorsed (one a publisher rejects counts as not reached), from the
@@ -2963,6 +2983,15 @@ func (s *Server) validatorRows(ctx context.Context, win Window, only string) ([]
 		v.IdentityStatus = identityStatus(&stc)
 		v.IdentityReason = st.identityReason
 		v.ConfirmedFrom, v.AlsoFailedFrom = st.confirmedFrom, st.alsoFailedFrom
+		// Readiness is asked only of an endpoint that is up with a verified
+		// identity, and is read only of one.
+		if v.EndpointState == "reachable" && v.IdentityStatus == "verified" {
+			rd, err := s.readinessNow(ctx, addr, st.host, win.asOfArg())
+			if err != nil {
+				return nil, err
+			}
+			v.setReadiness(rd)
+		}
 	}
 	// Names from the staking module, and a row for every bonded validator
 	// whether or not anything has been measured about it yet.

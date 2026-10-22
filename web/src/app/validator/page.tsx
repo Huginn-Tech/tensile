@@ -491,13 +491,25 @@ function Page() {
 
   // the endpoint as the newest handshake found it, stage by stage; stages after the first failure were never reached
   const c = data.last_endpoint_check;
-  const stages: [string, boolean, string][] = c ? [
+  // ok null: a stage that neither passed nor failed (–), as the readiness question the server does not answer
+  const stages: [string, boolean | null, string, string?][] = c ? [
     ["DNS", c.dns_ok, ""],
     ["TCP", c.tcp_ok, c.tcp_ok ? `${c.tcp_ms} ms` : ""],
     ["TLS", c.tls_ok, c.tls_ok ? `${c.tls_ms} ms` : ""],
     ["Identity", c.identity_ok, c.identity_ok ? "" : c.identity_reason ?? ""],
   ] : [];
-  const firstFail = stages.findIndex(([, ok]) => !ok);
+  // the server's own answer to whether it is ready for uploads, asked once the identity is verified; absent from a
+  // check that asked nothing
+  if (c?.readiness) {
+    const r = c.readiness;
+    stages.push(["Readiness", r === "serving" ? true : r === "not_serving" ? false : null,
+      r === "not_serving" ? "not ready" : r === "not_reported" ? "not reported" : r === "unmeasured" ? "no answer" : "",
+      r === "serving" ? "The server reported itself ready for uploads: its own checks of the app node, Fibre module, signer, active set, provider registration and store all pass."
+        : r === "not_serving" ? "The server reported itself not ready for uploads: at least one of its own checks fails — app node, Fibre module, signer, active set, provider registration or store. Which one is in the operator's log. Uploads to it may fail."
+        : r === "not_reported" ? "This endpoint does not report upload readiness."
+        : "The readiness question got no answer in time."]);
+  }
+  const firstFail = stages.findIndex(([, ok]) => ok === false);
   // what state the endpoint is in, in words, when it needs a look: before activation there is nothing to conclude,
   // and StatusLine says so
   const diag = notLive ? null : diagnose(v, c, decided);
@@ -595,9 +607,9 @@ function Page() {
               ? <>
                 <span><b title={utcWord(c.at)}>{whenUTC(c.at)}</b> <em>· {ago(c.at)}</em></span>
                 <span className="vd-stages" title={[c.host !== v.host && `checked ${c.host}`, c.raw_error].filter(Boolean).join(" · ") || "The newest handshake with the registered endpoint, stage by stage."}>
-                  {stages.map(([name, ok, note], i) => {
-                    const skip = firstFail >= 0 && i > firstFail;
-                    return <span key={name} className={ok ? "ok" : skip ? "skip" : "bad"}>{name} <i aria-hidden="true">{ok ? "✓" : skip ? "–" : "✗"}</i>{note && <em>{note}</em>}</span>;
+                  {stages.map(([name, ok, note, title], i) => {
+                    const skip = ok === null || (firstFail >= 0 && i > firstFail);
+                    return <span key={name} className={ok ? "ok" : skip ? "skip" : "bad"} title={title}>{name} <i aria-hidden="true">{ok ? "✓" : skip ? "–" : "✗"}</i>{note && <em>{note}</em>}</span>;
                   })}
                 </span>
                 {c.host !== v.host && <em title={c.host}>on the earlier endpoint</em>}

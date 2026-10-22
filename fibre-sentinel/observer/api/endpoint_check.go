@@ -24,6 +24,11 @@ type endpointCheck struct {
 	IdentityReason string `json:"identity_reason,omitempty"`
 	RawError       string `json:"raw_error,omitempty"`
 	Vantage        string `json:"vantage"`
+	// Readiness is what the endpoint answered when this check asked whether
+	// it is ready to take uploads, once the identity was verified: serving,
+	// not_serving, not_reported or unmeasured (probe.ReadinessResult).
+	// Absent when nothing was asked.
+	Readiness string `json:"readiness,omitempty"`
 }
 
 // lastEndpointCheck is the newest reachability row for addr up to the
@@ -34,11 +39,13 @@ type endpointCheck struct {
 func (s *Server) lastEndpointCheck(ctx context.Context, addr string, win Window) (*endpointCheck, error) {
 	var c endpointCheck
 	var dns, tcp, tls, id int
-	err := s.q(ctx).QueryRowContext(ctx, `SELECT started_at, validator_host, outcome, dns_ok, tcp_ok, tcp_ms, tls_ok, tls_ms,
-			identity_ok, identity_reason, raw_error, vantage
+	var raw []byte
+	q := s.q(ctx)
+	err := q.QueryRowContext(ctx, `SELECT started_at, validator_host, outcome, dns_ok, tcp_ok, tcp_ms, tls_ok, tls_ms,
+			identity_ok, identity_reason, raw_error, vantage, raw_json
 		FROM reachability WHERE validator_address = ? AND started_at <= ? AND +vantage = ?
 		ORDER BY started_at DESC LIMIT 1`, addr, win.endArg(), s.vantage).
-		Scan(&c.At, &c.Host, &c.Outcome, &dns, &tcp, &c.TCPMS, &tls, &c.TLSMS, &id, &c.IdentityReason, &c.RawError, &c.Vantage)
+		Scan(&c.At, &c.Host, &c.Outcome, &dns, &tcp, &c.TCPMS, &tls, &c.TLSMS, &id, &c.IdentityReason, &c.RawError, &c.Vantage, &raw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -46,5 +53,11 @@ func (s *Server) lastEndpointCheck(ctx context.Context, addr string, win Window)
 		return nil, err
 	}
 	c.DNSOK, c.TCPOK, c.TLSOK, c.IdentityOK = dns == 1, tcp == 1, tls == 1, id == 1
+	if c.TLSOK && c.IdentityOK {
+		// a record that cannot be read leaves it out, as if nothing was asked
+		if line, err := s.st.ReachRecord(ctx, q, raw); err == nil {
+			c.Readiness = readinessStatus(line)
+		}
+	}
 	return &c, nil
 }

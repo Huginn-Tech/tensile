@@ -41,6 +41,9 @@ type StepTimeouts struct {
 	TCP      time.Duration
 	TLS      time.Duration
 	Identity time.Duration
+	// Health bounds the readiness question (Input.AskReadiness), asked on
+	// the connection once its identity is verified.
+	Health time.Duration
 	// Download is the base download deadline. The effective deadline is
 	// Download + ExpectedShardBytes / MinDownloadBytesPerSec, so a 122 MB
 	// shard is not judged by the deadline chosen for a 1 MB one.
@@ -64,6 +67,7 @@ func DefaultStepTimeouts() StepTimeouts {
 		TCP:      5 * time.Second,
 		TLS:      10 * time.Second,
 		Identity: 2 * time.Second,
+		Health:   5 * time.Second,
 		Download: 25 * time.Second,
 
 		MinDownloadBytesPerSec: 1 << 20,
@@ -83,6 +87,9 @@ func (t StepTimeouts) withDefaults() StepTimeouts {
 	}
 	if t.Identity <= 0 {
 		t.Identity = d.Identity
+	}
+	if t.Health <= 0 {
+		t.Health = d.Health
 	}
 	if t.Download <= 0 {
 		t.Download = d.Download
@@ -176,6 +183,11 @@ type Input struct {
 	// reachability heartbeat and by the probe policy's backoff, where the
 	// expensive DownloadShard would only repeat a transport failure.
 	SkipDownload bool
+	// AskReadiness, with SkipDownload, asks the endpoint whether it is ready
+	// to take uploads once its identity is verified (askReadiness), on the
+	// same connection. The reachability heartbeat sets it; the probe
+	// policy's backoff does not.
+	AskReadiness bool
 
 	// Shadowers are the other settled promises over this commitment this
 	// prober knows, with the rows each assigns to this validator. Rows that
@@ -645,15 +657,21 @@ func Run(ctx context.Context, in Input, coder *Coder, to StepTimeouts) (m Measur
 	// client does, not two.
 	hs := newHandshake(in, to)
 	if in.SkipDownload {
-		if tc, _ := hs.run(ctx, rawConn); tc != nil {
-			_ = tc.Close()
-		} else {
+		tc, _ := hs.run(ctx, rawConn)
+		if tc == nil {
 			_ = rawConn.Close()
 		}
 		m.TLS, m.Identity = hs.results()
 		if out, raw, failed := hs.failure(); failed {
 			m.Outcome, m.RawError = out, raw
 			return m
+		}
+		// Whatever the readiness answer, the endpoint was reached: it is
+		// recorded beside the outcome, never as it.
+		if in.AskReadiness {
+			m.Readiness = askReadiness(ctx, in.Vantage, tc, to.Health)
+		} else {
+			_ = tc.Close()
 		}
 		m.Outcome = OutcomeReachable
 		return m

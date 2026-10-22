@@ -115,6 +115,10 @@ type Measurement struct {
 	TLS      TLSResult      `json:"tls"`
 	Identity IdentityResult `json:"identity"`
 	Download DownloadResult `json:"download"`
+	// Readiness is what the endpoint said when asked whether it is ready to
+	// take uploads (Input.AskReadiness): on reachability rows whose identity
+	// was verified, nil on every other row. Additive, omitempty.
+	Readiness *ReadinessResult `json:"readiness,omitempty"`
 
 	// verdict
 	Phase Phase `json:"phase"` // from StartedAt

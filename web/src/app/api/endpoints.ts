@@ -95,6 +95,8 @@ const EX_VALIDATORS = `{
       "voting_power": 2100001,
       "endpoint_state": "reachable",
       "identity_status": "verified",
+      "readiness": "ready",
+      "ready": true,
       "obligations": {
         "served": 1855,
         "broken": 0,
@@ -113,6 +115,8 @@ const EX_VALIDATOR = `{
     "moniker": "Huginn",
     "operator_address": "celestiavaloper1d2ktc37cme7ydk30ylzhamutcynhdvyet7nt3x",
     "endpoint_state": "reachable",
+    "readiness": "ready",
+    "ready": true,
     "obligations": {
       "served": 279,
       "broken": 0,

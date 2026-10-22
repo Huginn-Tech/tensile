@@ -503,6 +503,8 @@ td a.plain:hover, td a.fault:hover { text-decoration: underline; }
 .vt tbody td { font-family: var(--font-table); font-weight: 400; }
 .vt tbody .mon { font-weight: 600; }
 .vt tbody .fig, .vt tbody .fig .rate, .vt tbody .state { font-weight: 500; }
+/* the endpoint's word starts at one width in every row, so Ready, Reachable and Not ready keep their dots in a column */
+@media (min-width: 721px) { .vlist .vt-ep .state { min-width: 5.9em; } }
 .vt tbody tr { position: relative; }
 .vt tbody tr:not(.empty) { cursor: pointer; }
 /* a positioned row lets the pinned cell's background cover the collapsed rule; draw it on the cell */
