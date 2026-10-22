@@ -36,8 +36,8 @@ export function providerName(h: Hosting, full?: boolean): string {
 }
 
 /**
- * the validators list's mark of where a validator's Fibre server is: the country's flag beside the name, the provider
- * and the place on hover and in a panel on a click or a tap. Nothing for a host with no country on record. No address:
+ * a phone's mark, in the validators list, of where a validator's Fibre server is (a wider screen has the Hosting
+ * column): the country's flag after the name, the provider and the place in a panel on a tap. Nothing for a host with no country on record. No address:
  * the validator page has the endpoint.
  */
 export function HostFlag({ h }: { h?: Hosting }) {
