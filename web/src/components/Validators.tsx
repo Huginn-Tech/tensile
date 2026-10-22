@@ -61,9 +61,8 @@ function certificate(reason: string | undefined): string {
   }
 }
 
-/** the endpoint right now: the chain's own words first, then the newest handshake; `ready`, the server's upload readiness
- *  beside a reachable state, never in its place */
-export function endpoint(v: Validator): { dot: string; word: string; title: string; warn?: boolean; ready?: { word: string; hold?: boolean; title: string } } {
+/** the endpoint right now: the chain's own words first, then the newest handshake */
+export function endpoint(v: Validator): { dot: string; word: string; title: string; warn?: boolean } {
   if (v.jailed) return { dot: "none", word: "Jailed", title: "Jailed: out of the bonded set, so not checked. Shards it endorsed are still owed." };
   if (!bonded(v)) {
     const w = v.bond_status!.replace("BOND_STATUS_", "").toLowerCase();
@@ -84,14 +83,13 @@ export function endpoint(v: Validator): { dot: string; word: string; title: stri
   const when = v.confirmed_from ? ", reached from a second location" : v.last_reachable_at ? ` · last handshake ${ago(v.last_reachable_at)}` : checked;
   const says = `${v.host}: TLS with this validator's key${when}.`;
   // Upload readiness, the server's own answer on the same heartbeats: a record beside the endpoint's state that never
-  // moves it, so the state stays Reachable and the answer goes under it. Not ready only after two answers in a row; one
-  // is in the words, as one timeout is not an outage.
+  // moves it. Not ready only after two answers in a row; one is in the words, as one timeout is not an outage.
   const at = whenUTC(v.readiness_checked_at);
   switch (v.readiness) {
     case "ready":
-      return { dot: "ok", word: "Reachable", title: says.slice(0, -1), ready: { word: "Ready", title: `The server reports itself ready for uploads: its own checks of the app node, Fibre module, signer, active set, provider registration and store all pass. Checked ${at}.` } };
+      return { dot: "ok", word: "Ready", title: `${says} The server reports itself ready for uploads: its own checks of the app node, Fibre module, signer, active set, provider registration and store all pass. Checked ${at}.` };
     case "not_ready":
-      return { dot: "ok", word: "Reachable", title: says.slice(0, -1), ready: { word: "Not ready", hold: true, title: `Still reachable, but the server reported itself not ready for uploads in its last two checks, the latest at ${at}. A server says so when at least one of its own checks fails: app node, Fibre module, signer, active set, provider registration or store. Which one is in the operator's log. Uploads to it may fail.` } };
+      return { dot: "hold", word: "Not ready", title: `${says} The server reported itself not ready for uploads in its last two checks, the latest at ${at}. A server says so when at least one of its own checks fails: app node, Fibre module, signer, active set, provider registration or store. Which one is in the operator's log. Uploads to it may fail.`, warn: true };
     case "not_ready_once":
       return { dot: "ok", word: "Reachable", title: `${says} At ${at} the server reported itself not ready for uploads; it shows as Not ready if the next check says so too.` };
     case "not_reported":
@@ -379,7 +377,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
                       </span>
                     </span>
                   </td>
-                  <td className="vt-ep"><span className="ep"><span className="state" title={e.title}><i className={"dot " + e.dot} />{e.word}</span>{e.ready && <span className={"rd" + (e.ready.hold ? " hold" : "")} title={e.ready.title}>{e.ready.word}</span>}</span></td>
+                  <td className="vt-ep"><span className="state" title={e.title}><i className={"dot " + e.dot} />{e.word}</span></td>
                   {showHosting && <td className="vt-ho"><HostingCell h={v.hosting} full={phone} /></td>}
                   <td className="num fig vt-vp">{named(ORDERS.power.label)}{int(v.voting_power)}</td>
                   <td className="num soft-col fig vt-en">{signed(v, e.dot === "none")}</td>
