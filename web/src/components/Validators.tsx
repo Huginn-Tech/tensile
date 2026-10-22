@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { type Validator, int, pctOf, bytes, ago, utcWord, whenUTC, shortMid, failedWords } from "@/lib/api";
+import { type Validator, int, pctOf, ago, utcWord, whenUTC, shortMid, failedWords } from "@/lib/api";
 import { WINDOWS, periodName } from "@/lib/window";
 import Avatar from "./Avatar";
 import Copy from "./Copy";
@@ -17,11 +17,11 @@ import { usePhone } from "@/lib/phone";
 
 /**
  * The validators table: who, whether the endpoint answers right now, how
- * much stake, and what the chain records of its endorsements in the period:
- * the shard data it stored and endorsed, and how often it endorsed. Default order
+ * much stake, and what the chain records of its endorsements: how often it
+ * endorsed in the period, and when it last did. Default order
  * is voting power, descending, which is the chain's own order and never a
- * performance rank; the filters are for inspection. Serving, throughput and
- * the raw rows are on the validator's page.
+ * performance rank; the filters are for inspection. Serving, throughput, the
+ * shard data it stored and the raw rows are on the validator's page.
  */
 
 const bonded = (v: Validator) => !v.jailed && (!v.bond_status || v.bond_status === "BOND_STATUS_BONDED");
@@ -34,12 +34,11 @@ function isSelf(v: Validator): boolean {
 }
 
 type Filter = "all" | "providers" | "unreachable" | "cert" | "notready" | "nohost";
-type SortKey = "power" | "shard" | "signed" | "last";
+type SortKey = "power" | "signed" | "last";
 
 /** each order's heading; per: it counts the selected period, which follows it in brackets */
 const ORDERS: Record<SortKey, { label: string; per?: boolean }> = {
   power: { label: "Voting power" },
-  shard: { label: "Shard data", per: true },
   signed: { label: "Endorsements", per: true },
   last: { label: "Last endorsement" },
 };
@@ -102,14 +101,9 @@ export function endpoint(v: Validator): { dot: string; word: string; title: stri
 
 const time = (s: string | null | undefined) => (s ? new Date(s).getTime() : null);
 
-/** the shard data of the settled blobs it endorsed in the period, as the validator page's Shard data; none before Fibre is live */
-const shardBytes = (v: Validator, notLive?: boolean) => (!notLive && v.load && v.load.bytes > 0 ? v.load.bytes : null);
-
-function sortValue(v: Validator, k: SortKey, notLive?: boolean): number | null {
+function sortValue(v: Validator, k: SortKey): number | null {
   switch (k) {
     case "power": return v.voting_power;
-    // A validator that endorsed nothing in the period stored nothing for it and sorts last.
-    case "shard": return shardBytes(v, notLive);
     // Every validator with a settlement in the period is ranked by its share;
     // one with none has no share and sorts last.
     case "signed": { const s = v.signing; return s && s.assigned > 0 ? s.signed / s.assigned : null; }
@@ -130,7 +124,7 @@ function markStuck(el: HTMLElement | null) {
 
 /**
  * `periodSwitch`, the page's period control, sits under the heading, on one band with the search and the filter: the
- * period it selects is the Shard data and Endorsements columns', named in their headings. `failed`: the list could not
+ * period it selects is the Endorsements column's, named in its heading. `failed`: the list could not
  * be read and nothing of it is on screen, which the empty table says rather than "no validators on record"
  */
 export default function Validators({ rows, window: win, notLive, loading, failed, periodSwitch }: { rows: Validator[]; window: string; notLive?: boolean; loading?: boolean; failed?: { error: string | null; status?: number } | null; periodSwitch?: ReactNode }) {
@@ -216,7 +210,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
       || (v.host || v.last_host || "").toLowerCase().includes(needle)
       || (v.hosting ? [v.hosting.provider, v.hosting.as_org, v.hosting.country, v.hosting.asn ? "as" + v.hosting.asn : ""].join(" ").toLowerCase().includes(needle) : false));
     return [...pool].sort((a, b) => {
-      const av = sortValue(a, sort.key, notLive), bv = sortValue(b, sort.key, notLive);
+      const av = sortValue(a, sort.key), bv = sortValue(b, sort.key);
       if (av === null && bv === null) return b.voting_power - a.voting_power;
       if (av === null) return 1;
       if (bv === null) return -1;
@@ -224,7 +218,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
       const more = sort.key === "signed" ? (b.signing?.assigned ?? 0) - (a.signing?.assigned ?? 0) : 0;
       return (av - bv) * sort.dir || more || b.voting_power - a.voting_power;
     });
-  }, [rows, filter, needle, sort, notLive]);
+  }, [rows, filter, needle, sort]);
 
   // a new order is read from its first row: on a phone the list of orders closes and, with the head resting mid-list, the
   // list's top comes back under the head. The page moves up, so the header's tabs come back: its full height is counted
@@ -244,7 +238,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
   // A heading with a definition carries it behind an (i), opened by a click:
   // nothing appears on hover. The (i) sits outside the label's box so the
   // label stays centred over its column. A heading that counts the selected
-  // period names it after the label, in its own case: "Shard data (24h)". The
+  // period names it after the label, in its own case: "Endorsements (24h)". The
   // period sits in a box as wide as the widest period's name (every name is laid
   // over it, unseen), so switching periods never moves a heading or, where the
   // columns follow their headings, the table.
@@ -285,13 +279,6 @@ export default function Validators({ rows, window: win, notLive, loading, failed
         <i className="eb" aria-hidden="true"><i style={{ width: `${Math.min(100, (100 * s.signed) / s.assigned)}%` }} /></i>
       </span>
     );
-  };
-  // The shard data its endorsements stand for, with the count of blobs behind it in the title.
-  const shard = (v: Validator) => {
-    const n = shardBytes(v, notLive);
-    if (n === null) return <span className="muted" title="No settled blob endorsed by this validator in this period.">—</span>;
-    const p = v.load!.promises;
-    return <span title={`${int(p)} endorsed blob${p === 1 ? "" : "s"} in the period`}>{bytes(n)}</span>;
   };
   const last = (v: Validator) => {
     const at = v.signing?.last_endorsed_at;
@@ -337,14 +324,13 @@ export default function Validators({ rows, window: win, notLive, loading, failed
               <th className="c-ep" title="Whether the validator's Fibre server answered Tensile's latest check, and, from celestia-app v10.5, whether it reports itself ready for uploads.">Endpoint now</th>
               {showHosting && <th className="c-host" title="Where the validator's Fibre server is hosted.">Hosting</th>}
               <Th col="c-power" k="power" dflt={-1} label={ORDERS.power.label} title="The default order. Not a performance ranking." />
-              <Th col="c-shard" k="shard" dflt={-1} label={ORDERS.shard.label} per info="Row data of the shards this validator stored and endorsed over the period's settled blobs: blob_size / 4096 per row, padding included. The row proofs stored beside them are not counted." />
               <Th col="c-end" k="signed" dflt={-1} label={ORDERS.signed.label} per info="How often this validator’s signature is in the settlement, counted while it had a Fibre provider. A settlement needs signatures from ⅔ of the stake, and the first validators to respond fill it." />
               <Th col="c-last" k="last" dflt={-1} label={ORDERS.last.label} info="The last time this validator signed a blob, in any period." />
             </tr>
           </thead>
           <tbody ref={body}>
             {list.length === 0 && (
-              <tr className="empty"><td colSpan={6 + (showHosting ? 1 : 0)}>
+              <tr className="empty"><td colSpan={5 + (showHosting ? 1 : 0)}>
                 {loading && rows.length === 0 ? "Loading…"
                   : rows.length === 0 && failed ? `${failedWords(failed)}.`
                   : rows.length === 0 ? "No validators on record yet."
@@ -391,7 +377,6 @@ export default function Validators({ rows, window: win, notLive, loading, failed
                   <td className="vt-ep"><span className="state" title={e.title}><i className={"dot " + e.dot} />{e.word}</span></td>
                   {showHosting && <td className="vt-ho"><HostingCell h={v.hosting} full={phone} /></td>}
                   <td className="num fig vt-vp">{named(ORDERS.power.label)}{int(v.voting_power)}</td>
-                  <td className="num fig vt-sd">{named(`${ORDERS.shard.label} (${period})`)}{shard(v)}</td>
                   <td className="num soft-col fig vt-en">{signed(v, e.dot === "none")}</td>
                   <td className="num vt-le">{named(ORDERS.last.label)}{last(v)}</td>
                   {isOpen && <td className="vt-go"><Link href={href(v)}>Validator page <span aria-hidden="true">→</span></Link></td>}

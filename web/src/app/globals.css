@@ -377,7 +377,7 @@ a.go-other { font-weight: 500; white-space: nowrap; }
 
 /* ------------------------------------------------------- validators head --- */
 /* The heading and its line, then one band under them: the overview's period switch on the left (it drives the
-   table's Shard data and Endorsements), the search and the filter on the right. The three are one material, the
+   table's Endorsements), the search and the filter on the right. The three are one material, the
    switch's pill track, one height (36px) and one 30px line box, so their words sit on one baseline. The heading
    keeps the place it had beside the switch, a little clear of the map band above it. */
 .vhead { padding: 28px 0 0; }
@@ -466,12 +466,12 @@ td a.plain:hover, td a.fault:hover { text-decoration: underline; }
 .vt { font-variant-numeric: tabular-nums; }
 .vt th:not(:first-child), .vt td:not(:first-child) { text-align: center; padding-left: 6px; padding-right: 6px; }
 @media (min-width: 900px) {
-  /* seven columns need about 1100px; narrower, the frame scrolls with the validator pinned instead of crowding the headings */
+  /* six columns need about 1100px; narrower, the frame scrolls with the validator pinned instead of crowding the headings */
   .vt { table-layout: fixed; min-width: 1100px; }
-  .vt th:first-child { width: 20%; }
-  /* widths follow what the cells hold */
-  .vt .c-ep { width: 11.5%; } .vt .c-host { width: 13%; } .vt .c-power { width: 10.5%; }
-  .vt .c-shard { width: 13.5%; } .vt .c-end { width: 15.5%; } .vt .c-last { width: 16%; }
+  .vt th:first-child { width: 22.25%; }
+  /* widths follow what the cells hold; the Shard data column's share, since dropped, went to the six alike */
+  .vt .c-ep { width: 13.75%; } .vt .c-host { width: 15.25%; } .vt .c-power { width: 12.75%; }
+  .vt .c-end { width: 17.75%; } .vt .c-last { width: 18.25%; }
   .vt td:not(:first-child) { overflow: hidden; text-overflow: ellipsis; }
   .vt .hosting { max-width: 100%; vertical-align: middle; }
   .vt .hosting > span:not(.flag):not(.flag-none):not(.cc) { overflow: hidden; text-overflow: ellipsis; }
@@ -505,6 +505,13 @@ td a.plain:hover, td a.fault:hover { text-decoration: underline; }
 .vt tbody .fig, .vt tbody .fig .rate, .vt tbody .state { font-weight: 500; }
 /* the endpoint's word starts at one width in every row, so Ready, Reachable and Not ready keep their dots in a column */
 @media (min-width: 721px) { .vlist .vt-ep .state { min-width: 5.9em; } }
+/* the list's cell text a pixel over the site's table text, each line at its old height so the rows keep theirs; the
+   headings keep theirs */
+@media (min-width: 721px) {
+  .vlist .vt tbody .mon { font-size: 15px; line-height: 18.2px; }
+  .vlist .vt tbody .addr { font-size: 13px; line-height: 15.6px; }
+  .vlist .vt tbody td:not(.col-pin) { font-size: 14px; line-height: 18.85px; }
+}
 .vt tbody tr { position: relative; }
 .vt tbody tr:not(.empty) { cursor: pointer; }
 /* a positioned row lets the pinned cell's background cover the collapsed rule; draw it on the cell */
@@ -3713,17 +3720,16 @@ a.rb-c::after { inset: 0 calc(var(--rb-gap) / -2); }
 .vt-sort:focus-visible { outline-offset: -4px; border-radius: 999px; }
 .vt-sort svg { flex: none; width: 15px; height: 15px; color: var(--text-2); }
 .vt-sort .vt-sort-a { color: var(--accent-ink); }
-/* tapped: the four orders under it, each a 44 px line with its (i) */
+/* tapped: the three orders under it, each a 44 px line with its (i) */
 .tablewrap.framed .vt.sort-open thead tr:not(.vt-sb) {
   position: absolute; top: 46px; left: 12px; z-index: 3; flex-direction: column; align-items: stretch; width: 270px; height: auto; padding: 4px;
   border: 1px solid var(--border); border-radius: 12px; background: var(--paper); box-shadow: 0 8px 24px rgb(0 0 0 / .14);
 }
-.tablewrap.framed .vt.sort-open thead tr:not(.vt-sb) > th.c-power, .tablewrap.framed .vt.sort-open thead tr:not(.vt-sb) > th.c-shard,
-.tablewrap.framed .vt.sort-open thead tr:not(.vt-sb) > th.c-end, .tablewrap.framed .vt.sort-open thead tr:not(.vt-sb) > th.c-last {
+.tablewrap.framed .vt.sort-open thead tr:not(.vt-sb) > th.c-power, .tablewrap.framed .vt.sort-open thead tr:not(.vt-sb) > th.c-end, .tablewrap.framed .vt.sort-open thead tr:not(.vt-sb) > th.c-last {
   display: flex !important; align-items: center; height: 44px; padding: 0 0 0 12px !important; border: 0; border-radius: 8px; background: none;
   font-size: 14px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--text);
 }
-.tablewrap.framed .vt.sort-open[data-by="power"] thead tr:not(.vt-sb) > th.c-power, .tablewrap.framed .vt.sort-open[data-by="shard"] thead tr:not(.vt-sb) > th.c-shard,
+.tablewrap.framed .vt.sort-open[data-by="power"] thead tr:not(.vt-sb) > th.c-power,
 .tablewrap.framed .vt.sort-open[data-by="signed"] thead tr:not(.vt-sb) > th.c-end, .tablewrap.framed .vt.sort-open[data-by="last"] thead tr:not(.vt-sb) > th.c-last { background: var(--wash); }
 .tablewrap.framed .vt.sort-open thead .thi { flex: 1; justify-content: space-between; min-width: 0; }
 .tablewrap.framed .vt.sort-open thead button.sort { flex: 1; text-align: left; font-size: 14px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--text); }
@@ -3762,7 +3768,7 @@ a.rb-c::after { inset: 0 calc(var(--rb-gap) / -2); }
 .tablewrap.framed .vt tbody tr > td.vt-ho .hosting > span:not(.flag):not(.flag-none):not(.cc) { min-width: 0; white-space: normal; overflow-wrap: break-word; }
 .tablewrap.framed .vt tbody tr > td.vt-ho .hosting > .flag { margin-top: 3px; }
 .tablewrap.framed .vt tbody tr > td.vt-ho .hosting > .cc { margin-top: 1px; }
-.tablewrap.framed .vt tbody tr > td.vt-vp, .tablewrap.framed .vt tbody tr > td.vt-sd, .tablewrap.framed .vt tbody tr > td.vt-le { display: none; }
+.tablewrap.framed .vt tbody tr > td.vt-vp, .tablewrap.framed .vt tbody tr > td.vt-le { display: none; }
 /* the share on the name's line, its bar under it */
 .tablewrap.framed .vt tbody tr > td.vt-en { grid-area: en; justify-self: end; align-self: start; padding-left: 10px; }
 .tablewrap.framed .vt tbody .rate.share { display: flex; flex-direction: column; align-items: flex-end; font-size: 15px; line-height: 20px; }
@@ -3772,23 +3778,20 @@ a.rb-c::after { inset: 0 calc(var(--rb-gap) / -2); }
 /* the figure the list is ordered by, when the row hides it: under the bar, on the state's line, in the order control's
    muted weight; its name (the order's) is said to assistive tech, and shown once the row is open */
 .tablewrap.framed .vt[data-by="power"] tbody tr:not(.open) > td.vt-vp,
-.tablewrap.framed .vt[data-by="shard"] tbody tr:not(.open) > td.vt-sd,
 .tablewrap.framed .vt[data-by="last"] tbody tr:not(.open) > td.vt-le {
   display: block; grid-area: sv; justify-self: end; align-self: start; padding-left: 10px; font-size: 12px; font-weight: 500; line-height: 17px; color: var(--text-2); white-space: nowrap; font-variant-numeric: tabular-nums lining-nums;
 }
-.tablewrap.framed .vt[data-by="shard"] tbody tr:not(.open) > td.vt-sd:has(> .muted),
 .tablewrap.framed .vt[data-by="last"] tbody tr:not(.open) > td.vt-le:has(> .muted) { display: none; }
 .tablewrap.framed .vt tbody tr .vt-l { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* a row tapped open: its address with its copy, its other figures under it, name and value, and the way to its page */
-.tablewrap.framed .vt tbody tr.open { grid-template-areas: "av nm nm en" "av . . en" "av st ho sv" ". ad ad ac" ". vp vp vp" ". sd sd sd" ". le le le" ". go go go"; background: color-mix(in srgb, var(--accent) 4%, transparent); }
+.tablewrap.framed .vt tbody tr.open { grid-template-areas: "av nm nm en" "av . . en" "av st ho sv" ". ad ad ac" ". vp vp vp" ". le le le" ". go go go"; background: color-mix(in srgb, var(--accent) 4%, transparent); }
 .tablewrap.framed .vt tbody tr.open .addr { display: block; grid-area: ad; align-self: center; margin: 10px 0 2px 10px; font-size: 12px; color: var(--text-3); }
 .tablewrap.framed .vt tbody tr.open .copy { grid-area: ac; justify-self: end; margin: 10px -8px 2px 0; }
-.tablewrap.framed .vt tbody tr.open > td.vt-vp, .tablewrap.framed .vt tbody tr.open > td.vt-sd, .tablewrap.framed .vt tbody tr.open > td.vt-le {
+.tablewrap.framed .vt tbody tr.open > td.vt-vp, .tablewrap.framed .vt tbody tr.open > td.vt-le {
   display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-left: 10px; padding: 7px 0; border-top: 1px solid var(--border); font-size: 13.5px; font-weight: 500; line-height: 20px; color: var(--text);
 }
 .tablewrap.framed .vt tbody tr.open > td.vt-vp { grid-area: vp; }
-.tablewrap.framed .vt tbody tr.open > td.vt-sd { grid-area: sd; }
 .tablewrap.framed .vt tbody tr.open > td.vt-le { grid-area: le; }
 .tablewrap.framed .vt tbody tr.open .vt-l { position: static; width: auto; height: auto; margin: 0; overflow: visible; clip: auto; font-family: var(--sans); font-size: 13px; font-weight: 400; color: var(--text-2); }
 .tablewrap.framed .vt tbody tr.open > td > .muted { color: var(--text-3); }
