@@ -16,7 +16,9 @@ func TestReadinessOf(t *testing.T) {
 		notRep     = probe.ReadinessNotReported
 		unmeasured = probe.ReadinessUnmeasured
 	)
-	hb := func(at, status string) readinessAnswer { return readinessAnswer{at: at, verified: true, status: status} }
+	hb := func(at, status string) readinessAnswer {
+		return readinessAnswer{at: at, verified: true, status: status}
+	}
 	failed := func(at string) readinessAnswer { return readinessAnswer{at: at} }
 	for _, tc := range []struct {
 		name string
