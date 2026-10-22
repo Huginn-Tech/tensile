@@ -300,11 +300,11 @@ export default function Methodology() {
           </Def>
 
           <Def id="readiness" name="Upload readiness" say="Once a check has verified the validator’s identity, it asks on the same connection whether the Fibre server is ready to take uploads: the standard gRPC health check, which celestia-app’s Fibre server answers from v10.5 on.">
-            <p>The answer is the server&rsquo;s own and enters no percentage: Reachability and the service rate stay as they are. In Endpoint now:</p>
+            <p>The answer is the server&rsquo;s own and enters no percentage: Reachability and the service rate stay as they are. In Endpoint now it is a line under Reachable:</p>
             <Rules rows={[
               ["Ready", "The server reports that all of its own checks pass: app node, Fibre module, signer, active set, provider registration and store."],
-              ["Not ready", "The server reported at least one of those checks failing, in two checks in a row. The answer does not say which; the operator’s log does. Uploads to it may fail. It still counts as reachable."],
-              ["Reachable", "The server does not answer the question, as one before v10.5 does not; or the newest check could not ask it; or the server answered not ready once."],
+              ["Not ready", "The server reported at least one of those checks failing, in two checks in a row. The answer does not say which; the operator’s log does. Uploads to it may fail. The server is still reachable."],
+              ["No line", "The server does not answer the question, as one before v10.5 does not; or the newest check could not ask it; or the server answered not ready once."],
             ]} />
           </Def>
 
