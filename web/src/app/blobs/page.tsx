@@ -6,7 +6,7 @@ import PreLive from "@/components/PreLive";
 import { useApi, type Meta, type Market, type Blob, type NamespaceRow, type Publisher, int, bytes, failedWords, hhmm, isBlob, nsDisplay, nsName, shortMid, utcWord } from "@/lib/api";
 import { useTip } from "@/lib/tip";
 import Pager, { usePage } from "@/components/Pager";
-import { useWindow, WindowSwitch } from "@/lib/window";
+import { LIST_WINDOW, useWindow, WindowSwitch } from "@/lib/window";
 import BlobsDeck, { age, monthDayTime } from "@/components/BlobsDeck";
 import Ledger, { useLedger, type Feed } from "@/components/Ledger";
 import Picker, { type Choice } from "@/components/Picker";
@@ -183,7 +183,7 @@ function Namespaces({ rows, truncated, failed, onPick }: { rows: NamespaceRow[] 
  */
 function Page() {
   const params = useSearchParams();
-  const [win, setWin] = useWindow("24h");
+  const [win, setWin] = useWindow(LIST_WINDOW);
   const [page, setPageRaw] = usePage();
   const [tab, setTab] = useState<"blobs" | "namespaces">("blobs");
   const [ns, setNsRaw] = useState((params.get("namespace") ?? "").trim().toLowerCase());

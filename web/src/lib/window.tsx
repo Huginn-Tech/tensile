@@ -7,6 +7,13 @@ export type WindowName = (typeof WINDOWS)[number];
 export const windowLabel = (w: string) => (w === "all" ? "All" : w);
 /** the period as a title names it, in parentheses after the name: "24h", "7d", "30d", "all" */
 export const periodName = (w: string) => (w === "all" ? "all" : w);
+/**
+ * The period the overview's validator list, the Blobs page and the Publishers
+ * page open on. 7d while Fibre is new on mainnet and a day can pass without a
+ * blob (from 2026-10-22); back to "24h" once blobs come every day. A validator's
+ * own page keeps 24h.
+ */
+export const LIST_WINDOW: WindowName = "7d";
 
 /**
  * The selected period, carried in the URL (?window=7d) so a link to a page

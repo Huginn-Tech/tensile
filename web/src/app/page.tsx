@@ -1,7 +1,7 @@
 "use client";
 import { Suspense } from "react";
 import { API_BASE, useApi, type Validator, type Meta } from "@/lib/api";
-import { useWindowAfterMount, WindowSwitch } from "@/lib/window";
+import { LIST_WINDOW, useWindowAfterMount, WindowSwitch } from "@/lib/window";
 import StatusLine from "@/components/StatusLine";
 import Validators from "@/components/Validators";
 import PreLive from "@/components/PreLive";
@@ -27,7 +27,7 @@ const LIVE_POLL_MS = 15000;
 function Overview() {
   // read after mount, so the page is prerendered whole (see useWindowAfterMount); nothing that
   // depends on the period is asked for until the URL has said which one it is
-  const [win, setWin, winKnown] = useWindowAfterMount("24h");
+  const [win, setWin, winKnown] = useWindowAfterMount(LIST_WINDOW);
   const { data: meta, error: metaErr } = useApi<Meta>("/v1/meta");
   // The 24h list is refreshed as often as every ten seconds on the observer
   // (endorsements move with every block; in September 2026 its 15-22 s
