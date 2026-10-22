@@ -9,16 +9,17 @@ import Copy from "./Copy";
 import Info from "./Info";
 import Pick from "./Pick";
 import { endpointState } from "./Readiness";
-import { HostFlag } from "./Hosting";
+import { HostFlag, HostingCell } from "./Hosting";
 import { SELF_VALIDATOR } from "@/lib/site";
 import { isOperatorAccount, validatorHref } from "@/lib/addr";
 import { openRow } from "@/lib/row";
 import { usePhone } from "@/lib/phone";
 
 /**
- * The validators table: who, whether the endpoint answers right now, how
- * much stake, and what the chain records of its endorsements: how often it
- * endorsed in the period, and when it last did. Default order
+ * The validators table: who, whether the endpoint answers right now and
+ * reports itself ready for uploads, where it is hosted, how much stake, and
+ * how often the chain records it endorsing in the period (when it last did is
+ * in the share's title and on its page). Default order
  * is voting power, descending, which is the chain's own order and never a
  * performance rank; the filters are for inspection. Serving, throughput, the
  * shard data it stored and the raw rows are on the validator's page.
@@ -37,13 +38,12 @@ function isSelf(v: Validator): boolean {
 }
 
 type Filter = "all" | "providers" | "unreachable" | "cert" | "notready" | "nohost";
-type SortKey = "power" | "signed" | "last";
+type SortKey = "power" | "signed";
 
 /** each order's heading; per: it counts the selected period, which follows it in brackets */
 const ORDERS: Record<SortKey, { label: string; per?: boolean }> = {
   power: { label: "Voting power" },
   signed: { label: "Endorsements", per: true },
-  last: { label: "Last endorsement" },
 };
 
 /**
@@ -111,15 +111,12 @@ export function readiness(v: Validator, reachable: boolean): { word: string; ton
   return { word: "—", title: "No upload readiness answer from this endpoint yet." };
 }
 
-const time = (s: string | null | undefined) => (s ? new Date(s).getTime() : null);
-
 function sortValue(v: Validator, k: SortKey): number | null {
   switch (k) {
     case "power": return v.voting_power;
     // Every validator with a settlement in the period is ranked by its share;
     // one with none has no share and sorts last.
     case "signed": { const s = v.signing; return s && s.assigned > 0 ? s.signed / s.assigned : null; }
-    case "last": return time(v.signing?.last_endorsed_at);
   }
 }
 
@@ -200,6 +197,10 @@ export default function Validators({ rows, window: win, notLive, loading, failed
     nohost: rows.filter((v) => bonded(v) && !v.host).length,
   }), [rows]);
 
+  // The hosting column only exists while the lookup is on (observer/hosting):
+  // a column of dashes would read as "nobody knows", which is not what off means.
+  // A phone's row has no room for it: the flag after the name says it there.
+  const showHosting = useMemo(() => rows.some((v) => !!v.hosting), [rows]) && !phone;
   const needle = q.trim().toLowerCase();
   const list = useMemo(() => {
     const pool = rows.filter((v) => {
@@ -277,13 +278,15 @@ export default function Validators({ rows, window: win, notLive, loading, failed
   // jailed, not bonded, not checked yet: `quiet`).
   const signed = (v: Validator, quiet: boolean) => {
     const s = v.signing;
+    const at = s?.last_endorsed_at;
+    const lastSaid = at ? ` Last endorsed ${ago(at)}, in any period (${utcWord(at)}).` : "";
     if (!s || s.assigned === 0) {
-      const title = s && s.unknown > 0 ? `${int(s.unknown)} assigned promise${s.unknown === 1 ? "" : "s"} recorded before signatures were verified: nothing to say either way.` : "No settled promise assigned this validator rows in this period.";
+      const title = (s && s.unknown > 0 ? `${int(s.unknown)} assigned promise${s.unknown === 1 ? "" : "s"} recorded before signatures were verified: nothing to say either way.` : "No settled promise assigned this validator rows in this period.") + lastSaid;
       if (phone) return quiet ? null : <span className="muted na" title={title}>{s && s.unknown > 0 ? "Not recorded" : "None assigned"}</span>;
       return <span className="muted" title={title}>—</span>;
     }
     return (
-      <span className="rate share endorsed" title={`${int(s.signed)} of ${int(s.assigned)} settled promises endorsed`}>
+      <span className="rate share endorsed" title={`${int(s.signed)} of ${int(s.assigned)} settled promises endorsed.${lastSaid}`}>
         {pctOf(s.signed, s.assigned)}
         <i className="eb" aria-hidden="true"><i style={{ width: `${Math.min(100, (100 * s.signed) / s.assigned)}%` }} /></i>
       </span>
@@ -334,17 +337,17 @@ export default function Validators({ rows, window: win, notLive, loading, failed
               <th className="num c-rd has-i">
                 <span className="thi">
                   <span>Upload readiness</span>
-                  <span className="thi-i"><Info label="Upload readiness"><p>Whether the validator’s Fibre server reports itself ready to take uploads: its own checks of the app node, Fibre module, signer, active set, provider registration and store. Servers answer from celestia-app v10.5 on; a dash means no answer, with the reason on hover. Not ready comes after two such answers in a row, and the server still counts as reachable.</p></Info></span>
+                  <span className="thi-i"><Info label="Upload readiness"><p>Whether the validator’s Fibre server reports itself ready to take uploads: its own checks of the app node, Fibre module, signer, active set, provider registration and store. Servers answer from celestia-app v10.5 on; a dash means no current answer, with the reason on hover. Not ready comes after two such answers in a row, and the server still counts as reachable.</p></Info></span>
                 </span>
               </th>
+              {showHosting && <th className="c-host" title="Where the validator's Fibre server is hosted.">Hosting</th>}
               <Th col="c-power" k="power" dflt={-1} label={ORDERS.power.label} title="The default order. Not a performance ranking." />
               <Th col="c-end" k="signed" dflt={-1} label={ORDERS.signed.label} per info="How often this validator’s signature is in the settlement, counted while it had a Fibre provider. A settlement needs signatures from ⅔ of the stake, and the first validators to respond fill it." />
-              <Th col="c-last" k="last" dflt={-1} label={ORDERS.last.label} info="The last time this validator signed a blob, in any period." />
             </tr>
           </thead>
           <tbody ref={body}>
             {list.length === 0 && (
-              <tr className="empty"><td colSpan={6}>
+              <tr className="empty"><td colSpan={5 + (showHosting ? 1 : 0)}>
                 {loading && rows.length === 0 ? "Loading…"
                   : rows.length === 0 && failed ? `${failedWords(failed)}.`
                   : rows.length === 0 ? "No validators on record yet."
@@ -376,7 +379,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
                     <span className="who">
                       <Avatar v={v} />
                       <span>
-                        <span className="nmw"><Link className="mon" href={href(v)}>{v.moniker || shortMid(v.operator_address || v.cons_address || v.address, 18, 4)}</Link><HostFlag h={v.hosting} /></span>
+                        <span className="nmw"><Link className="mon" href={href(v)}>{v.moniker || shortMid(v.operator_address || v.cons_address || v.address, 18, 4)}</Link>{phone && <HostFlag h={v.hosting} />}</span>
                         {isSelf(v) && <span className="ours" title="Huginn Tech runs both this validator and Tensile. It is measured like every other validator.">runs Tensile</span>}
                         {notLive && v.signaled_upgrade === true && <span className="ours" title="Signalled on chain for the app version that brings Fibre.">signalled</span>}
                         {notLive && v.signaled_upgrade === false && <span className="ours" title="Has not signalled on chain for the app version that brings Fibre.">not signalled</span>}
@@ -392,9 +395,11 @@ export default function Validators({ rows, window: win, notLive, loading, failed
                   <td className="vt-ep"><span className="state" title={e.title}><i className={"dot " + e.dot} />{e.word}</span></td>
                   {/* a phone's row shows only a word: a lone dash there has no column to explain it */}
                   <td className="num vt-rd">{named("Upload readiness")}{(r.tone || !phone) && <span className={r.tone ? "rd " + r.tone : "rd muted"} title={r.title}>{r.word}</span>}</td>
+                  {showHosting && <td className="vt-ho"><HostingCell h={v.hosting} /></td>}
                   <td className="num fig vt-vp">{named(ORDERS.power.label)}{int(v.voting_power)}</td>
                   <td className="num soft-col fig vt-en">{signed(v, e.dot === "none")}</td>
-                  <td className="num vt-le">{named(ORDERS.last.label)}{last(v)}</td>
+                  {/* the last endorsement is on the validator page and in the share's title; a phone's open row says it too */}
+                  {phone && <td className="num vt-le">{named("Last endorsement")}{last(v)}</td>}
                   {isOpen && <td className="vt-go"><Link href={href(v)}>Validator page <span aria-hidden="true">→</span></Link></td>}
                 </tr>
               );
