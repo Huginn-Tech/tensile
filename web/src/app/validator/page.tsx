@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useApi, type EndpointEvent, type ValidatorDetail, type ValidatorReading, type Window, type RecordThrough, type Obligations, type Meta, type EndpointCheck, int, pctOf, bytes, utcWord, dateUTC, whenUTC, shortMid, notFound, rateTone, notCountedText, badRequest, MIN_RATED, API_BASE, provisionalNow, type ProvisionalFaults, type NetworkReference,
   endOfWindow, fullReading, ownGap, foreignRows, attemptsOf, judged, askedTimes, FULL_READ_SINCE_WORDS, ago } from "@/lib/api";
-import { useWindow, WindowSwitch, periodName } from "@/lib/window";
+import { LIST_WINDOW, useWindow, WindowSwitch, periodName } from "@/lib/window";
 import StatusLine from "@/components/StatusLine";
 import { Eye } from "@/components/Metrics";
 import { CelestiaMark } from "@/components/Chrome";
@@ -539,7 +539,7 @@ function Page() {
   return (
     <>
       <div className="vd-head" ref={vdHead}>
-        <p className="crumb"><Link href={win === "24h" ? "/" : `/?window=${win}`}>Validators</Link> › <span className="crumb-nm">{v.moniker || shortMid(v.operator_address || cons, 18, 4)}</span></p>
+        <p className="crumb"><Link href={win === LIST_WINDOW ? "/" : `/?window=${win}`}>Validators</Link> › <span className="crumb-nm">{v.moniker || shortMid(v.operator_address || cons, 18, 4)}</span></p>
         <WindowSwitch value={win} onChange={setWin} />
       </div>
 

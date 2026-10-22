@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useApi, type Meta, type Window, blobFee, bytes, failedWords, fmtShare, hhmm, int, nsDisplay, tia, utcWord } from "@/lib/api";
 import { useTip } from "@/lib/tip";
 import type { MarketWithQueue, Params, PublisherWithQueue } from "@/lib/withdrawals";
-import { useWindow, WindowSwitch, periodName } from "@/lib/window";
+import { LIST_WINDOW, useWindow, WindowSwitch, periodName } from "@/lib/window";
 import { openRow } from "@/lib/row";
 import PreLive, { notLiveOf } from "@/components/PreLive";
 import { unit } from "@/components/Unit";
@@ -77,8 +77,8 @@ const plural = (n: number, w: string) => `${int(n)} ${w}${n === 1 ? "" : "s"}`;
  */
 function Page() {
   const router = useRouter();
-  // 24h, as on the overview and the Blobs page
-  const [win, setWinRaw] = useWindow("24h");
+  // the period the overview and the Blobs page open on
+  const [win, setWinRaw] = useWindow(LIST_WINDOW);
   const [page, setPage] = usePage();
   const [sort, setSortRaw] = useState<Sort>({ k: "fees", desc: true });
   // another period or order is another list: start from its first page
