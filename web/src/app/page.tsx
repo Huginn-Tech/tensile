@@ -56,7 +56,7 @@ function Overview() {
         </div>
       </div>
 
-      {/* the period drives the table's Shard data and Endorsements; the map, the stake and the blobs are now */}
+      {/* the period drives the table's Endorsements; the map, the stake and the blobs are now */}
       <Validators rows={rows} window={win} notLive={notLive} loading={vals.loading || (!vals.data && !vals.error)}
         failed={!vals.data && vals.error ? vals : null}
         periodSwitch={<WindowSwitch value={win} onChange={setWin} />} />
