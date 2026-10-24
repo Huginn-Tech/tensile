@@ -333,11 +333,11 @@ export default function Validators({ rows, window: win, notLive, loading, failed
             )}
             <tr id={phone ? sortId : undefined}>
               <th className="col-pin">Validator</th>
-              {/* the order explorers keep: who, their weight, how they did, where, and the server's state now at the row's end */}
+              {/* who, their weight, the server now and where it is, how they did, and whether it takes uploads */}
               <Th col="c-power" k="power" dflt={-1} label={ORDERS.power.label} title="The default order. Not a performance ranking." />
-              <Th col="c-end" k="signed" dflt={-1} label={ORDERS.signed.label} per info="How often this validator’s signature is in the settlement, counted while it had a Fibre provider. A settlement needs signatures from ⅔ of the stake, and the first validators to respond fill it." />
-              {showHosting && <th className="c-host" title="Where the validator's Fibre server is hosted.">Hosting</th>}
               <th className="c-ep" title="Whether the validator's Fibre server answered Tensile's latest check.">Endpoint now</th>
+              {showHosting && <th className="c-host" title="Where the validator's Fibre server is hosted.">Hosting</th>}
+              <Th col="c-end" k="signed" dflt={-1} label={ORDERS.signed.label} per info="How often this validator’s signature is in the settlement, counted while it had a Fibre provider. A settlement needs signatures from ⅔ of the stake, and the first validators to respond fill it." />
               <th className="num c-rd has-i">
                 <span className="thi">
                   <span>Upload readiness</span>
@@ -394,9 +394,9 @@ export default function Validators({ rows, window: win, notLive, loading, failed
                     </span>
                   </td>
                   <td className="num fig vt-vp">{named(ORDERS.power.label)}{int(v.voting_power)}</td>
-                  <td className="num soft-col fig vt-en">{signed(v, e.dot === "none")}</td>
-                  {showHosting && <td className="vt-ho"><HostingCell h={v.hosting} /></td>}
                   <td className="vt-ep"><span className="state" title={e.title}><i className={"dot " + e.dot} />{e.word}</span></td>
+                  {showHosting && <td className="vt-ho"><HostingCell h={v.hosting} /></td>}
+                  <td className="num soft-col fig vt-en">{signed(v, e.dot === "none")}</td>
                   {/* a phone's row shows only a word: a lone dash there has no column to explain it */}
                   <td className="num vt-rd">{named("Upload readiness")}{(r.tone || !phone) && <span className={r.tone ? "rd " + r.tone : "rd muted"} title={r.title}>{r.word}</span>}</td>
                   {/* the last endorsement is on the validator page and in the share's title; a phone's open row says it too */}

@@ -469,8 +469,8 @@ td a.plain:hover, td a.fault:hover { text-decoration: underline; }
   /* six columns need about 1100px; narrower, the frame scrolls with the validator pinned instead of crowding the headings */
   .vt { table-layout: fixed; min-width: 1100px; }
   .vt th:first-child { width: 23%; }
-  /* widths follow what the cells hold: Validator, Voting power, Endorsements, Hosting, Endpoint now, Upload readiness */
-  .vt .c-power { width: 13%; } .vt .c-end { width: 18.25%; } .vt .c-host { width: 16.5%; } .vt .c-ep { width: 14%; }
+  /* widths follow what the cells hold: Validator, Voting power, Endpoint now, Hosting, Endorsements, Upload readiness */
+  .vt .c-power { width: 13%; } .vt .c-ep { width: 14%; } .vt .c-host { width: 16.5%; } .vt .c-end { width: 18.25%; }
   .vt .c-rd { width: 15.25%; }
   .vt td:not(:first-child) { overflow: hidden; text-overflow: ellipsis; }
   .vt .hosting { max-width: 100%; vertical-align: middle; }
