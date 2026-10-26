@@ -5,9 +5,10 @@
  * are named in a shuffled order, each once, a new one every ROTATE_MS, and the last named stays until the next
  * beat: one round, never again; a new beat takes the pill at once, with one of its own endorsers picked at random.
  * What the page opened with is not news: it is named by one of its endorsers, still, with its age. A
- * beat whose endorsers are not known yet (its records have not answered, or none endorsed) is named plainly as
- * settled; endorsers that become known later join the names still to come. A validator's new or changed endpoint
- * takes the pill for HOLD_MS when it happens; the endorsers come back after, where they were.
+ * beat is taken up once its endorsers are known (its records have answered); until then the pill keeps what it
+ * names, or waits, empty, when it names nothing yet. Endorsers that become known later join the names still to come.
+ * A validator's new or changed endpoint takes the pill for HOLD_MS when it happens; the endorsers come back after,
+ * where they were.
  */
 
 /** ms between two endorsers named */
@@ -17,7 +18,7 @@ export const HOLD_MS = 12000;
 
 export type Shown<E> =
   | { kind: "endorser"; who: string; key: string; at: string }
-  | { kind: "settled"; key: string; at: string }
+  | { kind: "wait" }
   | { kind: "endpoint"; ev: E }
   | null;
 
@@ -40,6 +41,8 @@ export class PillPicker<E> {
   private i = 0;
   private ep: E | null = null;
   private epUntil = 0;
+  /** a beat came before any was taken up, its endorsers not known yet: the pill waits for them, empty */
+  private waiting = false;
   private rand: () => number;
 
   constructor(rand: () => number = Math.random) {
@@ -53,28 +56,28 @@ export class PillPicker<E> {
 
   /**
    * The newest beat: a key for it (its newest blob's promise hash), when its block settled, and the union of its blobs'
-   * endorsers as far as they are known (null while none is). A new beat is named at once, by a random endorser; the
-   * same beat with more endorsers known adds them, shuffled, after the one named now.
+   * endorsers as far as they are known (null while none is). A new beat is named at once, by a random endorser, once
+   * any of its endorsers is known; until then it is not taken up, and the pill keeps what it names. The same beat
+   * with more endorsers known adds them, shuffled, after the one named now.
    */
   beat(key: string, at: string, endorsers: string[] | null, live = true): void {
-    if (key === this.key) {
-      if (!this.live) {
-        const known = endorsers ?? [];
-        if (this.order === null && known.length) this.order = [known[Math.floor(this.rand() * known.length)]];
-        return;
-      }
-      const fresh = (endorsers ?? []).filter((e) => !this.order?.includes(e));
-      if (fresh.length === 0) return;
-      if (this.order === null) { this.order = shuffle(fresh, this.rand); this.i = 0; return; }
-      this.order.splice(this.i + 1, 0, ...shuffle(fresh, this.rand));
+    const order = this.order;
+    if (key === this.key && order) {
+      if (!this.live) return;
+      const fresh = (endorsers ?? []).filter((e) => !order.includes(e));
+      if (fresh.length) order.splice(this.i + 1, 0, ...shuffle(fresh, this.rand));
+      return;
+    }
+    if (!endorsers || endorsers.length === 0) {
+      if (!this.key) this.waiting = true;
       return;
     }
     this.key = key;
     this.at = at;
     this.live = live;
-    const es = endorsers && endorsers.length ? endorsers : null;
-    this.order = es ? (live ? shuffle(es, this.rand) : [es[Math.floor(this.rand() * es.length)]]) : null;
+    this.order = live ? shuffle(endorsers, this.rand) : [endorsers[Math.floor(this.rand() * endorsers.length)]];
     this.i = 0;
+    this.waiting = false;
   }
 
   /** a validator's new or changed endpoint, as it happens: the pill is its for HOLD_MS from now */
@@ -92,9 +95,8 @@ export class PillPicker<E> {
   /** what the pill names now */
   show(now: number): Shown<E> {
     if (this.ep && now < this.epUntil) return { kind: "endpoint", ev: this.ep };
-    if (this.key) {
-      return this.order ? { kind: "endorser", who: this.order[this.i], key: this.key, at: this.at } : { kind: "settled", key: this.key, at: this.at };
-    }
-    return this.ep ? { kind: "endpoint", ev: this.ep } : null;
+    if (this.key && this.order) return { kind: "endorser", who: this.order[this.i], key: this.key, at: this.at };
+    if (this.ep) return { kind: "endpoint", ev: this.ep };
+    return this.waiting ? { kind: "wait" } : null;
   }
 }
