@@ -734,7 +734,8 @@ func (s *Server) attachReadings(rows []publisherRow) {
 }
 
 // paymentRow is one escrow movement as a publisher's page lists it. A
-// settlement's or a timeout's amount is its gas at one utia per gas. The
+// settlement's or a timeout's amount is the module's charge for its gas, at
+// the rate of the app version its block ran under (scan.chargeUtia). The
 // publisher is the page's own, so a row does not repeat it, and the rest of
 // the payment (who submitted a timeout, the namespace and size of the blob
 // it paid for) is the blob's, /v1/blobs/{promise_hash}.

@@ -170,7 +170,9 @@ settlement, timeout, deposit, withdrawal request, withdrawal payout).
 publications, from the same blocks. A settlement or timeout carries no amount
 in any chain event, so the charge is recomputed from the promise's padded
 `blob_size` with the module's own formula (`650,000 + 45,000 × ⌈size / 256
-KiB⌉` gas at 1 utia/gas), which is exactly what the module charges; the
+KiB⌉` gas, at 1 utia/gas through app v10 and at 0.004 utia/gas rounded up
+from v11, by the version the block ran under), which is exactly what the
+module charges; the
 publisher is the account whose key signed the promise, whoever broadcast the
 transaction. A timeout is recorded only when somebody submitted it: an
 abandoned promise nobody reports leaves no trace, so the timeout count is a
