@@ -28,7 +28,8 @@ import (
 // handed out and never settled leaves no trace until someone submits its
 // timeout, so the timeout count is a floor, never a total. The settlement
 // amount is not in any event; it is recomputed from the promise's blob_size
-// with the module's own formula, which is what the module charges.
+// with the module's own formula, at the rate of the app version the block
+// ran under, which is what the module charges.
 
 // accountHRP is the bech32 prefix of a Celestia account.
 const accountHRP = "celestia"
@@ -146,20 +147,37 @@ func decodeTxMsgs(txBytes []byte) []txMsg {
 	return out
 }
 
-// promiseCharge is what the module charges for a promise: the gas formula at
-// one utia per gas, and the promise hash that identifies it on chain.
-func promiseCharge(pp *fibretypes.PaymentPromise) (hash string, gas uint64, amount uint64, err error) {
+// minGasPriceAppVersion is the app version from which the module charges a
+// promise's gas at the minimum gas price, 0.004 utia per gas rounded up to a
+// whole utia (celestia-app #7931); earlier versions charged one utia per
+// gas. A block keeps the rate of the version it ran under, so a rescan of an
+// older block records what was charged then. It is also the newest version
+// whose charge has been checked: a later one is charged at its rate, with a
+// warning (recordEconomy).
+const minGasPriceAppVersion = 11
+
+// chargeUtia is what the module charges, in utia, for a promise's gas in a
+// block that ran under appVersion.
+func chargeUtia(appVersion, gas uint64) uint64 {
+	if appVersion < minGasPriceAppVersion {
+		return gas
+	}
+	return (gas*4 + 999) / 1000
+}
+
+// promiseCharge is the gas the module charges a promise for, by its formula,
+// and the promise hash that identifies it on chain. What that gas costs
+// depends on the block (chargeUtia).
+func promiseCharge(pp *fibretypes.PaymentPromise) (hash string, gas uint64, err error) {
 	var internal celfibre.PaymentPromise
 	if err := internal.FromProto(pp); err != nil {
-		return "", 0, 0, fmt.Errorf("promise FromProto: %w", err)
+		return "", 0, fmt.Errorf("promise FromProto: %w", err)
 	}
 	h, err := internal.Hash()
 	if err != nil {
-		return "", 0, 0, fmt.Errorf("promise hash: %w", err)
+		return "", 0, fmt.Errorf("promise hash: %w", err)
 	}
-	gas = fibretypes.EstimateGasForPayForFibre(pp.BlobSize)
-	_, amount = coinAmount(fibretypes.PaymentAmount(pp.BlobSize))
-	return hexstr(h), gas, amount, nil
+	return hexstr(h), fibretypes.EstimateGasForPayForFibre(pp.BlobSize), nil
 }
 
 // paymentsInTx decodes the economy messages of one successful transaction.
@@ -183,7 +201,7 @@ func paymentsInTx(txBytes []byte, blk *Block, txIndex int, txHash string, now ti
 			if err := msg.Unmarshal(m.value); err != nil {
 				return out, fmt.Errorf("msg %d: unmarshal MsgPayForFibre: %w", m.index, err)
 			}
-			p, err := chargePayment(base, PaymentSettlement, &msg.PaymentPromise, msg.Signer)
+			p, err := chargePayment(base, blk.AppVersion, PaymentSettlement, &msg.PaymentPromise, msg.Signer)
 			if err != nil {
 				return out, fmt.Errorf("msg %d: %w", m.index, err)
 			}
@@ -193,7 +211,7 @@ func paymentsInTx(txBytes []byte, blk *Block, txIndex int, txHash string, now ti
 			if err := msg.Unmarshal(m.value); err != nil {
 				return out, fmt.Errorf("msg %d: unmarshal MsgPaymentPromiseTimeout: %w", m.index, err)
 			}
-			p, err := chargePayment(base, PaymentTimeout, &msg.PaymentPromise, msg.Signer)
+			p, err := chargePayment(base, blk.AppVersion, PaymentTimeout, &msg.PaymentPromise, msg.Signer)
 			if err != nil {
 				return out, fmt.Errorf("msg %d: %w", m.index, err)
 			}
@@ -223,8 +241,8 @@ func paymentsInTx(txBytes []byte, blk *Block, txIndex int, txHash string, now ti
 	return out, nil
 }
 
-func chargePayment(base Payment, kind string, pp *fibretypes.PaymentPromise, processor string) (Payment, error) {
-	hash, gas, amount, err := promiseCharge(pp)
+func chargePayment(base Payment, appVersion uint64, kind string, pp *fibretypes.PaymentPromise, processor string) (Payment, error) {
+	hash, gas, err := promiseCharge(pp)
 	if err != nil {
 		return Payment{}, err
 	}
@@ -241,7 +259,7 @@ func chargePayment(base Payment, kind string, pp *fibretypes.PaymentPromise, pro
 	p.BlobSize = pp.BlobSize
 	p.GasUnits = gas
 	p.Denom = "utia"
-	p.AmountUtia = amount
+	p.AmountUtia = chargeUtia(appVersion, gas)
 	return p, nil
 }
 
@@ -303,6 +321,10 @@ func withdrawalsExecuted(evs []abci.Event, blk *Block, now time.Time) ([]Payment
 // are skipped: they move nothing. Decode errors are logged, not fatal, so an
 // unexpected message shape cannot stop the scan of publications.
 func (s *Scanner) recordEconomy(blk *Block, res *BlockResults, h int64) int {
+	if blk.AppVersion > minGasPriceAppVersion && blk.AppVersion != s.chargeWarnedFor {
+		s.chargeWarnedFor = blk.AppVersion
+		s.log.Printf("WARNING h=%d ran under app v%d: escrow charges are recorded at v%d's rate (0.004 utia per gas, rounded up) until v%d's charge is checked", h, blk.AppVersion, minGasPriceAppVersion, blk.AppVersion)
+	}
 	now := time.Now().UTC()
 	recorded := 0
 	for i, raw := range blk.Txs {

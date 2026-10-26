@@ -155,11 +155,11 @@ func failedCases(t *testing.T, key *secp256k1.PrivKey) []failedCase {
 	other := "celestia1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"
 	pp := testPromise(t, key, 1<<20)
 	pp2 := testPromise(t, key, 1<<19)
-	hash, _, _, err := promiseCharge(&pp)
+	hash, _, err := promiseCharge(&pp)
 	if err != nil {
 		t.Fatal(err)
 	}
-	hash2, _, _, err := promiseCharge(&pp2)
+	hash2, _, err := promiseCharge(&pp2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -428,7 +428,7 @@ func TestEachFibreMessageKeepsWhatItAskedFor(t *testing.T) {
 		t.Fatal(err)
 	}
 	pp := testPromise(t, key, 3<<20)
-	hash, _, _, err := promiseCharge(&pp)
+	hash, _, err := promiseCharge(&pp)
 	if err != nil {
 		t.Fatal(err)
 	}

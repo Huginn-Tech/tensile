@@ -122,6 +122,10 @@ type Scanner struct {
 	// at FibreAppVersion or later; the seeds are tried there once rather
 	// than at the next inactiveRetryEvery boundary.
 	activationSeen bool
+	// chargeWarnedFor is the last app version past minGasPriceAppVersion
+	// this process warned about, so a newer version's warning is logged
+	// once, at its first block.
+	chargeWarnedFor uint64
 
 	// reseedFor is the end of the event-losing gap the bonded registry was
 	// last re-read for in this process (or tried: reseedTriedAt is the

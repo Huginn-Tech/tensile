@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	celfibre "github.com/celestiaorg/celestia-app/v10/fibre"
 	fibretypes "github.com/celestiaorg/celestia-app/v10/x/fibre/types"
 	"github.com/celestiaorg/go-square/v4/share"
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -92,7 +93,7 @@ func TestPaymentsInTx_EveryKind(t *testing.T) {
 		timeoutMsg{&fibretypes.MsgPaymentPromiseTimeout{Signer: other, PaymentPromise: pp}},
 		withdrawMsg{&fibretypes.MsgRequestWithdrawal{Signer: owner, Amount: sdk.NewInt64Coin("utia", 7)}},
 	)
-	blk := &Block{Height: 100, Time: time.Date(2026, 9, 17, 11, 0, 0, 0, time.UTC)}
+	blk := &Block{Height: 100, Time: time.Date(2026, 9, 17, 11, 0, 0, 0, time.UTC), AppVersion: FibreAppVersion}
 	now := time.Now()
 	ps, err := paymentsInTx(raw, blk, 3, "abcd", now)
 	if err != nil {
@@ -119,7 +120,7 @@ func TestPaymentsInTx_EveryKind(t *testing.T) {
 	if ps[0].AmountUtia != 6_000_000_000 || ps[0].Denom != "utia" {
 		t.Errorf("deposit amount: %+v", ps[0])
 	}
-	// The charge is the module's own formula: (650k + 45k×⌈size/256KiB⌉) gas at 1 utia/gas.
+	// The charge is the module's own formula: (650k + 45k×⌈size/256KiB⌉) gas at 1 utia/gas, v10's rate.
 	wantGas := uint64(650_000 + 45_000*4)
 	for _, i := range []int{1, 2} {
 		if ps[i].GasUnits != wantGas || ps[i].AmountUtia != wantGas {
@@ -137,6 +138,72 @@ func TestPaymentsInTx_EveryKind(t *testing.T) {
 	}
 	if ps[3].AmountUtia != 7 {
 		t.Errorf("withdrawal request amount: %+v", ps[3])
+	}
+}
+
+// A block that ran under app v11 is charged at the minimum gas price: the
+// same 1 MiB promise's 830,000 gas costs 3,320 utia there, 830,000 under v10.
+func TestPaymentsInTx_ChargeByAppVersion(t *testing.T) {
+	key := secp256k1.GenPrivKey()
+	owner, err := bech32.ConvertAndEncode(accountHRP, key.PubKey().Address())
+	if err != nil {
+		t.Fatal(err)
+	}
+	pp := testPromise(t, key, 1<<20) // 1 MiB → 4 chunks
+	raw := rawTx(t,
+		payMsg{&fibretypes.MsgPayForFibre{Signer: owner, PaymentPromise: pp}},
+		timeoutMsg{&fibretypes.MsgPaymentPromiseTimeout{Signer: owner, PaymentPromise: pp}},
+	)
+	for _, c := range []struct {
+		version uint64
+		want    uint64
+	}{{FibreAppVersion, 830_000}, {11, 3_320}} {
+		blk := &Block{Height: 200, Time: time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC), AppVersion: c.version}
+		ps, err := paymentsInTx(raw, blk, 0, "abcd", time.Now())
+		if err != nil {
+			t.Fatalf("v%d: %v", c.version, err)
+		}
+		if len(ps) != 2 {
+			t.Fatalf("v%d: want 2 payments, got %d: %+v", c.version, len(ps), ps)
+		}
+		for _, p := range ps {
+			if p.GasUnits != 830_000 || p.AmountUtia != c.want || p.Denom != "utia" {
+				t.Errorf("v%d %s: gas=%d amount=%d%s, want 830000 gas and %d utia", c.version, p.Kind, p.GasUnits, p.AmountUtia, p.Denom, c.want)
+			}
+		}
+	}
+}
+
+// The rate follows the app version: through v10 it is the pinned module's
+// own PaymentAmount, one utia per gas; from v11 it is ceil(gas × 0.004),
+// which upstream's test (celestia-app #7931) prices at 3,500, 9,980 and
+// 74,780 utia for 1, 10 and 100 MiB of data at their padded upload size.
+// A version past v11 keeps v11's rate until its charge is checked.
+func TestChargeUtia(t *testing.T) {
+	for _, c := range []struct {
+		mib  int
+		want uint64
+	}{{1, 3_500}, {10, 9_980}, {100, 74_780}} {
+		size := uint32(celfibre.DefaultBlobConfigV0().UploadSize(c.mib << 20))
+		gas := fibretypes.EstimateGasForPayForFibre(size)
+		if got, want := chargeUtia(FibreAppVersion, gas), fibretypes.PaymentAmount(size).Amount.Uint64(); got != want {
+			t.Errorf("%d MiB at v10: %d utia, the module charges %d", c.mib, got, want)
+		}
+		for _, v := range []uint64{11, 12} {
+			if got := chargeUtia(v, gas); got != c.want {
+				t.Errorf("%d MiB (upload %d bytes, %d gas) at v%d: %d utia, want %d", c.mib, size, gas, v, got, c.want)
+			}
+		}
+	}
+	// a whole utia is charged for any part of one
+	if got := chargeUtia(11, 1); got != 1 {
+		t.Errorf("1 gas at v11: %d utia, want 1", got)
+	}
+	if got := chargeUtia(11, 250); got != 1 {
+		t.Errorf("250 gas at v11: %d utia, want 1", got)
+	}
+	if got := chargeUtia(11, 251); got != 2 {
+		t.Errorf("251 gas at v11: %d utia, want 2", got)
 	}
 }
 
