@@ -123,6 +123,8 @@ function sortValue(v: Validator, k: SortKey): number | null {
 /** the search field's mark, the site search's own */
 const FIND = <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.75" fill="none" stroke="currentColor" strokeWidth="1.5" /><path d="m10.5 10.5 3.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>;
 /** the phone's order control's mark: three lines, longest first */
+// the upload glyph in the list's framed Ready and Not ready: an arrow rising from a line
+const UPLOAD = <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10.25V2.75M4.75 6 8 2.75 11.25 6M3.25 13.25h9.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>;
 const ORDER = <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4h11M2.5 8h7.5M2.5 12h4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>;
 
 /** a sticky element resting at its sticky top, the page scrolled: it then draws the hairline that parts it from the rows under it */
@@ -398,7 +400,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
                   {showHosting && <td className="vt-ho"><HostingCell h={v.hosting} /></td>}
                   <td className="num soft-col fig vt-en">{signed(v, e.dot === "none")}</td>
                   {/* a phone's row shows only a word: a lone dash there has no column to explain it */}
-                  <td className="num vt-rd">{named("Upload readiness")}{(r.tone || !phone) && <span className={r.tone ? "rd " + r.tone : "rd muted"} title={r.title}>{r.word}</span>}</td>
+                  <td className="num vt-rd">{named("Upload readiness")}{(r.tone || !phone) && <span className={r.tone ? "rd " + r.tone : "rd muted"} title={r.title}>{r.tone && !phone && UPLOAD}{r.word}</span>}</td>
                   {/* the last endorsement is on the validator page and in the share's title; a phone's open row says it too */}
                   {phone && <td className="num vt-le">{named("Last endorsement")}{last(v)}</td>}
                   {isOpen && <td className="vt-go"><Link href={href(v)}>Validator page <span aria-hidden="true">→</span></Link></td>}
