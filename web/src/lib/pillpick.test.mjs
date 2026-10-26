@@ -1,7 +1,7 @@
 // pillpick.ts (npm test; node --test): who the overview map's pill names. The newest beat's endorsers (the union over
 // its blobs) one at a time, a shuffled order, each once, the last staying; a new beat takes the pill at once with one
-// of its own; a beat without known endorsers is named as settled; a new or changed endpoint holds the pill for 12 s and
-// the endorsers come back after. The module is TypeScript with no imports, so the test compiles it with the project's
+// of its own; a beat without known endorsers waits for them, the pill keeping what it names; a new or changed endpoint
+// holds the pill for 12 s and the endorsers come back after. The module is TypeScript with no imports, so the test compiles it with the project's
 // own TypeScript.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -77,16 +77,29 @@ test("a new beat takes the pill at once, with one of its own endorsers, and goes
   assert.equal(who(pk), named[7], "the same beat again changes nothing");
 });
 
-test("a beat without known endorsers is named as settled, until its records answer", () => {
+test("a beat without known endorsers is not named until its records answer; the pill keeps what it names", () => {
   const pk = new PillPicker(seeded(1));
   pk.beat("b1", "t1", null);
-  assert.deepEqual(pk.show(0), { kind: "settled", key: "b1", at: "t1" });
+  assert.deepEqual(pk.show(0), { kind: "wait" }, "nothing named yet: it waits, empty");
   pk.tick(0);
-  assert.equal(pk.show(0).kind, "settled");
+  assert.deepEqual(pk.show(0), { kind: "wait" });
   pk.beat("b1", "t1", ["v1", "v2"]);
   assert.ok(["v1", "v2"].includes(who(pk)), "its endorsers once known");
+  assert.equal(pk.show(0).key, "b1");
+  pk.tick(0);
+  const before = who(pk);
+  pk.beat("b2", "t2", null);
+  assert.equal(who(pk), before, "a newer beat, its endorsers not known: the name stays");
+  assert.equal(pk.show(0).key, "b1", "and its beat with it");
   pk.beat("b2", "t2", []);
-  assert.deepEqual(pk.show(0), { kind: "settled", key: "b2", at: "t2" }, "none endorsed: settled");
+  assert.equal(pk.show(0).key, "b1", "none known: still the name before");
+  pk.beat("b2", "t2", ["n1"]);
+  assert.deepEqual(pk.show(0), { kind: "endorser", who: "n1", key: "b2", at: "t2" }, "taken up once known");
+  // an endpoint seen before any beat is taken up is named over the wait once its hold is over
+  const ep = new PillPicker(seeded(2));
+  ep.beat("b1", "t1", null);
+  ep.endpoint({ address: "x" }, 0);
+  assert.equal(ep.show(HOLD_MS + 1).kind, "endpoint");
 });
 
 test("a new or changed endpoint holds the pill for HOLD_MS; the endorsers come back where they were, a new beat's if one came", () => {
@@ -127,7 +140,7 @@ test("what the page opened with names one endorser, still, and an endorser known
   // not known at first: named once it is, and still
   const pk2 = new PillPicker(seeded(8));
   pk2.beat("b0", "t0", null, false);
-  assert.equal(pk2.show(0).kind, "settled");
+  assert.equal(pk2.show(0).kind, "wait");
   pk2.beat("b0", "t0", ["v1", "v2", "v3"], false);
   const one = who(pk2);
   pk2.tick(0); pk2.tick(0);

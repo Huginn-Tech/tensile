@@ -273,7 +273,8 @@ function useReducedMotion(): boolean {
  * cross-fade in place, every name of the beat stacked in one cell, the cell easing to the width of the name shown. A
  * new beat takes the pill in the frame the grid moves, and its dot pops (not for what the grid opened with); a
  * validator's new or changed endpoint takes it for HOLD_MS (ev, at epAt) and pops it too. A beat whose endorsers are
- * not known is named plainly as settled.
+ * not known yet is named once they are; until then the pill keeps what it names, its beat with it (named), or waits
+ * empty as before the tip answers.
  *
  * Under the pointer or with focus in it, the pill holds still, its beat and its name as they were, so the name can be
  * read, clicked or kept focused; let go, it shows the newest. Ages are by the observer's clock (skew, the tip's).
@@ -315,8 +316,12 @@ function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost, motion, skew }: {
     const el = whoRef.current, on = el?.querySelector<HTMLElement>(":scope > .on");
     if (el && on) el.style.width = `${Math.ceil(on.getBoundingClientRect().width)}px`;
   });
+  // the beat of the name shown: a newer one whose endorsers are not known yet waits, out of the pill's title and dot
+  const named = useRef<PillBeat | null>(null);
   const now = Date.now();
-  const live = { s: pk.show(now) ?? (ev ? { kind: "endpoint" as const, ev } : null), names: [...pk.names], beat };
+  const cur = pk.show(now) ?? (ev ? { kind: "endpoint" as const, ev } : null);
+  if (beat && cur?.kind === "endorser" && cur.key === beat.key) named.current = beat;
+  const live = { s: cur, names: [...pk.names], beat: named.current };
   if (!held || !shown.current) shown.current = live;
   const { s, names, beat: b } = held && shown.current ? shown.current : live;
   const hold = {
@@ -326,22 +331,11 @@ function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost, motion, skew }: {
     onBlur: (e: React.FocusEvent<HTMLElement>) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHeld(false); },
   };
   const ago = (t: string) => secondsAgo(t, now + skew());
-  // nothing to name yet: a placeholder until the tip answers; once it has, and names no blob and no endpoint, no pill
-  // (a network whose Fibre has just gone live)
-  if (!s) return ev === undefined ? <p className="cm-ev"><span className="cm-ev-t wait">{" "}</span></p> : null;
+  // nothing to name yet: a placeholder until the tip answers and the newest beat's endorsers are known; once the tip
+  // has answered, naming no blob and no endpoint, no pill (a network whose Fibre has just gone live)
+  if (!s || s.kind === "wait") return ev === undefined || s ? <p className="cm-ev"><span className="cm-ev-t wait">{" "}</span></p> : null;
   if (s.kind === "endpoint") return <EventPill key={eventId(s.ev)} ev={s.ev} pulse={epAt > 0 && now - epAt < HOLD_MS} v={evVal} place={evHost} />;
   const many = (b?.blobs ?? 1) > 1, at = b ? ` at height ${int(b.height)}` : "";
-  if (s.kind === "settled") {
-    return (
-      <p className="cm-ev" {...hold}>
-        <i key={s.key} className={`cm-ev-dot${b?.live ? " pop" : ""}`} aria-hidden="true" />
-        <span className="cm-ev-t" title={`${many ? `${b!.blobs} blobs` : "A blob"} settled${at} · ${utcWord(s.at)}`}>
-          <Link href={`/blob/?hash=${s.key}`}>{many ? `${b!.blobs} blobs` : "The latest blob"}</Link> settled
-        </span>
-        <span className="cm-ev-ago">{ago(s.at)}</span>
-      </p>
-    );
-  }
   const who = nameOf(s.who);
   return (
     <p className="cm-ev" {...hold}>
