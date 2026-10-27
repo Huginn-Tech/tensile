@@ -76,9 +76,10 @@ files, schema, invariants and the path from a block to a figure are in
 
 ### Pinned celestia-app
 
-celestia-app `v10.4.0-mocha` (commit `5187d2fb5eb8bc4b534c74724882943c54253ae9`),
-celestia-core `v0.42.3`, cosmos-sdk fork `v0.52.12`. TLS golden vectors come
-from celestia-app commit `dba155084505a8f6c5d37260a94f70f939fb96de`.
+celestia-app `v10.5.0` (commit `6013e758d5dceb75827ad191c8d739d7c43cfa04`),
+the release mainnet and Mocha run; celestia-core `v0.42.3`, cosmos-sdk fork
+`v0.52.12`. TLS golden vectors come from celestia-app commit
+`dba155084505a8f6c5d37260a94f70f939fb96de`.
 `fibre-assign/reftest/go.mod` and `fibre-sentinel/go.mod` each carry a copy of
 celestia-app's `replace` block; refresh the pin and the block together.
 

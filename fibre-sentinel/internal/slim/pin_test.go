@@ -19,7 +19,8 @@ const foreignPin = "00000000000000000000000000000000000000aa"
 // build ships.
 var pinsOnRecord = []string{
 	"3b77dc2f5b00e1a646a2e9dd98b5c024a0d9ad8a", // v10.2.0-mocha: mocha, 2026-09-21 to 2026-10-06
-	"5187d2fb5eb8bc4b534c74724882943c54253ae9", // v10.4.0-mocha: mocha, from 2026-10-06
+	"5187d2fb5eb8bc4b534c74724882943c54253ae9", // v10.4.0-mocha (= v10.4.0): mocha from 2026-10-06, mainnet from 2026-10-20
+	"6013e758d5dceb75827ad191c8d739d7c43cfa04", // v10.5.0: both, from the deploy after 2026-10-27
 }
 
 func TestEveryPinOnRecordIsReproduced(t *testing.T) {

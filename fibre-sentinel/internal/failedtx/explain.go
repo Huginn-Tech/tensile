@@ -25,7 +25,7 @@ type Explanation struct {
 }
 
 // pinnedAppVersions are the app versions whose registered errors and runMsgs
-// log prefix the tests check against the pinned module (celestia-app v10.4.0).
+// log prefix the tests check against the pinned module (celestia-app v10.5.0).
 // A new chain version is added only after its errors and the prefix are
 // checked again.
 var pinnedAppVersions = map[uint64]bool{10: true}
@@ -77,7 +77,7 @@ type reasonKey struct {
 
 // reasonErrs are the registered errors whose description is the reason, in
 // this order: cosmos-sdk's root errors (codes 2-41), x/valaddr's, x/fibre's
-// (genesis-only at v10.4.0, listed for completeness) and x/authz's.
+// (genesis-only at v10.5.0, listed for completeness) and x/authz's.
 var reasonErrs = []*errorsmod.Error{
 	sdkerrors.ErrTxDecode, sdkerrors.ErrInvalidSequence, sdkerrors.ErrUnauthorized,
 	sdkerrors.ErrInsufficientFunds, sdkerrors.ErrUnknownRequest, sdkerrors.ErrInvalidAddress,

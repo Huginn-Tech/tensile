@@ -101,9 +101,10 @@ var ErrAssignmentPin = errors.New("slim: the record's assignment is from a celes
 // the two. An earlier pin is listed under the compiled pin it was checked against, never on its own, so a re-pin of
 // fibre-assign lists none of them until they are checked against the new pin and listed under it.
 var reproducedUnder = map[string][]string{
-	// v10.4.0-mocha reproduces v10.2.0-mocha, the pin until 2026-10-06: it changes none of fibre/protocol_params.go,
-	// fibre/blob.go, fibre/validator or x/fibre (fibre-assign/params.go)
-	"5187d2fb5eb8bc4b534c74724882943c54253ae9": {"3b77dc2f5b00e1a646a2e9dd98b5c024a0d9ad8a"},
+	// v10.5.0 reproduces v10.4.0 (v10.4.0-mocha), the pin until 2026-10-27, and through it v10.2.0-mocha, the pin
+	// until 2026-10-06: neither step changes fibre/protocol_params.go, fibre/blob.go, fibre/validator or x/fibre
+	// (fibre-assign/params.go)
+	"6013e758d5dceb75827ad191c8d739d7c43cfa04": {"5187d2fb5eb8bc4b534c74724882943c54253ae9", "3b77dc2f5b00e1a646a2e9dd98b5c024a0d9ad8a"},
 }
 
 // assignPins are the celestia-app commits whose shard assignment the compiled fibre-assign computes exactly: its own
