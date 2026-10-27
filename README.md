@@ -4,29 +4,35 @@ Tensile is Huginn Tech's open-source explorer for Celestia Fibre. It follows
 blob settlements, publishers and validators in real time, and checks that
 every validator serves the rows it endorsed.
 
-[Explorer](https://tensile.huginn.tech) ·
+[Mainnet](https://tensile.huginn.tech) ·
+[Mocha testnet](https://tensile-mocha.huginn.tech) ·
 [Methodology](https://tensile.huginn.tech/methodology/) ·
 [API](https://tensile.huginn.tech/api/)
 
 ## Features
 
 - **Real time.** Blocks are read the moment the node announces them, so a new
-  blob is on the site within seconds and the live pages update on their own.
+  blob is on the site within seconds and the live pages update on their own;
+  the API streams the newest block and blob as server-sent events.
 - **Every blob, searchable.** Find any blob by its blob ID (base64 or hex),
   transaction hash, commitment or payment promise hash.
 - **Settlements, publishers and escrow.** Each settlement with its namespace,
   size, fee and endorsements; who pays for blobs, and their escrow deposits,
   withdrawals and balances.
-- **Validators, checked.** Endpoint reachability, TLS identity, and whether
-  each validator serves the rows it endorsed.
-- **An open record.** A public API, signed daily exports, and a tool that
-  recomputes every result from them.
+- **Validators, checked.** Endpoint reachability, TLS identity, upload
+  readiness, and whether each validator serves the rows it endorsed.
+- **Where Fibre runs.** Every registered Fibre host on a map, and the hosts
+  by hosting provider, country and AS.
+- **An open record.** A public API, Atom feeds of network and validator
+  events, and signed daily exports, with a tool that recomputes every result
+  from the exports.
 
 ## How it works
 
 Settlements, endorsements, protocol parameters and escrow balances are read
 from the chain. On top of that, Tensile runs two checks of its own: every
-registered Fibre endpoint is checked every five minutes, and every blob is
+registered Fibre endpoint is checked every five minutes (reachability, TLS
+identity and, from celestia-app v10.5 on, upload readiness), and every blob is
 read once before its retention window ends, asking each validator that
 endorsed it for its own rows and verifying them against the commitment. The
 [methodology](https://tensile.huginn.tech/methodology/) covers timing, rules
@@ -69,7 +75,9 @@ chain ──► scanner ────┐
 The scanner reads each block as it arrives. The prober reads every blob before
 its window ends, and the heartbeat checks every endpoint; both talk to the
 validators' Fibre servers. All three append to record files, which the
-collector loads into SQLite, rolls up by day and exports. The API serves that
+collector loads into SQLite, rolls up by day and exports; it also places each
+Fibre host by provider, country and AS from local IP databases that a monthly
+job refreshes, so no lookup leaves the host. The API serves that
 database read-only, and the site is a static export that calls it. Record
 files, schema, invariants and the path from a block to a figure are in
 [`docs/SYSTEM.md`](docs/SYSTEM.md).
