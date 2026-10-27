@@ -14,13 +14,14 @@ import (
 // files at its release tag. See ProtocolParams and Fingerprint.
 const (
 	PinnedCelestiaAppVersion = "v10"
-	// v10.4.0-mocha (1 October 2026), the build Mocha runs. Against
-	// v10.2.0-mocha (3b77dc2f) it changes the Fibre server (connection age,
-	// storage, upload admission), x/valaddr's genesis export, celestia-core
-	// and the cosmos-sdk fork, and not fibre/protocol_params.go,
-	// fibre/blob.go, fibre/validator, x/fibre or the shard download; reftest
-	// is bit-identical across the two.
-	PinnedCelestiaAppCommit = "5187d2fb5eb8bc4b534c74724882943c54253ae9"
+	// v10.5.0 (22 October 2026), the release mainnet and Mocha run. Against
+	// v10.4.0 (5187d2fb, the same commit as v10.4.0-mocha) it changes the
+	// Fibre server (the gRPC health service, storage, pruning), the upload
+	// client, the proposer's square builder, the ABCI multiplexer and the
+	// hyperlane-cosmos fork, and not fibre/protocol_params.go, fibre/blob.go,
+	// fibre/validator, x/fibre, x/valaddr or the shard download; reftest is
+	// bit-identical across the two.
+	PinnedCelestiaAppCommit = "6013e758d5dceb75827ad191c8d739d7c43cfa04"
 	// PinnedCelestiaAppMajor is PinnedCelestiaAppVersion as the number the
 	// chain reports in abci_info app_version. A chain above it may assign
 	// rows differently from this package.
