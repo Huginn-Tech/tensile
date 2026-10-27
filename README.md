@@ -1,4 +1,4 @@
-# Tensile
+![Tensile for Celestia Fibre. Every blob, checked. An engraving of a tensile testing machine.](web/public/poster/tensile-engraving-1600.webp)
 
 Tensile is Huginn Tech's open-source explorer for Celestia Fibre. It follows
 blob settlements, publishers and validators in real time, and checks that
