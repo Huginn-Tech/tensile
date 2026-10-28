@@ -32,7 +32,7 @@ func fullRow() validatorRow {
 		Signing: signingStats{Assigned: 4, Signed: 3, Rate: rate(3, 4), Unknown: 1, NoHost: 1, LastEndorsedAt: s("2026-09-06T00:00:00Z"),
 			Recent: recentEndorsement{Assigned: 20, Endorsed: 18}},
 		Load: loadStats{Promises: 3, Rows: 444, Bytes: 111, StoredBytes: 37, RowsPerBlob: 148},
-		Hosting: &hosting.Info{Status: "ok", Host: "h:7980", IP: "1.2.3.4", ASN: 24940, ASOrg: "HETZNER-AS", Country: "DE",
+		Hosting: &hosting.Info{Status: "ok", Host: "h:7980", IP: "1.2.3.4", ASN: 24940, ASOrg: "HETZNER-AS", ASNSource: "iptoasn", Country: "DE",
 			CountryBasis: "geolocation", City: "Falkenstein", Region: "Saxony", Lat: f(50.4), Lon: f(12.3), Provider: "Hetzner",
 			Addresses:  []hosting.Address{{IP: "1.2.3.4", ASN: 24940, Provider: "Hetzner", Connected: true}},
 			ResolvedAt: "2026-09-07T00:00:00Z", ResolvedBy: "heartbeat", LookedUpAt: "2026-09-07T00:00:00Z"},
@@ -117,7 +117,7 @@ func TestValidatorProjectionsCopyTheRow(t *testing.T) {
 	sameAs(t, "detail signing", detailSigning, signing, []string{"assigned", "signed", "unknown", "last_endorsed_at", "recent"})
 	sameAs(t, "list load", listLoad, load, []string{"promises", "bytes"})
 	sameAs(t, "detail load", detailLoad, load, []string{"promises", "bytes", "stored_bytes", "rows_per_blob"})
-	hostingKeys := []string{"status", "host", "ip", "asn", "as_org", "country", "country_basis", "city", "lat", "lon", "provider"}
+	hostingKeys := []string{"status", "host", "ip", "asn", "as_org", "asn_source", "country", "country_basis", "city", "lat", "lon", "provider"}
 	for name, m := range map[string]map[string]any{"list": listHosting, "detail": detailHosting} {
 		sameAs(t, name+" hosting", m, hostingRow, hostingKeys)
 	}

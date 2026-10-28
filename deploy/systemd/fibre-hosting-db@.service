@@ -9,12 +9,14 @@ User=fibre-observer
 EnvironmentFile=/etc/fibre-observer/%i.env
 # Downloads into <DATA_DIR>/hosting, where the collector finds the files
 # without configuration, and replaces each only once the new one checks
-# out (deploy/hosting-db.sh). HOSTING_SKIP_COUNTRY=1 / HOSTING_SKIP_CITY=1
-# in the env file skip the DB-IP files. The collector notices the new files
-# on its next endpoint poll; nothing restarts. A network whose env file
-# points HOSTING_ASN_DB elsewhere refreshes that place itself.
+# out (deploy/hosting-db.sh). HOSTING_SKIP_ASN_FALLBACK=1 /
+# HOSTING_SKIP_COUNTRY=1 / HOSTING_SKIP_CITY=1 in the env file skip the
+# DB-IP files. The collector notices the new files on its next endpoint
+# poll; nothing restarts. A network whose env file points HOSTING_ASN_DB
+# elsewhere refreshes that place itself.
 ExecStart=/usr/local/bin/fibre-hosting-db ${DATA_DIR}/hosting
-# The city file is about 85 MB, on a disk the validator may share.
+# The city file is about 85 MB (fetched once a month), on a disk the
+# validator may share.
 Nice=10
 IOSchedulingClass=idle
 NoNewPrivileges=true

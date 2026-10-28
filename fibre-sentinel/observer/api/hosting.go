@@ -75,18 +75,19 @@ type hostingResponse struct {
 // the lookup is on, each database with the licence and attribution its use
 // requires, and when the files were consulted.
 type hostingSources struct {
-	Enabled    bool          `json:"enabled"`
-	ASN        *hostingDBOut `json:"asn_db,omitempty"`
-	Country    *hostingDBOut `json:"country_db,omitempty"`
-	City       *hostingDBOut `json:"city_db,omitempty"`
-	LookedUpAt string        `json:"looked_up_at,omitempty"`
+	Enabled     bool          `json:"enabled"`
+	ASN         *hostingDBOut `json:"asn_db,omitempty"`
+	ASNFallback *hostingDBOut `json:"asn_fallback_db,omitempty"`
+	Country     *hostingDBOut `json:"country_db,omitempty"`
+	City        *hostingDBOut `json:"city_db,omitempty"`
+	LookedUpAt  string        `json:"looked_up_at,omitempty"`
 }
 
 // hostingDBOut is one data file's provenance, without where it lies on the
 // collector's host. Modified is when the file was last written, as the
-// collector found it on its last lookup: the databases are refreshed
-// monthly (fibre-hosting-db@.timer), and an address that moved since the
-// file's date is attributed to where it was.
+// collector found it on its last lookup: the IP-to-ASN file is refreshed
+// daily and DB-IP's files monthly (fibre-hosting-db@.timer), and an address
+// that moved since the file's date is attributed to where it was.
 type hostingDBOut struct {
 	Name        string `json:"name"`
 	URL         string `json:"url"`
@@ -104,7 +105,7 @@ func hostingDBOf(d *hosting.DBSource) *hostingDBOut {
 }
 
 func hostingSourcesOf(s hosting.Sources) hostingSources {
-	return hostingSources{Enabled: s.Enabled, ASN: hostingDBOf(s.ASN), Country: hostingDBOf(s.Country), City: hostingDBOf(s.City), LookedUpAt: s.LookedUpAt}
+	return hostingSources{Enabled: s.Enabled, ASN: hostingDBOf(s.ASN), ASNFallback: hostingDBOf(s.ASNFallback), Country: hostingDBOf(s.Country), City: hostingDBOf(s.City), LookedUpAt: s.LookedUpAt}
 }
 
 func (s *Server) handleHosting(w http.ResponseWriter, r *http.Request) {

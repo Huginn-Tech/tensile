@@ -50,6 +50,7 @@ const Schema = `CREATE TABLE IF NOT EXISTS endpoint_hosting (
 	region            TEXT NOT NULL DEFAULT '',  -- its state / province
 	lat               REAL,                      -- the city's approximate coordinates; NULL when unknown
 	lon               REAL,
+	asn_source        TEXT NOT NULL DEFAULT '',  -- iptoasn | dbip: which file gave asn and as_org
 	PRIMARY KEY (validator_address, host)
 )`
 
@@ -61,7 +62,16 @@ var addedColumns = [][2]string{
 	{"region", "TEXT NOT NULL DEFAULT ''"},
 	{"lat", "REAL"},
 	{"lon", "REAL"},
+	{"asn_source", "TEXT NOT NULL DEFAULT ''"},
 }
+
+// The files an AS number can come from (Info.ASNSource): the iptoasn table
+// first, and DB-IP's ASN file only for an address that table has no route
+// for.
+const (
+	ASNSourceIPtoASN = "iptoasn"
+	ASNSourceDBIP    = "dbip"
+)
 
 // EnsureSchema creates the table when it is not there, and adds any column
 // a table created by an older collector is missing (SQLite has no ADD
@@ -74,21 +84,8 @@ func EnsureSchema(db *sql.DB) error {
 	if _, err := db.Exec(Schema); err != nil {
 		return err
 	}
-	rows, err := db.Query(`SELECT name FROM pragma_table_info('endpoint_hosting')`)
+	have, err := tableColumns(context.Background(), db)
 	if err != nil {
-		return err
-	}
-	have := map[string]bool{}
-	for rows.Next() {
-		var n string
-		if err := rows.Scan(&n); err != nil {
-			rows.Close()
-			return err
-		}
-		have[n] = true
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
 		return err
 	}
 	for _, c := range addedColumns {
@@ -102,17 +99,38 @@ func EnsureSchema(db *sql.DB) error {
 	return nil
 }
 
+// tableColumns is the set of endpoint_hosting's columns; empty, not an
+// error, when there is no table (SQLite's pragma answers no rows then).
+func tableColumns(ctx context.Context, db store.Querier) (map[string]bool, error) {
+	rows, err := db.QueryContext(ctx, `SELECT name FROM pragma_table_info('endpoint_hosting')`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	have := map[string]bool{}
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		have[n] = true
+	}
+	return have, rows.Err()
+}
+
 // Meta keys the lookup pass writes. The API reads them to say which files
 // the figures came from and how old those files are.
 const (
-	MetaEnabled         = "hosting_enabled" // yes | no
-	MetaASNDB           = "hosting_asn_db"  // file name
-	MetaASNDBModified   = "hosting_asn_db_modified"
-	MetaCountryDB       = "hosting_country_db"
-	MetaCountryModified = "hosting_country_db_modified"
-	MetaCityDB          = "hosting_city_db"
-	MetaCityModified    = "hosting_city_db_modified"
-	MetaLookedUpAt      = "hosting_looked_up_at"
+	MetaEnabled             = "hosting_enabled" // yes | no
+	MetaASNDB               = "hosting_asn_db"  // file name
+	MetaASNDBModified       = "hosting_asn_db_modified"
+	MetaASNFallbackDB       = "hosting_asn_fallback_db"
+	MetaASNFallbackModified = "hosting_asn_fallback_db_modified"
+	MetaCountryDB           = "hosting_country_db"
+	MetaCountryModified     = "hosting_country_db_modified"
+	MetaCityDB              = "hosting_city_db"
+	MetaCityModified        = "hosting_city_db_modified"
+	MetaLookedUpAt          = "hosting_looked_up_at"
 )
 
 // Address is one resolved address with its own lookup.
@@ -120,6 +138,7 @@ type Address struct {
 	IP        string `json:"ip"`
 	ASN       uint32 `json:"asn,omitempty"`
 	ASOrg     string `json:"as_org,omitempty"`
+	ASNSource string `json:"asn_source,omitempty"` // iptoasn | dbip, with an ASN
 	Country   string `json:"country,omitempty"`
 	Provider  string `json:"provider"`
 	Connected bool   `json:"connected,omitempty"` // the address the heartbeat's TCP connect reached
@@ -128,15 +147,20 @@ type Address struct {
 // Info is what the API publishes per validator. Field names are the API's.
 type Info struct {
 	// Status is ok (an origin AS was found for the primary address),
-	// no_asn (the address resolved but lies in no routed range the file
-	// knows), or unresolved (no recent heartbeat recorded an address for
-	// this host: the name did not resolve, resolved only to addresses the
-	// observer does not dial, or the heartbeat has not reached it yet).
+	// no_asn (the address resolved but lies in no routed range the ASN file
+	// knows, nor in a range of the fallback file), or unresolved (no recent
+	// heartbeat recorded an address for this host: the name did not
+	// resolve, resolved only to addresses the observer does not dial, or the
+	// heartbeat has not reached it yet).
 	Status string `json:"status"`
 	Host   string `json:"host"`
 	IP     string `json:"ip,omitempty"`
 	ASN    uint32 `json:"asn,omitempty"`
 	ASOrg  string `json:"as_org,omitempty"`
+	// ASNSource is the file ASN and ASOrg came from: "iptoasn" (the routing
+	// table's origin AS), or "dbip" (DB-IP's ASN file, asked only when the
+	// routing table has no route for the address). Set with an ASN.
+	ASNSource string `json:"asn_source,omitempty"`
 	// Country is an ISO 3166-1 alpha-2 code. CountryBasis says what it
 	// means: "geolocation" is DB-IP's estimate of where the address is
 	// used; "as_registry" is the country the announcing AS is registered in,
@@ -171,17 +195,28 @@ type Info struct {
 // A database without the table answers an empty map, not an error: that is
 // a collector from before this feature, and the feature is simply off.
 //
-// A table from before the city columns (the API opened the database before
-// the new collector's EnsureSchema ran) reads as having no cities.
+// A table from before the city or asn_source columns (the API opened the
+// database before the new collector's EnsureSchema ran) reads as having no
+// cities, or no ASN sources.
 func Current(ctx context.Context, db store.Querier) (map[string]Info, error) {
 	const base = `SELECT validator_address, host, status, ip, asn, as_org, country, country_basis,
 		provider, addresses_json, resolved_at, resolved_by, looked_up_at`
-	withCity := true
-	rows, err := db.QueryContext(ctx, base+`, city, region, lat, lon FROM endpoint_hosting`)
-	if err != nil && strings.Contains(err.Error(), "no such column") {
-		withCity = false
-		rows, err = db.QueryContext(ctx, base+` FROM endpoint_hosting`)
+	cols, err := tableColumns(ctx, db)
+	if err != nil {
+		return nil, err
 	}
+	if len(cols) == 0 {
+		return map[string]Info{}, nil
+	}
+	withCity, withSource := cols["city"] && cols["region"] && cols["lat"] && cols["lon"], cols["asn_source"]
+	q := base
+	if withCity {
+		q += `, city, region, lat, lon`
+	}
+	if withSource {
+		q += `, asn_source`
+	}
+	rows, err := db.QueryContext(ctx, q+` FROM endpoint_hosting`)
 	if err != nil {
 		if isNoTable(err) {
 			return map[string]Info{}, nil
@@ -199,6 +234,9 @@ func Current(ctx context.Context, db store.Querier) (map[string]Info, error) {
 			&in.Provider, &addrs, &in.ResolvedAt, &in.ResolvedBy, &in.LookedUpAt}
 		if withCity {
 			dest = append(dest, &in.City, &in.Region, &lat, &lon)
+		}
+		if withSource {
+			dest = append(dest, &in.ASNSource)
 		}
 		if err := rows.Scan(dest...); err != nil {
 			return nil, err
@@ -243,13 +281,16 @@ func isNoTable(err error) bool {
 // Sources is the provenance block the API publishes with every hosting
 // figure: whether the feature is on, which files, how old, and under which
 // licence. The licence fields are constants of the data sources, not
-// configuration, because they are facts about those files.
+// configuration, because they are facts about those files. ASNFallback is
+// DB-IP's ASN file, asked only for the addresses the ASN file has no route
+// for, and absent without it.
 type Sources struct {
-	Enabled    bool      `json:"enabled"`
-	ASN        *DBSource `json:"asn_db,omitempty"`
-	Country    *DBSource `json:"country_db,omitempty"`
-	City       *DBSource `json:"city_db,omitempty"`
-	LookedUpAt string    `json:"looked_up_at,omitempty"`
+	Enabled     bool      `json:"enabled"`
+	ASN         *DBSource `json:"asn_db,omitempty"`
+	ASNFallback *DBSource `json:"asn_fallback_db,omitempty"`
+	Country     *DBSource `json:"country_db,omitempty"`
+	City        *DBSource `json:"city_db,omitempty"`
+	LookedUpAt  string    `json:"looked_up_at,omitempty"`
 	// Vantage is the caveat, in words, every hosting figure carries.
 	Caveat string `json:"caveat"`
 }
@@ -298,6 +339,12 @@ func ReadSources(ctx context.Context, db *sql.DB) (Sources, error) {
 		s.ASN = &DBSource{File: f, Modified: meta[MetaASNDBModified],
 			Name: "IPtoASN", URL: "https://iptoasn.com/",
 			License: "Public Domain (ODC PDDL v1.0)", LicenseURL: "https://opendatacommons.org/licenses/pddl/1-0/"}
+	}
+	if f := meta[MetaASNFallbackDB]; f != "" {
+		s.ASNFallback = &DBSource{File: f, Modified: meta[MetaASNFallbackModified],
+			Name: "DB-IP IP to ASN Lite", URL: "https://db-ip.com/db/download/ip-to-asn-lite",
+			License: "CC BY 4.0", LicenseURL: "https://creativecommons.org/licenses/by/4.0/",
+			Attribution: "IP Geolocation by DB-IP"}
 	}
 	if f := meta[MetaCountryDB]; f != "" {
 		s.Country = &DBSource{File: f, Modified: meta[MetaCountryModified],

@@ -127,7 +127,8 @@
 #                   env file with credentials; the README installs the env
 #                   file 0640 root:fibre-observer and reads it only as root
 #   hosting-db      a gzip cut short or failing its CRC, with enough lines
-#                   before the damage, does not replace the good file
+#                   before the damage, does not replace the good file; a
+#                   DB-IP release already in place is not fetched again
 #   snapshot_code   a 503 with "computing": true is asked again until the
 #                   deadline; a 503 without it and a 200 are final at once
 #
@@ -1220,9 +1221,11 @@ echo "== hosting-db"
 HD="$T/hosting"; mkdir -p "$T/fakecurl"
 cat > "$T/fakecurl/curl" <<'SH'
 #!/bin/sh
-out=""
-while [ $# -gt 0 ]; do case $1 in -o) out=$2; shift 2 ;; *) shift ;; esac; done
-cp "$FAKE_CURL_FILE" "$out"
+out="" url=""
+while [ $# -gt 0 ]; do case $1 in -o) out=$2; shift 2 ;; -A) shift 2 ;; -*) shift ;; *) url=$1; shift ;; esac; done
+[ -z "${FAKE_CURL_LOG:-}" ] || echo "$url" >> "$FAKE_CURL_LOG"
+case $url in *db-ip.com*) src=${FAKE_CURL_DBIP:-$FAKE_CURL_FILE} ;; *) src=$FAKE_CURL_FILE ;; esac
+cp "$src" "$out"
 SH
 chmod +x "$T/fakecurl/curl"
 awk 'BEGIN { for (i = 0; i < 200000; i++) printf "1.%d.%d.0\t1.%d.%d.255\t13335\tUS\tCLOUDFLARENET\n", int(i / 256) % 256, i % 256, int(i / 256) % 256, i % 256 }' | gzip -c > "$T/asn-good.gz"
@@ -1232,13 +1235,25 @@ cp "$T/asn-good.gz" "$T/asn-crc.gz"
 printf '\0\0\0\0' | dd of="$T/asn-crc.gz" bs=1 seek=$((gzsize - 8)) conv=notrunc 2>/dev/null
 check test "$(gzip -dc "$T/asn-cut.gz" 2>/dev/null | wc -l)" -ge 100000
 check test "$(gzip -dc "$T/asn-crc.gz" 2>/dev/null | wc -l)" -ge 100000
-hdb() { env PATH="$T/fakecurl:$PATH" FAKE_CURL_FILE="$1" HOSTING_SKIP_COUNTRY=1 HOSTING_SKIP_CITY=1 sh "$HERE/../hosting-db.sh" "$HD"; }
+hdb() { env PATH="$T/fakecurl:$PATH" FAKE_CURL_FILE="$1" HOSTING_SKIP_ASN_FALLBACK=1 HOSTING_SKIP_COUNTRY=1 HOSTING_SKIP_CITY=1 sh "$HERE/../hosting-db.sh" "$HD"; }
 check hdb "$T/asn-good.gz"
 check cmp -s "$T/asn-good.gz" "$HD/ip2asn-combined.tsv.gz"
 check not hdb "$T/asn-cut.gz"
 check cmp -s "$T/asn-good.gz" "$HD/ip2asn-combined.tsv.gz"
 check not hdb "$T/asn-crc.gz"
 check cmp -s "$T/asn-good.gz" "$HD/ip2asn-combined.tsv.gz"
+# The daily run fetches the iptoasn file every time and a DB-IP release
+# once: the release in place is written beside the file, and the next run
+# asks DB-IP for nothing
+awk 'BEGIN { for (i = 0; i < 200000; i++) printf "1.%d.%d.0,1.%d.%d.255,13335,\"Cloudflare, Inc.\"\n", int(i / 256) % 256, i % 256, int(i / 256) % 256, i % 256 }' | gzip -c > "$T/dbip-asn-good.gz"
+hdbf() { : > "$T/curl.log"; env PATH="$T/fakecurl:$PATH" FAKE_CURL_FILE="$T/asn-good.gz" FAKE_CURL_DBIP="$T/dbip-asn-good.gz" FAKE_CURL_LOG="$T/curl.log" HOSTING_SKIP_COUNTRY=1 HOSTING_SKIP_CITY=1 sh "$HERE/../hosting-db.sh" "$HD"; }
+check hdbf
+check cmp -s "$T/dbip-asn-good.gz" "$HD/dbip-asn-lite.csv.gz"
+check grep -qx "$(date -u +%Y-%m)" "$HD/dbip-asn-lite.csv.gz.release"
+check grep -q 'db-ip\.com/free/dbip-asn-lite-' "$T/curl.log"
+check hdbf
+check grep -q 'iptoasn\.com' "$T/curl.log"
+check not grep -q 'db-ip\.com' "$T/curl.log"
 
 echo
 echo "selftest: $ok passed, $bad failed"
