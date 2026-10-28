@@ -420,7 +420,7 @@ func TestRefresherASNFallback(t *testing.T) {
 	}
 	beat(t, st, h1, "routed.example:7980", now.Add(-5*time.Minute), "5.9.1.1", "-> 5.9.1.1:7980")
 	beat(t, st, h2, "new.example:7980", now.Add(-5*time.Minute), "1.0.2.9", "-> 1.0.2.9:7980")
-	beat(t, st, h3, "dark.example:7980", now.Add(-5*time.Minute), "198.51.100.7", "-> 198.51.100.7:7980")
+	beat(t, st, h3, "dark.example:7980", now.Add(-5*time.Minute), "9.9.9.9", "-> 9.9.9.9:7980")
 
 	r := &Refresher{DB: st.DB(), Record: recordOf(st), Cfg: Config{ASNPath: writeFile(t, dir, DefaultASNFile, asnTSV, true)}}
 	if res, err := r.Run(ctx, now); err != nil || res.WithASN != 1 {
