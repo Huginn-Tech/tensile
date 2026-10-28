@@ -14,6 +14,10 @@ package main
 //	<data-dir>/hosting/dbip-country-lite.csv.gz                 writes, when present
 //	<data-dir>/hosting/dbip-city-lite.csv.gz
 //
+// DB-IP's ASN file, asked only for the addresses the IP-to-ASN file has no
+// route for, has no flag: HOSTING_ASN_FALLBACK_DB, else
+// <data-dir>/hosting/dbip-asn-lite.csv.gz when present.
+//
 // No ASN file means the feature is off and nothing is looked up. The pass
 // never makes a network call: addresses come from the heartbeat's own
 // reachability rows.
@@ -50,23 +54,24 @@ func newHostingPass(st *store.Store, dataDir, vantage string, logf func(string, 
 	if cfg.ASNPath == "" {
 		logf("hosting: no ASN database configured; provider/country lookup off (deploy/hosting-db.sh enables it)")
 	} else {
-		logf("hosting: asn db %s, country db %q, city db %q", cfg.ASNPath, cfg.CountryPath, cfg.CityPath)
+		logf("hosting: asn db %s, asn fallback db %q, country db %q, city db %q", cfg.ASNPath, cfg.ASNFallbackPath, cfg.CountryPath, cfg.CityPath)
 	}
 	r := &hosting.Refresher{DB: st.DB(), Cfg: cfg, Vantage: vantage, Logf: logf,
 		Record: func(ctx context.Context, raw []byte) ([]byte, error) { return st.ReachRecord(ctx, st.DB(), raw) }}
 	return func(ctx context.Context, now time.Time) error {
 		// The databases usually arrive after the collector has started
 		// (deploy/hosting-db.sh runs once the new binaries are up), and an
-		// optional one (the city file) can be added to a host that already
-		// has the others. Resolve the paths again every pass, a few stats a
-		// minute, so a file that appears is used without a restart. A file
-		// that disappears is left to Run, which notices it by stat.
+		// optional one (the city file, the ASN fallback) can be added to a
+		// host that already has the others. Resolve the paths again every
+		// pass, a few stats a minute, so a file that appears is used without
+		// a restart. A file that disappears is left to Run, which notices it
+		// by stat.
 		if c := hosting.ResolveConfig(*hostingASNFlag, *hostingCountryFlag, *hostingCityFlag, dataDir); c.ASNPath != "" &&
-			(c.ASNPath != r.Cfg.ASNPath || c.CountryPath != r.Cfg.CountryPath || c.CityPath != r.Cfg.CityPath) {
+			(c.ASNPath != r.Cfg.ASNPath || c.ASNFallbackPath != r.Cfg.ASNFallbackPath || c.CountryPath != r.Cfg.CountryPath || c.CityPath != r.Cfg.CityPath) {
 			if r.Cfg.ASNPath == "" {
-				logf("hosting: asn db %s appeared, country db %q, city db %q; lookup on", c.ASNPath, c.CountryPath, c.CityPath)
+				logf("hosting: asn db %s appeared, asn fallback db %q, country db %q, city db %q; lookup on", c.ASNPath, c.ASNFallbackPath, c.CountryPath, c.CityPath)
 			} else {
-				logf("hosting: databases now asn %s, country %q, city %q", c.ASNPath, c.CountryPath, c.CityPath)
+				logf("hosting: databases now asn %s, asn fallback %q, country %q, city %q", c.ASNPath, c.ASNFallbackPath, c.CountryPath, c.CityPath)
 			}
 			c.Lookback, c.MaxAge = r.Cfg.Lookback, r.Cfg.MaxAge
 			r.Cfg = c

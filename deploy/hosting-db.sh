@@ -12,6 +12,11 @@
 #                              AS registry country. Public Domain (ODC PDDL
 #                              v1.0), https://iptoasn.com/ — refreshed hourly
 #                              upstream; daily here is plenty.
+#   dbip-asn-lite.csv.gz       DB-IP "IP to ASN Lite", CC BY 4.0, same credit
+#                              as below, https://db-ip.com/db/download/ip-to-asn-lite
+#                              — monthly upstream. The collector asks it only
+#                              for an address the iptoasn file has no route
+#                              for. Skip it with HOSTING_SKIP_ASN_FALLBACK=1.
 #   dbip-country-lite.csv.gz   DB-IP "IP to Country Lite", CC BY 4.0,
 #                              https://db-ip.com/db/download/ip-to-country-lite
 #                              — monthly upstream. The licence requires the
@@ -29,13 +34,17 @@
 #
 # All land in the directory given (default: ./hosting). Put it at
 # <data-dir>/hosting and the collector finds them without any configuration;
-# anywhere else, set HOSTING_ASN_DB / HOSTING_COUNTRY_DB / HOSTING_CITY_DB in the network's env
-# file. The collector notices a changed file (size or mtime) on its next
-# endpoint poll and re-runs the lookup; no restart.
+# anywhere else, set HOSTING_ASN_DB / HOSTING_ASN_FALLBACK_DB / HOSTING_COUNTRY_DB / HOSTING_CITY_DB
+# in the network's env file. The collector notices a changed file (size or
+# mtime) on its next endpoint poll and re-runs the lookup; no restart.
 #
 # Run it as the service user so the files are readable by the collector,
-# e.g. from a monthly timer or cron:
+# e.g. from a daily timer or cron:
 #   sudo -u fibre-observer fibre-hosting-db /var/lib/fibre-observer/mocha/hosting
+#
+# Every run fetches the iptoasn file. A DB-IP file is fetched once per
+# release: the release in place is written beside it (<file>.release), and
+# a run that finds no newer release downloads nothing for it.
 #
 # Needs curl and gzip. Exits non-zero, leaving the previous files in place,
 # when a download fails, does not gunzip whole, or does not look like the
@@ -60,8 +69,8 @@ fetch() { # url out
 # as a success, and the counts below read a pipe whose status is wc's and
 # head's, not gzip's, so it would pass them with its first hundred thousand
 # lines and replace the good file, and the collector's lookup, which reads
-# the stream to its end, would then fail every pass until the next month's
-# refresh.
+# the stream to its end, would then fail every pass until a later refresh
+# replaced it.
 check() {
 	if ! gzip -t "$1" 2>/dev/null; then echo "hosting-db: $1: not a whole gzip file (cut short or corrupt)" >&2; return 1; fi
 	n=$(gzip -dc "$1" | wc -l)
@@ -78,14 +87,22 @@ mv -f "$tmp/asn.gz" "$dest/ip2asn-combined.tsv.gz"
 
 # dbip kind out min pattern: fetch DB-IP's "<kind>-lite" release for this
 # month, else last month's (early in a month the new one may not be up yet),
-# check it and rename it into place. Returns non-zero, leaving the previous
-# file, when neither release passes.
+# check it, rename it into place and write its release to <out>.release.
+# A release already in place is not fetched again, so the daily run asks
+# DB-IP for this month's file until it is up and then leaves it alone.
+# Returns non-zero, leaving the previous file, when neither release passes.
 dbip() {
+	have=$(cat "$dest/$2.release" 2>/dev/null || true)
 	for m in "$(date -u +%Y-%m)" "$(date -u -d "$(date -u +%Y-%m-01) -1 day" +%Y-%m 2>/dev/null || true)"; do
 		[ -n "$m" ] || continue
+		if [ "$m" = "$have" ] && [ -s "$dest/$2" ]; then
+			echo "hosting-db: DB-IP $1 release $m already in place"
+			return 0
+		fi
 		if fetch "https://download.db-ip.com/free/dbip-$1-lite-$m.csv.gz" "$tmp/$1.gz" 2>/dev/null &&
 			check "$tmp/$1.gz" "$3" "$4"; then
 			mv -f "$tmp/$1.gz" "$dest/$2"
+			printf '%s\n' "$m" > "$dest/$2.release"
 			echo "hosting-db: DB-IP $1 release $m"
 			return 0
 		fi
@@ -95,6 +112,14 @@ dbip() {
 }
 
 rc=0
+
+# ---- ASN fallback (optional) ----
+# ip_start,ip_end,as_number,as_organization, the organisation quoted when it
+# holds a comma; about 480,000 ranges. The collector asks it only for an
+# address the iptoasn file has no route for.
+if [ "${HOSTING_SKIP_ASN_FALLBACK:-0}" != "1" ]; then
+	dbip asn dbip-asn-lite.csv.gz 100000 '^"?[0-9a-fA-F.:]+"?,"?[0-9a-fA-F.:]+"?,"?[0-9]+"?,' || rc=1
+fi
 
 # ---- country (optional) ----
 if [ "${HOSTING_SKIP_COUNTRY:-0}" != "1" ]; then

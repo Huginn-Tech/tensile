@@ -534,8 +534,8 @@ func TestHealthFailsWhileARouteAnswers500(t *testing.T) {
 	}
 }
 
-// The hosting lookup's IP-to-ASN file is refreshed monthly; one past 45
-// days fails, and its age is said either way.
+// The hosting lookup's IP-to-ASN file is refreshed daily; one past 7 days
+// fails, and its age is said either way.
 func TestHealthFailsAStaleHostingDatabase(t *testing.T) {
 	f := newHealthFixture(t)
 	f.healthy()
@@ -545,6 +545,10 @@ func TestHealthFailsAStaleHostingDatabase(t *testing.T) {
 	ok, detail, found := check(f.health(ts), "hosting_db")
 	if !found || ok || !strings.HasPrefix(detail, "the IP-to-ASN file is 60 days old") {
 		t.Fatalf("hosting_db: found=%v ok=%v %q", found, ok, detail)
+	}
+	f.meta(hosting.MetaASNDBModified, store.TS(f.now.Add(-8*24*time.Hour)))
+	if ok, detail, _ := check(f.health(ts), "hosting_db"); ok || !strings.HasPrefix(detail, "the IP-to-ASN file is 8 days old") {
+		t.Fatalf("an eight-day-old file: ok=%v %q", ok, detail)
 	}
 	f.meta(hosting.MetaASNDBModified, store.TS(f.now.Add(-3*24*time.Hour)))
 	if ok, detail, _ := check(f.health(ts), "hosting_db"); !ok {

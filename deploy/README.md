@@ -362,7 +362,7 @@ failing checks otherwise.
 | `pin` | the chain upgraded past this build's pin (see the Runbook). |
 | `unassignable_publications` | a publication settled in the last 24 hours could not be assigned. |
 | `day_partials` | an audit found the day partials not what the store holds, or a day due stayed unsealed for two days. |
-| `hosting_db` | with the hosting lookup on, the IP-to-ASN file is over 45 days old (7b). |
+| `hosting_db` | with the hosting lookup on, the IP-to-ASN file is over 7 days old (7b). |
 
 `/v1/health` is public, so it says what is wrong and not what the host
 looks like. A check's detail names the stage that failed and for how long,
@@ -2056,6 +2056,7 @@ is read from local files.
 | file | source | licence |
 | --- | --- | --- |
 | `ip2asn-combined.tsv.gz` (required) | [iptoasn.com](https://iptoasn.com/) — IPv4+IPv6 range → origin AS, AS name, AS registry country | Public Domain, [ODC PDDL v1.0](https://opendatacommons.org/licenses/pddl/1-0/) |
+| `dbip-asn-lite.csv.gz` (optional) | [DB-IP IP to ASN Lite](https://db-ip.com/db/download/ip-to-asn-lite) — range → AS number, AS name; asked only for an address the iptoasn file has no route for (a range it marks Not routed, or none: a network announced after its file was made), and the row then says `"asn_source": "dbip"` (`HOSTING_ASN_FALLBACK_DB` to move it, `HOSTING_SKIP_ASN_FALLBACK=1` to skip it) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), same credit as below |
 | `dbip-country-lite.csv.gz` (optional) | [DB-IP IP to Country Lite](https://db-ip.com/db/download/ip-to-country-lite) — range → country (geolocation estimate) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the site prints the required "IP Geolocation by DB-IP" credit |
 | `dbip-city-lite.csv.gz` (optional, ~85 MB) | [DB-IP IP to City Lite](https://db-ip.com/db/download/ip-to-city-lite) — range → city, region, coordinates (adds `city`/`region`/`lat`/`lon` to each validator's `hosting`, which places it on the overview map; absent file = country only; `HOSTING_CITY_DB` / `-hosting-city-db` to move it, `HOSTING_SKIP_CITY=1` to skip it) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), same credit |
 
@@ -2076,27 +2077,31 @@ checks that it gunzips whole (`gzip -t`), its format and its line count,
 and renames, so a failed download never replaces a good file, nor does
 one the server sent complete but whose gzip stream is cut short or fails
 its CRC, which would pass the line count and then fail every lookup until
-the next month's refresh). Within one endpoint poll (a minute) the collector
+a later refresh replaced it). Within one endpoint poll (a minute) the collector
 logs `hosting: N open endpoint(s), N resolved, N with an origin AS`, and
 `/v1/hosting` answers `"enabled": true`. No restart, no unit change. To keep
 the files elsewhere, set `HOSTING_ASN_DB=` and `HOSTING_COUNTRY_DB=` in the
 network's env file (or pass `-hosting-asn-db` / `-hosting-country-db`), then
 restart the collector.
 
-Refresh it monthly (DB-IP publishes monthly; iptoasn hourly) with the
-timer that runs the same script as the service user:
+Refresh it daily with the timer that runs the same script as the service
+user. iptoasn rebuilds its file every hour, so a network announced since
+the last download is known within a day; DB-IP publishes monthly, and the
+script downloads each DB-IP release once (it writes the release beside the
+file, `<file>.release`, and a run that finds no newer one fetches nothing
+from DB-IP):
 
 ```
 sudo systemctl enable --now fibre-hosting-db@mocha.timer
 ```
 
-It is `Persistent`, so a month missed while the host was down is made up
+It is `Persistent`, so a day missed while the host was down is made up
 after boot. It refreshes `<DATA_DIR>/hosting` only: files kept elsewhere
 (`HOSTING_ASN_DB=`) are refreshed by whoever put them there, and
-`HOSTING_SKIP_COUNTRY=1` / `HOSTING_SKIP_CITY=1` in the env file skip the
-DB-IP files. `/v1/hosting` says when each file was last changed, and the
-`hosting_db` health check fails once the IP-to-ASN file is over 45 days
-old: the refresh has stopped. The collector re-runs the lookup when a file's
+`HOSTING_SKIP_ASN_FALLBACK=1` / `HOSTING_SKIP_COUNTRY=1` /
+`HOSTING_SKIP_CITY=1` in the env file skip the DB-IP files. `/v1/hosting`
+says when each file was last changed, and the `hosting_db` health check
+fails once the IP-to-ASN file is over 7 days old: the refresh has stopped. The collector re-runs the lookup when a file's
 size or mtime changes. Removing `ip2asn-combined.tsv.gz` turns the feature
 off again, and the next pass clears the stored lookups so the API never
 serves one that can no longer be reproduced.

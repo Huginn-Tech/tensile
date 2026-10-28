@@ -24,6 +24,12 @@
 //     AS number, AS description and the AS's registry country. Public Domain
 //     (Open Data Commons PDDL v1.0), https://iptoasn.com/. Required: without
 //     it the feature is off.
+//   - DB-IP's IP to ASN Lite CSV (dbip-asn-lite-YYYY-MM.csv.gz): ranges to
+//     AS number and AS organisation. CC BY 4.0, the same credit as below,
+//     https://db-ip.com/db/download/ip-to-asn-lite. Optional, and asked only
+//     for an address the iptoasn file has no route for (a range it marks
+//     Not routed, or none: a network announced after the file was made);
+//     the API says which file each AS came from (asn_source).
 //   - DB-IP's IP to Country Lite CSV (dbip-country-lite-YYYY-MM.csv.gz):
 //     ranges to the country the address is estimated to be used in.
 //     CC BY 4.0, https://db-ip.com/db/download/ip-to-country-lite, and the

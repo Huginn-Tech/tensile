@@ -1097,7 +1097,7 @@ then the remote proof of the exports), `fibre-archive@` (rotation, then
 retirement; `PrivateNetwork=true`), `fibre-vantage-pull@` (each other
 vantage's heartbeats, every minute), `fibre-healthwatch@` (polls
 `/v1/health` and checks what the nightly jobs left behind, posts to a
-webhook and Telegram) and `fibre-hosting-db@` (monthly, the hosting
+webhook and Telegram) and `fibre-hosting-db@` (daily, the hosting
 lookup's IP files), and optional `fibre-litestream@` and `fibre-site@`
 (the site and its `/api` proxy, for a host whose front proxy cannot serve
 files).

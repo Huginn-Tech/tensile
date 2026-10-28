@@ -16,7 +16,7 @@ import (
 // ASNRecord is what the iptoasn file says about one address: the origin AS
 // of the range it falls in, that AS's description, and the country the AS is
 // registered in (the registry's word about the organisation, not a
-// geolocation of the address).
+// geolocation of the address). DB-IP's ASN file gives the first two only.
 type ASNRecord struct {
 	ASN       uint32
 	Org       string
@@ -128,6 +128,37 @@ func LookupASN(path string, targets []netip.Addr) (map[netip.Addr]ASNRecord, err
 	return out, err
 }
 
+// LookupDBIPASN finds the AS of every target in a DB-IP "IP to ASN Lite" CSV
+// file (dbip-asn-lite-YYYY-MM.csv.gz, gzipped or not):
+//
+//	ip_start,ip_end,as_number,as_organization
+//
+// The organisation is quoted when it holds a comma ("Cloudflare, Inc."), so
+// the part after the two addresses is read with a real CSV reader, only for
+// the lines that match a target. The file has no registry country, so
+// ASCountry stays empty. AS 0 and lines that do not parse leave the target
+// out of the result.
+func LookupDBIPASN(path string, targets []netip.Addr) (map[netip.Addr]ASNRecord, error) {
+	out := map[netip.Addr]ASNRecord{}
+	_, _, err := scanRanges(path, dedupe(targets), splitAddrsRest, func(t netip.Addr, rest [][]byte) {
+		if _, seen := out[t]; seen || len(rest) != 1 {
+			return
+		}
+		cr := csv.NewReader(bytes.NewReader(rest[0]))
+		cr.FieldsPerRecord = -1
+		f, err := cr.Read()
+		if err != nil || len(f) < 2 {
+			return
+		}
+		n, err := strconv.ParseUint(strings.TrimSpace(f[0]), 10, 32)
+		if err != nil || n == 0 {
+			return
+		}
+		out[t] = ASNRecord{ASN: uint32(n), Org: strings.TrimSpace(f[1])}
+	})
+	return out, err
+}
+
 // LookupCountry finds the country of every target in a DB-IP "IP to Country
 // Lite" CSV file (gzipped or not):
 //
@@ -209,7 +240,7 @@ type CityRecord struct {
 // ranges with no city, leave the target out of the result.
 func LookupCity(path string, targets []netip.Addr) (map[netip.Addr]CityRecord, error) {
 	out := map[netip.Addr]CityRecord{}
-	_, _, err := scanRanges(path, dedupe(targets), splitCityLine, func(t netip.Addr, rest [][]byte) {
+	_, _, err := scanRanges(path, dedupe(targets), splitAddrsRest, func(t netip.Addr, rest [][]byte) {
 		if _, seen := out[t]; seen || len(rest) != 1 {
 			return
 		}
@@ -221,11 +252,11 @@ func LookupCity(path string, targets []netip.Addr) (map[netip.Addr]CityRecord, e
 	return out, err
 }
 
-// splitCityLine reads only the two addresses of a city line, which never
-// contain a comma, and hands back the remainder whole: splitting all 7.7
-// million lines on every comma would both be slower and cut quoted names
-// in two.
-func splitCityLine(line []byte) (netip.Addr, netip.Addr, [][]byte, bool) {
+// splitAddrsRest reads only the two addresses of a DB-IP city or ASN line,
+// which never contain a comma, and hands back the remainder whole:
+// splitting all 7.7 million city lines on every comma would both be slower
+// and cut quoted names in two.
+func splitAddrsRest(line []byte) (netip.Addr, netip.Addr, [][]byte, bool) {
 	i := bytes.IndexByte(line, ',')
 	if i < 0 {
 		return netip.Addr{}, netip.Addr{}, nil, false

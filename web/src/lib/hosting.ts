@@ -8,7 +8,7 @@
  * it into a verdict about an operator.
  */
 
-export type HostingAddress = { ip: string; asn?: number; as_org?: string; country?: string; provider: string; connected?: boolean };
+export type HostingAddress = { ip: string; asn?: number; as_org?: string; asn_source?: "iptoasn" | "dbip"; country?: string; provider: string; connected?: boolean };
 
 export type Hosting = {
   status: "ok" | "no_asn" | "unresolved";
@@ -16,6 +16,8 @@ export type Hosting = {
   ip?: string;
   asn?: number;
   as_org?: string;
+  /** iptoasn (the routing table's origin AS) | dbip (DB-IP's ASN file, for an address the routing table has no route for) */
+  asn_source?: "iptoasn" | "dbip";
   country?: string;
   /** geolocation (DB-IP's estimate) | as_registry (where the AS is registered) */
   country_basis?: "geolocation" | "as_registry";
@@ -31,8 +33,8 @@ export type Hosting = {
 
 export type DBSource = { name: string; url: string; license: string; license_url: string; attribution?: string };
 
-/** the lookup's databases, each with the licence and the attribution its use requires; city_db only with a city file */
-export type HostingSources = { enabled: boolean; asn_db?: DBSource; country_db?: DBSource; city_db?: DBSource; looked_up_at?: string };
+/** the lookup's databases, each with the licence and the attribution its use requires; asn_fallback_db and city_db only with those files */
+export type HostingSources = { enabled: boolean; asn_db?: DBSource; asn_fallback_db?: DBSource; country_db?: DBSource; city_db?: DBSource; looked_up_at?: string };
 
 export type HostingBucket = { key: string; label?: string; provider?: string; hosts: number; host_share: number; stake: number; stake_share: number };
 
@@ -73,7 +75,7 @@ export function hostingTitle(h: Hosting): string {
   if (h.status === "unresolved") return `${h.host}: no recent address on record, so its network is unknown.`;
   const parts = [
     `${h.host} → ${h.ip}`,
-    h.asn ? asLabel(h) : "no known network for this address",
+    h.asn ? asLabel(h) + (h.asn_source === "dbip" ? " (per DB-IP)" : "") : "no known network for this address",
     h.country ? `${h.country} (${h.country_basis === "geolocation" ? "geolocation estimate" : "where the network is registered"})` : "",
     h.mixed_networks ? `resolves into ${new Set((h.addresses ?? []).map((a) => a.asn).filter(Boolean)).size} networks; shown: the address Tensile connected to` : "",
   ];

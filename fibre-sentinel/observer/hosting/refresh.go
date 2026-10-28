@@ -21,11 +21,15 @@ import (
 )
 
 // Config is where the collector finds the database files. An empty or
-// missing ASNPath turns the feature off; CountryPath and CityPath are
-// optional.
+// missing ASNPath turns the feature off; ASNFallbackPath, CountryPath and
+// CityPath are optional.
 type Config struct {
-	ASNPath     string
-	CountryPath string
+	ASNPath string
+	// ASNFallbackPath is DB-IP's IP to ASN Lite file, asked only for the
+	// addresses the ASN file leaves out: a range it marks Not routed, or no
+	// range at all (a network announced after the file was made).
+	ASNFallbackPath string
+	CountryPath     string
 	// CityPath is DB-IP's IP to City Lite file. Without it hosts are placed
 	// by country only and the API carries no city fields.
 	CityPath string
@@ -42,9 +46,10 @@ type Config struct {
 // DefaultPaths are the file names deploy/hosting-db.sh writes under
 // <data-dir>/hosting, which the collector uses when no path is configured.
 const (
-	DefaultASNFile     = "ip2asn-combined.tsv.gz"
-	DefaultCountryFile = "dbip-country-lite.csv.gz"
-	DefaultCityFile    = "dbip-city-lite.csv.gz"
+	DefaultASNFile         = "ip2asn-combined.tsv.gz"
+	DefaultASNFallbackFile = "dbip-asn-lite.csv.gz"
+	DefaultCountryFile     = "dbip-country-lite.csv.gz"
+	DefaultCityFile        = "dbip-city-lite.csv.gz"
 )
 
 // ResolveConfig fills a Config from a flag value, then an environment
@@ -52,7 +57,8 @@ const (
 // the environment, so setting HOSTING_ASN_DB there needs no unit change),
 // then the default file under <dataDir>/hosting. The default is only taken
 // when the file exists, so a host that never ran the download script keeps
-// the feature off without a warning.
+// the feature off without a warning. The ASN fallback has no flag, only
+// HOSTING_ASN_FALLBACK_DB and the default file.
 func ResolveConfig(flagASN, flagCountry, flagCity, dataDir string) Config {
 	pick := func(flagV, env, file string) string {
 		if flagV != "" {
@@ -68,9 +74,10 @@ func ResolveConfig(flagASN, flagCountry, flagCity, dataDir string) Config {
 		return ""
 	}
 	return Config{
-		ASNPath:     pick(flagASN, "HOSTING_ASN_DB", DefaultASNFile),
-		CountryPath: pick(flagCountry, "HOSTING_COUNTRY_DB", DefaultCountryFile),
-		CityPath:    pick(flagCity, "HOSTING_CITY_DB", DefaultCityFile),
+		ASNPath:         pick(flagASN, "HOSTING_ASN_DB", DefaultASNFile),
+		ASNFallbackPath: pick("", "HOSTING_ASN_FALLBACK_DB", DefaultASNFallbackFile),
+		CountryPath:     pick(flagCountry, "HOSTING_COUNTRY_DB", DefaultCountryFile),
+		CityPath:        pick(flagCity, "HOSTING_CITY_DB", DefaultCityFile),
 	}
 }
 
@@ -158,6 +165,10 @@ func (r *Refresher) Run(ctx context.Context, now time.Time) (Result, error) {
 		r.lastKey = ""
 		return Result{Cleared: n}, err
 	}
+	fallbackStat, fallbackErr := statFile(cfg.ASNFallbackPath)
+	if fallbackErr != nil && cfg.ASNFallbackPath != "" && r.Logf != nil && r.lastKey == "" {
+		r.Logf("hosting: asn fallback file: %v; an address the ASN file has no route for stays without a network", fallbackErr)
+	}
 	countryStat, countryErr := statFile(cfg.CountryPath)
 	if countryErr != nil && cfg.CountryPath != "" && r.Logf != nil && r.lastKey == "" {
 		r.Logf("hosting: country file: %v; countries fall back to the AS registry's", countryErr)
@@ -171,7 +182,7 @@ func (r *Refresher) Run(ctx context.Context, now time.Time) (Result, error) {
 	if err != nil {
 		return Result{Enabled: true}, err
 	}
-	key := fingerprint(targets, asnStat, countryStat+"\n"+cityStat)
+	key := fingerprint(targets, asnStat+"\n"+fallbackStat, countryStat+"\n"+cityStat)
 	if key == r.lastKey && now.Sub(r.lastRun) < cfg.MaxAge {
 		return Result{Enabled: true, Skipped: true, Hosts: len(targets)}, nil
 	}
@@ -183,6 +194,31 @@ func (r *Refresher) Run(ctx context.Context, now time.Time) (Result, error) {
 	asns, err := LookupASN(cfg.ASNPath, all)
 	if err != nil {
 		return Result{Enabled: true}, fmt.Errorf("asn db: %w", err)
+	}
+	// The fallback answers only for what the ASN file left out, so a range
+	// both files know keeps the routing table's origin AS.
+	viaDBIP := map[netip.Addr]bool{}
+	if fallbackStat != "" {
+		var missing []netip.Addr
+		for _, a := range dedupe(all) {
+			if _, ok := asns[a]; !ok {
+				missing = append(missing, a)
+			}
+		}
+		if len(missing) > 0 {
+			fb, err := LookupDBIPASN(cfg.ASNFallbackPath, missing)
+			if err != nil {
+				// Optional: a bad fallback file costs only the addresses
+				// it would have filled in.
+				if r.Logf != nil {
+					r.Logf("hosting: asn fallback db: %v; addresses the ASN file has no route for stay without a network", err)
+				}
+				fb, fallbackStat = nil, ""
+			}
+			for a, rec := range fb {
+				asns[a], viaDBIP[a] = rec, true
+			}
+		}
 	}
 	var countries map[netip.Addr]string
 	if countryStat != "" {
@@ -216,7 +252,7 @@ func (r *Refresher) Run(ctx context.Context, now time.Time) (Result, error) {
 		return res, err
 	}
 	for _, t := range targets {
-		row := buildInfo(t, asns, countries, cities)
+		row := buildInfo(t, asns, viaDBIP, countries, cities)
 		if row.Status != "unresolved" {
 			res.Resolved++
 		}
@@ -229,23 +265,29 @@ func (r *Refresher) Run(ctx context.Context, now time.Time) (Result, error) {
 		addrs, _ := json.Marshal(row.Addresses)
 		if _, err := tx.ExecContext(ctx, `INSERT INTO endpoint_hosting
 			(validator_address, host, status, ip, asn, as_org, as_country, country, country_basis, provider,
-			 addresses_json, resolved_at, resolved_by, looked_up_at, city, region, lat, lon)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 addresses_json, resolved_at, resolved_by, looked_up_at, city, region, lat, lon, asn_source)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(validator_address, host) DO NOTHING`,
 			t.addrHex, t.host, row.Status, row.IP, row.ASN, row.ASOrg, asCountryOf(row, asns), row.Country, row.CountryBasis,
-			row.Provider, string(addrs), row.ResolvedAt, row.ResolvedBy, ts(now), row.City, row.Region, row.Lat, row.Lon); err != nil {
+			row.Provider, string(addrs), row.ResolvedAt, row.ResolvedBy, ts(now), row.City, row.Region, row.Lat, row.Lon, row.ASNSource); err != nil {
 			return res, err
 		}
 	}
 	meta := map[string]string{
-		MetaEnabled:         "yes",
-		MetaASNDB:           filepath.Base(cfg.ASNPath),
-		MetaASNDBModified:   asnStat[strings.LastIndexByte(asnStat, '|')+1:],
-		MetaCountryDB:       "",
-		MetaCountryModified: "",
-		MetaCityDB:          "",
-		MetaCityModified:    "",
-		MetaLookedUpAt:      ts(now),
+		MetaEnabled:             "yes",
+		MetaASNDB:               filepath.Base(cfg.ASNPath),
+		MetaASNDBModified:       asnStat[strings.LastIndexByte(asnStat, '|')+1:],
+		MetaASNFallbackDB:       "",
+		MetaASNFallbackModified: "",
+		MetaCountryDB:           "",
+		MetaCountryModified:     "",
+		MetaCityDB:              "",
+		MetaCityModified:        "",
+		MetaLookedUpAt:          ts(now),
+	}
+	if fallbackStat != "" {
+		meta[MetaASNFallbackDB] = filepath.Base(cfg.ASNFallbackPath)
+		meta[MetaASNFallbackModified] = fallbackStat[strings.LastIndexByte(fallbackStat, '|')+1:]
 	}
 	if countryStat != "" {
 		meta[MetaCountryDB] = filepath.Base(cfg.CountryPath)
@@ -284,7 +326,10 @@ func asCountryOf(in Info, asns map[netip.Addr]ASNRecord) string {
 // fields are set only when the city file's country is the published
 // country, so a row can never read "Frankfurt, FI" when the two monthly
 // files disagree about a range.
-func buildInfo(t target, asns map[netip.Addr]ASNRecord, countries map[netip.Addr]string, cities map[netip.Addr]CityRecord) Info {
+//
+// viaDBIP marks the addresses whose record came from the ASN fallback file;
+// every other record in asns is the ASN file's.
+func buildInfo(t target, asns map[netip.Addr]ASNRecord, viaDBIP map[netip.Addr]bool, countries map[netip.Addr]string, cities map[netip.Addr]CityRecord) Info {
 	in := Info{Host: t.host, ResolvedAt: t.resolvedAt, ResolvedBy: t.resolvedBy, Status: "unresolved", Provider: ProviderUnknown}
 	if len(t.addrs) == 0 {
 		return in
@@ -292,6 +337,15 @@ func buildInfo(t target, asns map[netip.Addr]ASNRecord, countries map[netip.Addr
 	primary := t.addrs[0]
 	if t.connected.IsValid() {
 		primary = t.connected
+	}
+	source := func(a netip.Addr) string {
+		if _, ok := asns[a]; !ok {
+			return ""
+		}
+		if viaDBIP[a] {
+			return ASNSourceDBIP
+		}
+		return ASNSourceIPtoASN
 	}
 	country := func(a netip.Addr) (string, string) {
 		if cc, ok := countries[a]; ok {
@@ -308,7 +362,7 @@ func buildInfo(t target, asns map[netip.Addr]ASNRecord, countries map[netip.Addr
 	for _, a := range t.addrs {
 		rec := asns[a]
 		cc, _ := country(a)
-		in.Addresses = append(in.Addresses, Address{IP: a.String(), ASN: rec.ASN, ASOrg: rec.Org, Country: cc,
+		in.Addresses = append(in.Addresses, Address{IP: a.String(), ASN: rec.ASN, ASOrg: rec.Org, ASNSource: source(a), Country: cc,
 			Provider: ProviderFor(rec.ASN), Connected: t.connected.IsValid() && a == t.connected})
 	}
 	in.IP = primary.String()
@@ -326,6 +380,7 @@ func buildInfo(t target, asns map[netip.Addr]ASNRecord, countries map[netip.Addr
 		return in
 	}
 	in.Status, in.ASN, in.ASOrg, in.Provider = "ok", rec.ASN, rec.Org, ProviderFor(rec.ASN)
+	in.ASNSource = source(primary)
 	return in
 }
 

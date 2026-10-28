@@ -29,6 +29,16 @@ const asnTSV = "1.0.0.0\t1.0.0.255\t13335\tUS\tCLOUDFLARENET\n" +
 	"203.0.113.0\t203.0.113.255\t64500\tNL\tEXAMPLE-NET Example B.V.\n" +
 	"2a01:4f8::\t2a01:4f8:ffff:ffff:ffff:ffff:ffff:ffff\t24940\tDE\tHETZNER-AS\n"
 
+// And of DB-IP's ASN file: no header, the organisation quoted when it holds
+// a comma, no registry country. 1.0.2.0/24 is Not routed in asnTSV (a
+// network announced after that file was made); 5.9.0.0/16 is in both, under
+// another AS here, so the routing table's answer must win.
+const dbipASNCSV = "1.0.0.0,1.0.0.255,13335,\"Cloudflare, Inc.\"\n" +
+	"1.0.2.0,1.0.2.255,44259,\"Ultahost, Inc.\"\n" +
+	"1.0.3.0,1.0.3.255,0,\n" +
+	"5.9.0.0,5.9.255.255,64999,Example Other\n" +
+	"2a0e:97c0::,2a0e:97c0:ffff:ffff:ffff:ffff:ffff:ffff,204770,Cherry Servers\n"
+
 // And of DB-IP's: no header, ZZ for unknown.
 const countryCSV = "0.0.0.0,0.255.255.255,ZZ\n" +
 	"5.9.0.0,5.9.127.255,DE\n" +
@@ -110,6 +120,31 @@ func TestLookupCountry(t *testing.T) {
 	if got[netip.MustParseAddr("5.9.10.10")] != "DE" || got[netip.MustParseAddr("5.9.200.1")] != "FI" ||
 		got[netip.MustParseAddr("2a01:4f8::5")] != "DE" || len(got) != 3 {
 		t.Fatalf("got %v", got)
+	}
+}
+
+func TestLookupDBIPASN(t *testing.T) {
+	p := writeFile(t, t.TempDir(), "asn.csv.gz", dbipASNCSV, true)
+	got, err := LookupDBIPASN(p, addrs("1.0.2.9", "1.0.3.1", "2a0e:97c0::5", "1.0.0.1", "198.51.100.7"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]ASNRecord{
+		"1.0.2.9":      {ASN: 44259, Org: "Ultahost, Inc."},
+		"2a0e:97c0::5": {ASN: 204770, Org: "Cherry Servers"},
+		"1.0.0.1":      {ASN: 13335, Org: "Cloudflare, Inc."},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %v", got)
+	}
+	for a, w := range want {
+		if got[netip.MustParseAddr(a)] != w {
+			t.Fatalf("%s: got %+v want %+v", a, got[netip.MustParseAddr(a)], w)
+		}
+	}
+	// AS 0 is no network, never a record
+	if _, ok := got[netip.MustParseAddr("1.0.3.1")]; ok {
+		t.Fatal("AS 0 must not produce a record")
 	}
 }
 
@@ -357,6 +392,80 @@ func TestRefresherEndToEnd(t *testing.T) {
 	}
 }
 
+// The DB-IP ASN file fills in only what the iptoasn file has no route for,
+// the rows say which file each AS came from, and a broken fallback file
+// costs only those addresses.
+func TestRefresherASNFallback(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "observer.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if err := EnsureSchema(st.DB()); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	now := time.Now().UTC()
+	b1, h1 := consBech(t, 0x51)
+	b2, h2 := consBech(t, 0x52)
+	b3, h3 := consBech(t, 0x53)
+	provs := []scan.FibreProvider{
+		{ConsAddressBech32: b1, Host: "routed.example:7980"},
+		{ConsAddressBech32: b2, Host: "new.example:7980"},
+		{ConsAddressBech32: b3, Host: "dark.example:7980"},
+	}
+	if _, _, err := st.ObserveEndpoints(ctx, provs, 100, now.Add(-time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	beat(t, st, h1, "routed.example:7980", now.Add(-5*time.Minute), "5.9.1.1", "-> 5.9.1.1:7980")
+	beat(t, st, h2, "new.example:7980", now.Add(-5*time.Minute), "1.0.2.9", "-> 1.0.2.9:7980")
+	beat(t, st, h3, "dark.example:7980", now.Add(-5*time.Minute), "198.51.100.7", "-> 198.51.100.7:7980")
+
+	r := &Refresher{DB: st.DB(), Record: recordOf(st), Cfg: Config{ASNPath: writeFile(t, dir, DefaultASNFile, asnTSV, true)}}
+	if res, err := r.Run(ctx, now); err != nil || res.WithASN != 1 {
+		t.Fatalf("without the fallback: %+v %v", res, err)
+	}
+	cur, _ := Current(ctx, st.DB())
+	if in := cur[h2]; in.Status != "no_asn" || in.ASNSource != "" {
+		t.Fatalf("h2 without the fallback: %+v", in)
+	}
+
+	r.Cfg.ASNFallbackPath = writeFile(t, dir, DefaultASNFallbackFile, dbipASNCSV, true)
+	res, err := r.Run(ctx, now.Add(time.Minute))
+	if err != nil || res.Skipped || res.WithASN != 2 {
+		t.Fatalf("with the fallback: %+v %v", res, err)
+	}
+	cur, _ = Current(ctx, st.DB())
+	if in := cur[h1]; in.Status != "ok" || in.ASN != 24940 || in.ASNSource != ASNSourceIPtoASN || in.Provider != ProviderHetzner {
+		t.Fatalf("h1, in both files: %+v", in)
+	}
+	if in := cur[h2]; in.Status != "ok" || in.ASN != 44259 || in.ASOrg != "Ultahost, Inc." || in.ASNSource != ASNSourceDBIP ||
+		in.Provider != ProviderOther || in.Country != "" || len(in.Addresses) != 1 || in.Addresses[0].ASNSource != ASNSourceDBIP {
+		t.Fatalf("h2, from the fallback: %+v", in)
+	}
+	if in := cur[h3]; in.Status != "no_asn" || in.ASN != 0 || in.ASNSource != "" {
+		t.Fatalf("h3, in neither file: %+v", in)
+	}
+	src, err := ReadSources(ctx, st.DB())
+	if err != nil || src.ASNFallback == nil || src.ASNFallback.File != DefaultASNFallbackFile || src.ASNFallback.Attribution == "" || src.ASNFallback.Modified == "" {
+		t.Fatalf("sources: %+v %v", src, err)
+	}
+
+	// a broken fallback file: the pass goes on, those addresses lose their network
+	r.Cfg.ASNFallbackPath = writeFile(t, dir, DefaultASNFallbackFile, "<html>not a database</html>\n", false)
+	if res, err := r.Run(ctx, now.Add(2*time.Minute)); err != nil || res.Skipped || res.WithASN != 1 {
+		t.Fatalf("broken fallback: %+v %v", res, err)
+	}
+	cur, _ = Current(ctx, st.DB())
+	if in := cur[h2]; in.Status != "no_asn" || in.ASNSource != "" {
+		t.Fatalf("h2 with a broken fallback: %+v", in)
+	}
+	if src, _ := ReadSources(ctx, st.DB()); src.ASNFallback != nil {
+		t.Fatalf("a fallback file that did not read is still credited: %+v", src.ASNFallback)
+	}
+}
+
 func TestCurrentWithoutTable(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "observer.db"))
 	if err != nil {
@@ -372,15 +481,21 @@ func TestCurrentWithoutTable(t *testing.T) {
 func TestResolveConfig(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOSTING_ASN_DB", "")
+	t.Setenv("HOSTING_ASN_FALLBACK_DB", "")
 	t.Setenv("HOSTING_COUNTRY_DB", "")
 	t.Setenv("HOSTING_CITY_DB", "")
-	if c := ResolveConfig("", "", "", dir); c.ASNPath != "" || c.CountryPath != "" || c.CityPath != "" {
+	if c := ResolveConfig("", "", "", dir); c.ASNPath != "" || c.ASNFallbackPath != "" || c.CountryPath != "" || c.CityPath != "" {
 		t.Fatalf("nothing there: %+v", c)
 	}
 	os.MkdirAll(filepath.Join(dir, "hosting"), 0o755)
 	def := writeFile(t, filepath.Join(dir, "hosting"), DefaultASNFile, asnTSV, true)
-	if c := ResolveConfig("", "", "", dir); c.ASNPath != def {
+	fb := writeFile(t, filepath.Join(dir, "hosting"), DefaultASNFallbackFile, dbipASNCSV, true)
+	if c := ResolveConfig("", "", "", dir); c.ASNPath != def || c.ASNFallbackPath != fb {
 		t.Fatalf("default file: %+v", c)
+	}
+	t.Setenv("HOSTING_ASN_FALLBACK_DB", "/env/asn-fallback")
+	if c := ResolveConfig("", "", "", dir); c.ASNFallbackPath != "/env/asn-fallback" {
+		t.Fatalf("fallback env: %+v", c)
 	}
 	t.Setenv("HOSTING_ASN_DB", "/env/asn")
 	if c := ResolveConfig("", "", "", dir); c.ASNPath != "/env/asn" {

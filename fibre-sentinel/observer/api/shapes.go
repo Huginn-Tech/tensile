@@ -226,6 +226,7 @@ type hostingOut struct {
 	IP            string            `json:"ip,omitempty"`
 	ASN           uint32            `json:"asn,omitempty"`
 	ASOrg         string            `json:"as_org,omitempty"`
+	ASNSource     string            `json:"asn_source,omitempty"`
 	Country       string            `json:"country,omitempty"`
 	CountryBasis  string            `json:"country_basis,omitempty"`
 	City          string            `json:"city,omitempty"`
@@ -241,7 +242,7 @@ func hostingOf(h *hosting.Info) *hostingOut {
 		return nil
 	}
 	out := &hostingOut{
-		Status: h.Status, Host: h.Host, IP: h.IP, ASN: h.ASN, ASOrg: h.ASOrg, Country: h.Country, CountryBasis: h.CountryBasis,
+		Status: h.Status, Host: h.Host, IP: h.IP, ASN: h.ASN, ASOrg: h.ASOrg, ASNSource: h.ASNSource, Country: h.Country, CountryBasis: h.CountryBasis,
 		City: h.City, Lat: h.Lat, Lon: h.Lon, Provider: h.Provider, MixedNetworks: h.MixedNetworks,
 	}
 	if h.MixedNetworks {

@@ -478,9 +478,10 @@ func (s *Server) vantagesCheck(ctx context.Context, now time.Time) (healthCheck,
 }
 
 // hostingDBStaleAfter is how old the IP-to-ASN file may get before the
-// hosting_db check fails: the monthly refresh (fibre-hosting-db@.timer)
-// missed once, and some.
-const hostingDBStaleAfter = 45 * 24 * time.Hour
+// hosting_db check fails: a week of the daily refresh
+// (fibre-hosting-db@.timer) failing. A network announced since the file
+// was made is not in it, and its hosts show without a network.
+const hostingDBStaleAfter = 7 * 24 * time.Hour
 
 // hostingDBCheck fails while the hosting lookup reads an IP-to-ASN file
 // older than hostingDBStaleAfter: hosts that moved since are attributed to
@@ -496,7 +497,7 @@ func hostingDBCheck(meta map[string]string, now time.Time) (healthCheck, bool) {
 	}
 	days := int(now.Sub(at) / (24 * time.Hour))
 	if now.Sub(at) > hostingDBStaleAfter {
-		return healthCheck{"hosting_db", false, fmt.Sprintf("the IP-to-ASN file is %d days old; fibre-hosting-db@.timer refreshes it monthly", days)}, true
+		return healthCheck{"hosting_db", false, fmt.Sprintf("the IP-to-ASN file is %d days old; fibre-hosting-db@.timer refreshes it daily", days)}, true
 	}
 	return healthCheck{"hosting_db", true, fmt.Sprintf("the IP-to-ASN file is %d days old", days)}, true
 }
