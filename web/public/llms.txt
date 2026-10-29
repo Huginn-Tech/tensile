@@ -12,5 +12,5 @@ The public JSON API is read-only and needs no key. Base URLs: https://tensile.hu
 
 ## License
 
-- Data: Tensile's measurements and the figures derived from them are [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+- Data: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) for Tensile's own figures on the site, in the API and in the exports
 - Credit line: Data from Tensile by Huginn Tech (https://tensile.huginn.tech)
