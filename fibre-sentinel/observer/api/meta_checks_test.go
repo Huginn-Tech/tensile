@@ -59,6 +59,9 @@ func TestMetaCarriesNoCopyOfTheHealthChecks(t *testing.T) {
 	if meta["pin_status"] != "chain_ahead" {
 		t.Fatalf("pin_status: %v", meta["pin_status"])
 	}
+	if meta["data_license"] != "CC-BY-4.0" || meta["attribution"] != "Data from Tensile by Huginn Tech (https://tensile.huginn.tech)" {
+		t.Fatalf("data_license %v, attribution %v", meta["data_license"], meta["attribution"])
+	}
 	var h healthBody
 	getAny(t, ts, "/v1/health", &h)
 	if ok, detail, found := check(h, "pin"); !found || ok || detail == "" {
