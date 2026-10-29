@@ -57,7 +57,7 @@ tmp=$(mktemp -d "${dest%/}/.dl.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
 fetch() { # url out
-	curl -fsSL --retry 3 --max-time 300 -A "tensile-hosting-db/1 (+https://github.com/s0urledd/tensile)" -o "$2" "$1"
+	curl -fsSL --retry 3 --max-time 300 -A "tensile-hosting-db/1 (+https://github.com/Huginn-Tech/tensile)" -o "$2" "$1"
 }
 
 # check file min_lines pattern: the file gunzips whole, has at least

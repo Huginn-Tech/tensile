@@ -7,7 +7,7 @@ validators served their rows. The observer service built on it (store,
 collector, API) lives in `observer/` and `cmd/observer-*`.
 
 ```
-git clone https://github.com/s0urledd/tensile && cd tensile/fibre-sentinel
+git clone https://github.com/Huginn-Tech/tensile && cd tensile/fibre-sentinel
 go build -o bin/ ./cmd/...
 ```
 

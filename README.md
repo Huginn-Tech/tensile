@@ -144,7 +144,7 @@ reader has a copy that does not come from the API
 ## Contributing
 
 Report bugs and suggest changes in
-[GitHub issues](https://github.com/s0urledd/tensile/issues); pull requests are
+[GitHub issues](https://github.com/Huginn-Tech/tensile/issues); pull requests are
 welcome.
 
 ## License

@@ -87,7 +87,7 @@ published either.
 ## 2. Build
 
 ```bash
-git clone https://github.com/s0urledd/tensile && cd tensile
+git clone https://github.com/Huginn-Tech/tensile && cd tensile
 make build            # fibre-sentinel/bin/* and web/out/
 ```
 

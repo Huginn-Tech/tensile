@@ -8,7 +8,7 @@ import { otherSiteOf, previewImage, siteName } from "@/lib/othernet-core";
  * and so that moving this repository, which is a decision still open, is one
  * environment variable rather than a search across the site.
  */
-export const SOURCE_URL = (process.env.NEXT_PUBLIC_SOURCE_URL ?? "https://github.com/s0urledd/tensile").replace(/\/$/, "");
+export const SOURCE_URL = (process.env.NEXT_PUBLIC_SOURCE_URL ?? "https://github.com/Huginn-Tech/tensile").replace(/\/$/, "");
 
 /**
  * The API's public /v1 address, which the API page prints without the /v1 as
