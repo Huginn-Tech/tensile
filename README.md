@@ -149,4 +149,12 @@ welcome.
 
 ## License
 
-Apache-2.0. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
+Code: Apache-2.0. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
+
+Data: Tensile's measurements and the figures derived from them, as the site,
+the API and the exports publish them, are
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Credit line:
+
+```
+Data from Tensile by Huginn Tech (https://tensile.huginn.tech)
+```

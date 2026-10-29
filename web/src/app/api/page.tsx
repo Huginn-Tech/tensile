@@ -24,6 +24,7 @@ const CONVENTIONS: [string, ReactNode][] = [
   ["Pagination", <><code>/v1/blobs</code> pages on from <code>next_before_height</code> and <code>next_before_tx_index</code>, <code>/v1/probes</code> from <code>next_before</code>; <code>truncated</code> is true while more remain.</>],
   ["Errors", <>JSON <code>{"{\"error\": \"…\"}"}</code>: 400 a parameter that cannot be read, 404 nothing on record, 429 over a limit, 503 with <code>&quot;computing&quot;: true</code> while a figure is computed.</>],
   ["Rate limits", <>Per client, 120 requests in a burst, then 10 a second and 16 at once, with <code>/v1/tip</code> counted apart (60 in a burst, then 30 a second) and 30 <code>/v1/tip/stream</code> connections open at once; <code>as_of</code> and <code>exclude</code>, 4 in a burst, then one every 2 seconds, across all clients.</>],
+  ["Data license", <>Tensile&rsquo;s measurements and the figures derived from them are <a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener noreferrer" target="_blank">CC BY 4.0</a>: free to use and share, credited as &ldquo;Data from Tensile by Huginn Tech&rdquo; with a link to tensile.huginn.tech.</>],
 ];
 
 export default function Developers() {

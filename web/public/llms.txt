@@ -1,0 +1,16 @@
+# Tensile
+
+> Tensile is Huginn Tech's open-source explorer for Celestia Fibre. It follows blob settlements, publishers and validators in real time, and checks that every validator serves the rows it endorsed.
+
+The public JSON API is read-only and needs no key. Base URLs: https://tensile.huginn.tech/api/v1 (mainnet) and https://tensile-mocha.huginn.tech/api/v1 (Mocha testnet). /v1/meta carries the data license and the credit line.
+
+## Docs
+
+- [API reference](https://tensile.huginn.tech/api/): every endpoint with its parameters and an example response
+- [Methodology](https://tensile.huginn.tech/methodology/): how every figure is computed
+- [Source code](https://github.com/Huginn-Tech/tensile): Apache-2.0
+
+## License
+
+- Data: Tensile's measurements and the figures derived from them are [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+- Credit line: Data from Tensile by Huginn Tech (https://tensile.huginn.tech)

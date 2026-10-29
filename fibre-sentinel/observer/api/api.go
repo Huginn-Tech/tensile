@@ -906,7 +906,19 @@ type metaResponse struct {
 	// the chain is below it: the height x/signal scheduled it at and the
 	// estimate of when the chain gets there (upgradeSignal).
 	UpgradeSignal *upgradeSignalOut `json:"upgrade_signal,omitempty"`
+	// DataLicense is the license, as an SPDX id, that Tensile's own
+	// measurements and the figures derived from them are published under,
+	// and Attribution is the credit line that goes with it. The chain's own
+	// data is not Tensile's to license.
+	DataLicense string `json:"data_license"`
+	Attribution string `json:"attribution"`
 }
+
+// dataLicense and attribution are /v1/meta's data_license and attribution.
+const (
+	dataLicense = "CC-BY-4.0"
+	attribution = "Data from Tensile by Huginn Tech (https://tensile.huginn.tech)"
+)
 
 // upgradeSignalOut is the part of x/signal's tally the site shows: the
 // scheduled height, and an estimate at the chain's recent pace of how long
@@ -1163,7 +1175,7 @@ func (s *Server) handleMeta(w http.ResponseWriter, r *http.Request) {
 		AppVersion: meta["app_version"], FibreAppVersion: meta["fibre_app_version"], FibreActive: meta["fibre_active"] == "yes",
 		ChainHeight: meta["chain_height"], Counts: counts, LastProbeAt: lastProbe, ServerTime: now.UTC(),
 		ScanGaps: publicGaps(s.scanGaps(ctx)), ParamUncertainty: ranges, PinStatus: pinStatus(meta["app_version"]),
-		UpgradeSignal: signal,
+		UpgradeSignal: signal, DataLicense: dataLicense, Attribution: attribution,
 	})
 }
 

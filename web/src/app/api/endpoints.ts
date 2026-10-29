@@ -616,7 +616,9 @@ const EX_META = `{
   "counts": {"Publications": 8918, "Assignments": 731950, "Probes": 517247, "OpenEndpoints": 80, "Runs": 231},
   "last_probe_at": "2026-10-08T10:55:29.371169265Z",
   "server_time": "2026-10-08T11:41:48.842585946Z",
-  "pin_status": "matches"
+  "pin_status": "matches",
+  "data_license": "CC-BY-4.0",
+  "attribution": "Data from Tensile by Huginn Tech (https://tensile.huginn.tech)"
 }`;
 
 const EX_TIP = `{
@@ -957,7 +959,7 @@ export const GROUPS: Group[] = [
         id: "meta",
         path: "/v1/meta",
         summary: "The methodology version, the chain, Fibre's activation and record counts.",
-        desc: "`methodology_version` is the version of the rules every figure the API serves is computed under; each export manifest carries its own day's. `pin_status` is matches, chain_ahead, chain_behind or unknown: whether the chain's app version matches the celestia-app release Tensile is built against.",
+        desc: "`methodology_version` is the version of the rules every figure the API serves is computed under; each export manifest carries its own day's. `pin_status` is matches, chain_ahead, chain_behind or unknown: whether the chain's app version matches the celestia-app release Tensile is built against. `data_license` is the license Tensile's figures are published under and `attribution` the credit line that goes with it.",
         params: [],
         example: EX_META,
       },
