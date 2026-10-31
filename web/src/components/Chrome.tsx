@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useApi, type Meta, int, ago, since, span, utcWord } from "@/lib/api";
 import { useTip } from "@/lib/tip";
-import { SOURCE_URL, DISPUTE_URL } from "@/lib/site";
+import { ANALYTICS, SOURCE_URL, DISPUTE_URL } from "@/lib/site";
 import { usePhone } from "@/lib/phone";
 import HeaderSearch from "@/components/HeaderSearch";
 
@@ -24,6 +24,7 @@ const NAV: [string, string][] = [
   ["/", "Overview"],
   ["/blobs/", "Blobs"],
   ["/publishers/", "Publishers"],
+  ...(ANALYTICS ? [["/analytics/", "Analytics"] as [string, string]] : []),
   ["/api/", "API"],
 ];
 /** a page of one record marks the list it is a row of: a publisher's page is under Publishers */
