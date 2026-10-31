@@ -1706,53 +1706,36 @@ a.rb-c:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; z-
    The tops of the Blobs and Publishers pages (components/BlobsDeck.tsx,
    components/PublishersTop.tsx).
 
-   One frame each, the validator window's (.pan), with the period's figures as
-   one strip of tabs across it: Blobs draws the picked one per hour (per day)
-   under the strip, Publishers ranks the publishers by it. A period with no
-   settlement is one quiet band instead: the 0, when the last blob was and the
-   period that holds it (and, on Publishers, the escrow held now), in the
-   tabs' own type scale. One coloured thing a top, in the accent: the bars.
-   Everything else is type in the three greys.
+   The period's figures stand in a row of small frames, sentence-case labels over
+   figures in full ink. On Blobs three of them are tabs over a chart in a panel
+   of its own; on Publishers they are only figures, as the table under them
+   ranks the publishers. A period with no settlement keeps the row, with when
+   the last blob was in a wider frame. One coloured thing a top, in the accent:
+   the bars, and the frame of the tab picked.
    ========================================================================== */
 .lg-head { align-items: center; }
 
 .tp { margin: 18px 0 0; }
-.tp-b { display: grid; grid-template-columns: 280px minmax(0, 1fr); }
-.tp-b .tp-lead { min-width: 0; padding: 20px 24px; }
-.tp-b .tp-plot { min-width: 0; padding: 20px 24px; border-left: 1px solid var(--border); }
-.tp-p { display: grid; grid-template-columns: 232px minmax(0, 1fr) minmax(0, 1fr); column-gap: 48px; margin: 18px 0 28px; padding: 20px 24px; }
+.tp-p { margin: 18px 0 20px; }
 /* the list under it keeps the top's own margin, so both tops stand 18 px under the head */
 .tp-p + .pl-list { margin-top: 0; }
-.tp-g { min-width: 0; }
-
-/* the label names the figure and carries the period of the answer shown */
-.tp-lbl { margin: 0; font-size: var(--t-small); line-height: 16px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; }
-.tp-lbl .per { font-weight: 400; letter-spacing: .02em; text-transform: none; }
-.tp-fig { margin: 10px 0 0; font-family: var(--font-table); font-size: 22px; line-height: 28px; font-weight: 500; letter-spacing: -.01em; color: var(--text); font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
-.tp-fig.zero { color: var(--text-3); }
-/* a smaller run inside a line is set solid, so the line keeps its own height */
-.tp-fig .u { margin-left: 2px; line-height: 1; font-size: var(--t-cell); font-weight: 400; letter-spacing: 0; color: var(--text-3); }
-.tp-fig .beside { margin-left: 10px; line-height: 1; font-size: var(--t-cell); font-weight: 400; letter-spacing: 0; color: var(--text-3); }
-.tp-fig .beside b { font-weight: 500; color: var(--text-2); }
-.tp-fig button.warn { margin-left: 4px; vertical-align: 2px; }
-.tp-fig .wait { letter-spacing: 0; }
 /* a publisher a quiet band names: its mark and its short name */
 .tp-who { display: inline-flex; min-width: 0; }
 .tp-who.short .hd { display: none; }
 .tp-lab .nm { max-width: 170px; overflow: hidden; text-overflow: ellipsis; font-size: var(--t-cell); color: var(--text); }
 .tp-lab:hover .nm { color: var(--accent-ink); }
 
-/* a quiet period: one band, a label over one line, every line on the figures' baseline. Under "Last blob", when it
-   settled (and on Publishers who posted it), then the period that holds it, a short step after the words */
-.tp-quiet { white-space: normal; }
-.tp-quiet .say { font-family: var(--sans); font-size: 14px; line-height: 1; font-weight: 400; letter-spacing: 0; color: var(--text-2); white-space: nowrap; }
-.tp-quiet .tp-go { margin-left: 16px; white-space: nowrap; }
-.tp-quiet .tp-who, .tp-quiet .tp-lab { vertical-align: -3px; }
-.tp-quiet .age { font-weight: 500; color: var(--text); }
+/* a quiet period: the wider frame says when the last blob settled (and on Publishers who posted it), then the period
+   that holds it, a short step after the words */
+.tc-say { grid-column: span 2; }
+.tc-say .tc-v { height: 22px; }
+.tc-tabs:has(> :nth-child(2):last-child) .tc-say { grid-column: span 3; }
+.tc-say .say { font-family: var(--sans); font-size: var(--t-cell); font-weight: 400; letter-spacing: 0; color: var(--text-2); }
+.tc-say .tp-go { margin-left: 14px; }
+.tc-say .tp-who, .tc-say .tp-lab { vertical-align: -3px; }
+.tc-say .age { font-weight: 500; color: var(--text); }
 
 /* another period on its way: what is shown steps back until it lands (only when the wait is long enough to see) */
-.tp :is(.tp-fig, .tp-plot svg) { transition: opacity 120ms ease-out; }
-.tp.is-pending :is(.tp-fig, .tp-plot svg) { opacity: .5; transition-delay: 150ms; }
 .tp-go { display: inline-flex; flex: none; align-items: center; gap: 6px; padding: 0; border: 0; background: none; font: 500 var(--t-cell)/20px var(--sans); color: var(--accent-ink); cursor: pointer; }
 .tp-go:hover { text-decoration: underline; text-underline-offset: 3px; }
 .tp-go svg { transition: transform var(--dur) ease-out; }
@@ -1770,64 +1753,44 @@ a.rb-c:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; z-
 .chart svg.hovering .col:not(.hover) .val { fill: var(--tick-dim); }
 .chart svg .col.hover .val { fill: var(--text); }
 
-/* ---- Blobs: the period's figures as one strip of tabs across the frame, a hairline between them, as analytics tools
-   set theirs; under the strip's hairline, the chart of the one picked, titled with what a bar holds ---- */
-.tp.tc { display: block; padding: 0; }
-.tc-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, .8fr); margin: 0; border-bottom: 1px solid var(--border); }
-.tc-tab { position: relative; min-width: 0; padding: 20px 26px 18px; text-align: left; }
-.tc-tab + .tc-tab { border-left: 1px solid var(--line-soft); }
-/* a tab: the label, then its figure; the one picked in full ink with the accent under it, on the strip's hairline */
-.tc-tab[role="tab"] { cursor: pointer; transition: background var(--dur); }
-.tc-tab[role="tab"]:hover { background: var(--wash); }
-.tc-tab[role="tab"]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.tc-tab[aria-selected="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--accent); }
-.tc-k { display: block; font-size: var(--t-small); line-height: 16px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tc-k .per { font-weight: 400; letter-spacing: .02em; text-transform: none; }
+/* ---- the row: four frames, a label over a figure; a tab picked carries the accent on its frame ---- */
+.tc { display: grid; row-gap: 8px; }
+.tc-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.tc-tab { min-width: 0; padding: 10px 14px 11px; text-align: left; background: var(--paper); border: 1px solid var(--border); border-radius: var(--r-ctl); box-shadow: var(--shadow-sm); }
+.tc-tab[role="tab"] { cursor: pointer; transition: border-color var(--dur), background var(--dur); }
+.tc-tab[role="tab"]:hover { background: var(--surface-2); }
+.tc-tab[role="tab"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tc-tab[aria-selected="true"] { border-color: var(--accent); }
+.tc-k { display: block; margin: 0; font-size: var(--t-small); line-height: 16px; font-weight: 400; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tc-tab[aria-selected="true"] .tc-k { color: var(--text-2); }
-.tc-v { display: block; margin: 10px 0 0; font-family: var(--font-table); font-size: 22px; line-height: 28px; font-weight: 400; letter-spacing: -.01em; color: var(--text-2); font-variant-numeric: proportional-nums lining-nums; white-space: nowrap; }
-.tc-tab[aria-selected="true"] .tc-v { font-weight: 500; color: var(--text); }
+.tc-v { display: block; margin: 3px 0 0; font-family: var(--font-table); font-size: 17px; line-height: 22px; font-weight: 500; letter-spacing: -.005em; color: var(--text); font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
+.tc-v.zero { color: var(--text-3); }
+.tc-v .wait { letter-spacing: 0; }
 /* the small words beside a figure sit inside its line (line-height 1), so the line is as tall with them as with the
    loading frame's bar and nothing under it moves when the figures come */
-.tc-v .u, .tc-v .of { margin-left: 2px; font-size: var(--t-cell); font-weight: 400; line-height: 1; letter-spacing: 0; color: var(--text-3); }
-.tc-v .beside { margin-left: 10px; font-size: var(--t-cell); font-weight: 400; line-height: 1; letter-spacing: 0; color: var(--text-3); }
+.tc-v .u, .tc-v .of { margin-left: 2px; font-size: var(--t-small); font-weight: 400; line-height: 1; letter-spacing: 0; color: var(--text-3); }
+.tc-v .beside { margin-left: 8px; font-size: var(--t-small); font-weight: 400; line-height: 1; letter-spacing: 0; color: var(--text-3); }
 .tc-v .beside b { font-weight: 500; color: var(--text-2); }
-.tc-v button.warn { margin-left: 4px; vertical-align: 2px; }
-.tc-static .tc-v { color: var(--text-2); }
-.tp-b.tc .tp-plot { padding: 18px 26px 14px; border-left: 0; border-top: 0; }
+.tc-v button.warn { margin-left: 4px; vertical-align: 1px; }
+.tp-plot { min-width: 0; padding: 12px 16px 8px; }
 .tc :is(.tc-v, .tp-plot svg) { transition: opacity 120ms ease-out; }
 .tc.is-pending :is(.tc-v, .tp-plot svg) { opacity: .5; transition-delay: 150ms; }
 /* the chart's own title: what a bar holds, in the bucket the period uses */
-.tp-ct { margin: 0 0 6px; font-size: var(--t-cell); line-height: 16px; font-weight: 500; letter-spacing: 0; color: var(--text-2); white-space: nowrap; }
+.tp-ct { margin: 0 0 2px; font-size: var(--t-cell); line-height: 16px; font-weight: 500; letter-spacing: 0; color: var(--text-2); white-space: nowrap; }
 .tp-ct .tz { margin-left: 8px; font-size: var(--t-small); font-weight: 400; color: var(--text-3); }
 /* the figures are the whole network's while a filter or search narrows the list: said at the chart title's right */
 .tp-ct .tp-wide { float: right; font-size: var(--t-small); font-weight: 400; color: var(--text-3); }
-/* a tablet: the four still in a row, a little tighter */
-@media (max-width: 960px) {
-  .tc-tab { padding: 16px 18px 14px; }
-  .tc-v { font-size: 20px; }
-  .tp-b.tc .tp-plot { padding: 16px 18px 12px; }
-}
-/* a phone: two by two, a hairline between the rows too */
+/* a phone: two by two; the wider frame takes the row, and the accounts go to the frame's title */
 @media (max-width: 720px) {
   .tc-tabs { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .tc-tab { padding: 14px 16px 12px; }
-  .tc-tab:nth-child(odd) { border-left: 0; }
-  .tc-tab:nth-child(n+3) { border-top: 1px solid var(--line-soft); }
-  .tc-v { margin-top: 6px; font-size: 18px; line-height: 24px; }
-  .tp-b.tc .tp-plot { padding: 14px 16px 10px; }
+  .tc-say, .tc-tabs:has(> :nth-child(2):last-child) .tc-say { grid-column: 1 / -1; }
+  .tc-tab { padding: 9px 12px 10px; }
+  .tc-v { font-size: 16px; }
+  .tc-v .beside { display: none; }
+  .tp-plot { padding: 10px 12px 6px; }
 }
 
-/* ---- Publishers: the Blobs strip's tabs (the publishers active, the blob size, the fees paid, the escrow held now),
-   and under the strip the publishers ranked by the one picked: a row each, its mark, a bar of its part of the whole on
-   a quiet track, the figure, and its share. The tabs take the Blobs rules as they are, four equal ones a row, two by
-   two on a phone. ---- */
-@media (min-width: 721px) { .pp-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-/* a payment promise that timed out: the warning's dot on the fees tab, a mark only (a tab holds no button) */
-.pp-dot { display: inline-block; width: 7px; height: 7px; margin-left: 10px; border-radius: 50%; background: var(--fault); vertical-align: 3px; }
-.pp-plot { min-width: 0; padding: 18px 26px 12px; }
-.pp-plot .tp-ct { margin-bottom: 0; }
-/* the list's title, and at its far end the two parameters an escrow lives by, behind a quiet link */
-.pp-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; column-gap: 16px; row-gap: 4px; margin-bottom: 4px; }
+/* ---- Publishers: over the table, the two parameters an escrow lives by, behind a quiet link ---- */
 button.pp-params { appearance: none; display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none; font: 500 var(--t-cell)/16px var(--sans); color: var(--accent-ink); cursor: pointer; white-space: nowrap; }
 button.pp-params:hover { text-decoration: underline; text-underline-offset: 3px; }
 button.pp-params:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
@@ -1838,83 +1801,18 @@ button.pp-params[aria-expanded="true"] .pp-i { color: var(--paper); background: 
 .pp-kv dd { margin: 0; text-align: right; font-family: var(--font-table); font-weight: 500; color: var(--text); font-variant-numeric: tabular-nums lining-nums; }
 .pp-all { margin: 0; padding-top: 8px; border-top: 1px solid var(--line-soft); }
 .pp-all a { color: var(--accent-ink); }
-.pp-plot .tp-ct button.warn { margin-left: 4px; vertical-align: -5px; }
-/* the escrow's accounts: beside its figure while the tab has the room, else after the list's title (from where the
-   table below turns into a list) */
-.pp-acc { display: none; }
-@media (max-width: 1080px) {
-  .pp-tabs .beside { display: none; }
-  .pp-acc { display: inline; }
-}
-.pp-rows { margin: 0; padding: 0; list-style: none; }
-.pp-row { display: grid; grid-template-columns: 210px minmax(0, 1fr) 104px 64px; column-gap: 24px; align-items: center; height: 38px; }
-.pp-who { display: flex; align-items: center; min-width: 0; overflow: hidden; white-space: nowrap; }
-/* the track is the whole; a bar is never narrower than a sliver */
-.pp-bar { position: relative; height: 8px; border-radius: 2px; background: var(--seg-track); }
-.pp-bar i { position: absolute; top: 0; bottom: 0; left: 0; width: max(3px, calc(100% * var(--w))); border-radius: 2px; background: var(--accent); }
-.pp-rows.is-wait .pp-bar { background: var(--wash); }
-.pp-v { font-family: var(--font-table); font-size: 14px; font-weight: 500; color: var(--text); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums lining-nums; }
-.pp-v .u { margin-left: 1px; font-size: var(--t-cell); font-weight: 400; color: var(--text-3); }
-.pp-sh { font-family: var(--font-table); font-size: var(--t-cell); color: var(--text-2); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums lining-nums; }
-/* the rest as one row, in grey, its words where the names start */
-.pp-rest .pp-bar i { background: var(--tick-dim); }
-.pp-n { padding-left: 23px; font-size: var(--t-cell); color: var(--text-2); }
-.pp-none { margin: 0; padding: 10px 0 12px; font-size: var(--t-cell); color: var(--text-3); }
-.pp .pp-rows { transition: opacity 120ms ease-out; }
-.pp.is-pending .pp-rows { opacity: .5; transition-delay: 150ms; }
-/* a tablet: the Blobs plot's padding, the columns a little narrower */
-@media (max-width: 960px) {
-  .pp-plot { padding: 16px 18px 10px; }
-  .pp-row { grid-template-columns: 180px minmax(0, 1fr) 100px 60px; column-gap: 20px; }
-}
-/* a phone: a row is two lines, the name with its figure and share, then its bar the row's whole width */
-@media (max-width: 720px) {
-  .pp-plot { padding: 14px 16px 8px; }
-  .pp-row { grid-template-columns: minmax(0, 1fr) auto 56px; grid-template-areas: "w v s" "b b b"; column-gap: 14px; row-gap: 7px; height: auto; padding: 9px 0 10px; }
-  .pp-who { grid-area: w; }
-  .pp-v { grid-area: v; }
-  .pp-sh { grid-area: s; }
-  .pp-bar { grid-area: b; height: 6px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .pp .pp-rows { transition: none; }
-}
-
-/* a little narrower: the quiet bands' first column smaller */
-@media (min-width: 961px) and (max-width: 1199px) {
-  .tp-b { grid-template-columns: 240px minmax(0, 1fr); }
-  .tp-b .tp-lead { padding: 20px; }
-  .tp-b .tp-plot { padding-left: 16px; }
-  .tp-p { grid-template-columns: 200px minmax(0, 1fr) minmax(0, 1fr); column-gap: 32px; }
-}
-/* a tablet: Blobs' 0 beside the last blob; on Publishers the 0 and the escrow side by side, the last blob under them */
-@media (max-width: 960px) {
-  .tp-b.is-quiet { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); }
-  .tp-b.is-quiet .tp-plot { padding: 20px 24px 20px 0; border-left: 0; }
-  .tp-p.is-quiet { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 24px; padding: 4px 24px; }
-  .tp-p.is-quiet .tp-g { padding: 16px 0; }
-  .tp-p.is-quiet .tp-g:nth-child(2) { grid-area: 2 / 1 / 3 / 3; border-top: 1px solid var(--line-soft); }
-  .tp-p.is-quiet .tp-g:nth-child(3) { grid-area: 1 / 2; }
-}
-/* a phone: one under the other */
+/* a phone */
 @media (max-width: 720px) {
   .lg-head { flex-wrap: nowrap; }
   .lg-head .seg button, .lg-head .seg button:first-child { padding: 0 12px; }
   .tp { margin-top: 14px; }
-  .tp-b.is-quiet { grid-template-columns: minmax(0, 1fr); }
-  .tp-b.is-quiet .tp-lead { padding: 18px 16px 0; }
-  .tp-b.is-quiet .tp-plot { padding: 16px 16px 18px; }
   .tp-p { margin-bottom: 24px; }
-  .tp-p.is-quiet { grid-template-columns: minmax(0, 1fr); padding: 18px 16px; }
-  .tp-p.is-quiet .tp-g { padding: 0; }
-  .tp-p.is-quiet .tp-g:nth-child(n) { grid-area: auto; border-top: 0; }
-  .tp-p.is-quiet .tp-g + .tp-g { margin-top: 20px; }
 }
 @media (max-width: 400px) {
   .lg-head .seg button, .lg-head .seg button:first-child { padding: 0 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .tp-go svg, .tp :is(.tp-fig, .tp-plot svg) { transition: none; }
+  .tp-go svg, .tc :is(.tc-v, .tp-plot svg) { transition: none; }
 }
 
 /* =============================================================================
@@ -3244,7 +3142,7 @@ button.warn:focus-visible { outline-offset: 0; }
 /* ---- over a list's table: the search on the left, the filters on the right, each over the columns it reaches ---- */
 .lg-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; margin: -4px 0 12px; }
 .lg-bar-l { display: inline-flex; align-items: center; gap: 8px; }
-.pl-bar { justify-content: flex-end; margin: 0 0 12px; }
+.pl-bar { justify-content: space-between; margin: 0 0 12px; }
 .lg-findbox { display: inline-flex; align-items: center; gap: 8px; width: 360px; max-width: 100%; height: 34px; padding: 0 9px 0 11px; border-radius: 999px; border: 1px solid var(--border); background: var(--paper); box-shadow: var(--shadow-sm); color: var(--text-3); transition: border-color var(--dur), box-shadow var(--dur); }
 .lg-findbox:focus-within { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); box-shadow: 0 0 0 3px var(--accent-tint); }
 .lg-findbox.bad { border-color: color-mix(in srgb, var(--hold) 60%, var(--border)); }
