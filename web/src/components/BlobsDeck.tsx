@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { type Blob, type Market, bytes, int, tia, utc } from "@/lib/api";
 import { buckets, type Bucket } from "@/lib/buckets";
+import { dayScale } from "@/lib/dayscale";
 import { type WindowName, WINDOWS, periodName, windowLabel } from "@/lib/window";
 import { unit } from "@/components/Unit";
 import Chart from "@/components/Chart";
@@ -13,7 +14,9 @@ import Warn from "@/components/Warn";
  * the period's figures in a strip, three of them tabs (the settlements, their
  * total size, the fees they paid) over a chart that shows the one picked per
  * hour (per day past a day), titled with what a bar holds; the namespaces close
- * the strip, a figure with no chart.
+ * the strip, a figure with no chart. Past a day the chart stands taller, every
+ * day's figure over its bar, on a scale that keeps a busy day from flattening the
+ * rest (see dayscale.ts); its title names the unit, and the log scale when it is one.
  *
  * Everything in it is one /v1/market answer: while another period loads, the
  * last answer stays whole under its own period, a step back, and the top
@@ -80,6 +83,8 @@ function useNow(skew: number): number {
  * chart is measured then too, and draws nothing before.
  */
 const HEIGHTS: [string, number][] = [["(max-width: 720px)", 136], ["(max-width: 960px)", 150]];
+/** how much taller a chart of days stands: room for a figure over every bar, and for the months under them */
+const DAYS_TALLER = 102;
 function useChartHeight(): number {
   const [h, setH] = useState(150);
   useEffect(() => {
@@ -143,6 +148,7 @@ const METRICS: Record<Metric, {
 };
 
 const WIDE = "The figures cover every namespace and publisher; the filter narrows only the list below.";
+const LOG = "Each step of ten is the same height, so a very busy day does not flatten the others. The figure over a bar is its true value.";
 
 export default function BlobsDeck({ win, onWin, market, record, newest, skew, narrowed = false }: {
   win: WindowName;
@@ -204,6 +210,8 @@ export default function BlobsDeck({ win, onWin, market, record, newest, skew, na
   const series = m ? buckets(m, shownWin, fromFirst) : [];
   const unitWord = shownWin === "24h" ? "hour" : "day";
   const M = METRICS[metric];
+  // 24h is hours, on the bare chart; a period of days takes a scale of its own
+  const days = shownWin === "24h" ? undefined : dayScale(series.map(M.of), metric);
   const keys = Object.keys(METRICS) as Metric[];
   // the tabs as a tab list: one stop for Tab, the arrow keys (and Home / End) moving the choice and the focus with it;
   // a tab is not a <button>, since the fees one may hold the warning dot, which is one
@@ -235,11 +243,11 @@ export default function BlobsDeck({ win, onWin, market, record, newest, skew, na
         </div>
       </div>
       <div className="tp-plot" role="tabpanel" id={`${uid}-plot`} aria-labelledby={`${uid}-${metric}`}>
-        <h3 className="tp-ct">{M.chart} per {unitWord}<span className="tz">UTC</span>{narrowed && <span className="tp-wide" title={WIDE}>Network-wide</span>}</h3>
-        <Chart key={metric} bare padTop={22} height={height} title={`${M.chart} per ${unitWord}`}
+        <h3 className="tp-ct">{M.chart} per {unitWord}<span className="tz">{days?.unit ? `${days.unit} · ` : ""}UTC{days?.log && <> · <span title={LOG}>log scale</span></>}</span>{narrowed && <span className="tp-wide" title={WIDE}>Network-wide</span>}</h3>
+        <Chart key={metric} bare padTop={days ? 24 : 22} height={days ? height + DAYS_TALLER : height} title={`${M.chart} per ${unitWord}`}
           series={[{ key: "v", label: M.unit, color: "var(--accent)" }]}
           rows={series.map((c) => ({ x: c.title, label: c.label, short: c.short, values: { v: M.of(c) }, note: M.note(c), partial: c.partial }))}
-          fmt={M.fmt} empty={m ? "nothing settled" : "loading…"} />
+          fmt={M.fmt} empty={m ? "nothing settled" : "loading…"} scale={days} />
       </div>
     </section>
   );
