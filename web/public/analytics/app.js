@@ -105,7 +105,7 @@ shadow.querySelector("#page").innerHTML = `<main class="page">
         </div>
       </div>
       <div class="how">
-        <div class="say"><p class="say-how"></p><div class="say-r"><button type="button" class="clear" hidden>Clear picks</button><span>Click rows to compare, up to 3</span></div></div>
+        <div class="say-r"><button type="button" class="clear" hidden>Clear picks</button><span>Click rows to compare, up to 3</span></div>
       </div>
       <div class="tb">
         <div class="tb-list"></div>
@@ -1095,13 +1095,13 @@ function ruler(W) {
   box.innerHTML = stops.map((b, i) => `<span><i style="height:${evenPx(tall(b)) / C.dp}px"></i>${esc(bytes(b))}${i === stops.length - 1 && T.clipped ? " or more" : ""}</span>`).join("");
 }
 
-// A date starts where its day does, so it never sits off its rule; the last one ends with the plot when it would run past it, and stays out only if that touches the date before.
+// A date starts where its day does, so it never sits off its rule; the last one ends with the plot when it would run past it, and stays out only if that touches the date before. One that would touch the column's name stays out too.
 function ticks(list) {
-  const box = $("#publishers .pb-ticks");
+  const box = $("#publishers .pb-ticks"), name = $("#publishers .pb-h > span").offsetWidth + 8;
   box.innerHTML = list.map((d) => `<span>${esc(day(d.day))}</span>`).join("");
   $$("span", box).forEach((e, k) => {
     const x = dayX(list[k]) - INSET, at = Math.min(x, C.w - e.offsetWidth), prev = k && dayX(list[k - 1]) - INSET + e.offsetWidth;
-    e.style.left = at + "px"; e.hidden = at < x && k > 0 && at < prev + 8;
+    e.style.left = at + "px"; e.hidden = at < name || (at < x && k > 0 && at < prev + 8);
   });
 }
 
@@ -1233,8 +1233,8 @@ try {
 const { $, $$, el, esc, sum, calm, token, pct, readyPct, sharePct, int, count, day, N, U, TAIL, RANKS, inkOn, agg, regions, regionOf, seg, showTip, tipAt, hideTip, tipHead, tipRow, area, on, state, lit, pin, MAX_PINS } = M;
 
 const root = $("#hosting"), box = $(".tb", root), list = $(".tb-list", root), vs = $(".tb-vs", root), clear = $(".clear", root), line = $(".sec-h p", root), notes = $(".notes", root);
-// SORTED_TOP: rows before the others. LOW_MAX: hosts the sentence names. SHARDS_NAMED: groups the sentence names for shards not served. SUB_NAMES: validators a row names when they fit. TIP_NAMES: validators a tooltip lists.
-const SORTED_TOP = 8, LOW_MAX = 6, SHARDS_NAMED = 2, SUB_NAMES = 3, TIP_NAMES = 10, SHORT_WINDOW = .6, PIPS_MAX = 7, TAU = Math.PI * 2, DEG = Math.PI / 180;
+// SORTED_TOP: rows before the others. SUB_NAMES: validators a row names when they fit. TIP_NAMES: validators a tooltip lists.
+const SORTED_TOP = 8, SUB_NAMES = 3, TIP_NAMES = 10, SHORT_WINDOW = .6, PIPS_MAX = 7, TAU = Math.PI * 2, DEG = Math.PI / 180;
 // Our pass mark for checks answered. It is a choice, not a protocol rule, and the card says so.
 const MARK = .99;
 // Under this share ready, with hosts that do not report, a row has no reading worth printing.
@@ -1308,13 +1308,12 @@ function model() {
   // The weighing ranks the ring's groups. The table is one list, largest first in whatever column it is sorted by.
   const ranked = [...src].sort((a, b) => weight(b) - weight(a) || b.vp - a.vp), named = ranked.slice(0, RANKS), unnamed = ranked.slice(RANKS);
   const resting = S.sort === S.weigh && S.dir < 0, top = ordered(src).slice(0, SORTED_TOP), shown = new Set(top.map((g) => g.key));
-  const served = [...src].filter((g) => g.not_served).sort((a, b) => b.not_served - a.not_served).slice(0, SHARDS_NAMED);
   const tail = src.filter((g) => !shown.has(g.key));
   const all = { ...agg(src, "__all", `All ${src.length} ${noun()}`), sum: true, lows: [], rep: sum(src, (g) => g.rep) };
   const rest = { ...agg(tail, "__rest", `${tail.length} ${tail.length === 1 ? "other" : "others"}`), sum: true, lows: [], rep: sum(tail, (g) => g.rep) };
   // The scale is the weighing's, so a bar keeps its length through every sort. The others are a figure, or their bar would halve every other.
   const scale = weight(ranked[0]);
-  V = { src, ranked, named, unnamed, top, served, tail, all, rest, scale, resting, tailKeys: new Set(tail.map((g) => g.key)), step: new Map(named.map((g, i) => [g.key, `var(--p${i + 1})`])), rank: new Map(named.map((g, i) => [g.key, i + 1])), mem, byKey: new Map(), slices: new Map(),
+  V = { src, ranked, named, unnamed, top, tail, all, rest, scale, resting, tailKeys: new Set(tail.map((g) => g.key)), step: new Map(named.map((g, i) => [g.key, `var(--p${i + 1})`])), rank: new Map(named.map((g, i) => [g.key, i + 1])), mem, byKey: new Map(), slices: new Map(),
     midChecks: midOf(hosted.map((v) => v.reach?.den ?? 0)) };
   [...src, all, rest].forEach((g) => V.byKey.set(g.key, g));
   src.forEach((g) => { g.win = windowOf(g); });
@@ -1340,8 +1339,8 @@ function setHot(f) {
 }
 const paintLine = () => { const t = N().totals; line.textContent = `${t.hosts} of ${t.validators_bonded} validators run a Fibre host, ${sharePct(t.host_vp_share)} of voting power.`; };
 
-/* ---------- the card answers in words: who, where, how well ---------- */
-const sayWho = $(".say-who", root), sayWhere = $(".say-where", root), sayHow = $(".say-how", root);
+/* ---------- the card answers in words: who, where ---------- */
+const sayWho = $(".say-who", root), sayWhere = $(".say-where", root);
 // Fewest groups, biggest first, that reach a third of all Fibre hosts.
 function toThird(rows, w, total) {
   let c = 0, n = 0;
@@ -1375,18 +1374,6 @@ function say() {
   const reg = regions().sort((a, b) => (hosts ? b.hosts - a.hosts : b.share - a.share))[0];
   sayWhere.innerHTML = (hosts ? `<b>${esc(reg.name)}</b> has the most Fibre hosts, <b>${reg.hosts}</b> of ${t.hosts}.` : reg.share >= .5 ? `Most voting power runs in <b>${esc(reg.name)}</b>, <b>${sharePct(reg.share)}</b>.` : `<b>${esc(reg.name)}</b> hosts the most voting power, <b>${sharePct(reg.share)}</b>.`)
     + `<small>${int(t.cities)} cities · ${int(t.countries)} countries</small>`;
-
-  // Hosts, in every view: a sentence that quotes a host names the host, so it can never read as a row's own figure.
-  const checked = n.validators.filter((v) => v.has_host && rateOf(v) != null), lows = checked.filter(lowHost).sort((a, b) => rateOf(a) - rateOf(b));
-  const hostOf = (v) => `<b>${esc(v.moniker)}</b> on ${esc(short(v.company))} in ${esc(v.city)} ${pct(rateOf(v), 2)}`;
-  const line1 = (k) => `<b>${checked.length - lows.length} of ${checked.length}</b> hosts answered at least 99% of checks.${!lows.length ? "" : k ? ` Under 99%: ${lows.slice(0, k).map(hostOf).join(", ")}${lows.length > k ? ` and ${lows.length - k} more` : ""}.` : ` ${lows.length} did not.`}`;
-  const w = U().market[M.young(state.net) ? "all" : "30d"], asked = sum(n.providers, settled), missed = sum(n.providers, (g) => g.not_served);
-  const blobs = `${servedScope()}: ${w.settlements ? `${count(w.settlements, "settlement")}, ${w.timeouts ? `${int(w.timeouts)} timed out` : "none timed out"}` : "no settlements"}.`;
-  const shards = missed ? `${int(missed)} of ${int(asked)} shards were not served, the most ${prov() ? "at" : "in"} ${and(V.served.map((g) => `${esc(nameOf(g))} ${int(g.not_served)}`))}.` : `All ${int(asked)} shards asked for were served.`;
-  sayHow.innerHTML = `<span class="lead"></span><small>${blobs} ${shards}</small>`;
-  // As many hosts as the line holds, worst first; the count says the rest and the table lists them.
-  const lead1 = $(".lead", sayHow);
-  for (let k = Math.min(lows.length, LOW_MAX); k >= 0; k--) { lead1.innerHTML = line1(k); if (lead1.scrollWidth <= lead1.clientWidth) break; }
 
   // Only stated while the data bears it out, on this network, at this read.
   const quiet = n.validators.filter((v) => v.has_host && v.readiness === "not_reported"), working = quiet.length && quiet.every((v) => v.signing?.signed > 0 && v.reach?.num > 0);

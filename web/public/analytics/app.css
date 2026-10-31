@@ -334,9 +334,10 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #publishers th.a { padding-left: 18px; padding-right: 0; }
 #publishers .pb-h { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; line-height: 14px; }
 #publishers .pb-h button::after { left: auto; right: calc(100% + 4px); }
-#publishers .pb-h > span { grid-column: 1 / -1; }
-/* the dates sit under the column's name, each over the line that marks its day */
-#publishers .pb-ticks { position: relative; height: 14px; margin-top: 2px; font-size: var(--fs-tick); color: var(--ink2); }
+#publishers .pb-h > span { grid-area: 1 / 1; justify-self: start; }
+#publishers .pb-h > button { grid-area: 1 / 2; }
+/* the dates share the column name's line, as every head sits on one line, each over the line that marks its day */
+#publishers .pb-ticks { grid-area: 1 / 1; position: relative; height: 14px; font-size: var(--fs-tick); color: var(--ink2); }
 #publishers .pb-ticks span { position: absolute; top: 0; line-height: 14px; white-space: nowrap; }
 
 #publishers tbody tr { transition: opacity .12s; }
@@ -434,7 +435,7 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #hosting .say p small { display: block; font-size: var(--fs-lab); line-height: 20px; letter-spacing: 0; color: var(--ink2); text-wrap: pretty; }
 #hosting .say .lead { display: block; overflow: hidden; white-space: nowrap; }
 /* a caption on the sentence's quiet second line, so it never narrows the first */
-#hosting .say-r { position: absolute; right: 0; bottom: 0; display: flex; align-items: center; gap: 12px; font-size: var(--fs-lab); line-height: 20px; color: var(--ink2); white-space: nowrap; }
+#hosting .say-r { display: flex; justify-content: flex-end; align-items: center; gap: 12px; font-size: var(--fs-lab); line-height: 20px; color: var(--ink2); white-space: nowrap; }
 #hosting .clear { height: 20px; padding: 0 9px; border: 1px solid var(--rule4); border-radius: 999px; font-size: var(--fs-note); font-weight: 500; color: var(--ink); transition: background .12s; }
 #hosting .clear:hover { background: var(--wash2); }
 #hosting .clear[hidden] { display: none; }
@@ -704,6 +705,5 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #hosting .vs-col .vs-m > b { font-size: var(--fs-unit); }
 
 @media (max-width: 1100px) {
-  #hosting .say-r { position: static; justify-content: flex-end; margin-top: 2px; }
   #hosting .mkey { position: static; margin-top: 4px; }
 }
