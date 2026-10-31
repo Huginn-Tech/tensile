@@ -2158,7 +2158,7 @@ button.pp-params[aria-expanded="true"] .pp-i { color: var(--paper); background: 
 .pl-t.has-to th.c-sh { width: min(114px, calc((100vw - 599px) / 4 - 21px)); }
 .pl-t.has-to th.c-pub { width: 118px; }
 .pl-t.has-to .lg-who .hd { display: none; }
-.pl-t th.c-t, .pl-t td.c-t { text-align: center; }
+.pl-t th.c-t, .pl-t td.c-t, .pl-t th.c-ns, .pl-t td.c-ns, .pl-t th.c-n, .pl-t td.c-n { text-align: center; }
 /* a head that sorts: the word is the button, the order in force an arrow just before it, in the head's padding */
 .pl-t th .sort { all: unset; position: relative; cursor: pointer; border-radius: 3px; transition: color var(--dur); }
 .pl-t th .sort:hover { color: var(--text-2); }
