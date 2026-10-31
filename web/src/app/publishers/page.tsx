@@ -13,7 +13,7 @@ import Pager, { usePage } from "@/components/Pager";
 import Picker, { type Choice } from "@/components/Picker";
 import Ident from "@/components/Ident";
 import { Who } from "@/components/Ledger";
-import PublishersTop from "@/components/PublishersTop";
+import PublishersTop, { EscrowParams } from "@/components/PublishersTop";
 import { age, monthDayTime } from "@/components/BlobsDeck";
 
 /** rows per page of the publisher list */
@@ -67,10 +67,9 @@ function SortHead({ k, sort, onSort, children }: { k: SortKey; sort: Sort; onSor
 const plural = (n: number, w: string) => `${int(n)} ${w}${n === 1 ? "" : "s"}`;
 
 /**
- * Publishers: the accounts that pay for blobs from escrow. A framed top of
- * the period's figures as tabs over the publishers ranked by the one picked
- * (components/PublishersTop.tsx), then the publishers in the Blobs list's own
- * rows: what each posted and paid in the period, and what its escrow can
+ * Publishers: the accounts that pay for blobs from escrow. The period's
+ * figures in a row of small frames (components/PublishersTop.tsx), then the
+ * publishers in the Blobs list's own rows: what each posted and paid in the period, and what its escrow can
  * still spend, in a lane of its own.
  * Every figure is the chain's, read through the API; none was measured by
  * Tensile.
@@ -94,7 +93,7 @@ function Page() {
   const list = listed.data;
   // every account on record: what each posts as a rule (its average blob over all of them), and the choices of Find
   const { data: all } = useApi<{ publishers: PublisherWithQueue[] }>("/v1/publishers?window=all");
-  // the price of a blob, for the low-escrow warning: the parameters' own 5-minute stream (PublishersTop's too), asked
+  // the price of a blob, for the low-escrow warning: the parameters' own 5-minute stream (EscrowParams's too), asked
   // again soon after a failure, so one failed first answer does not lose the warning for the life of the page
   const pf = useApi<Params>("/v1/params", 300000).data?.price_formula;
   const tip = useTip(); // the page's one tip: no request of its own
@@ -149,12 +148,13 @@ function Page() {
       {/* the period's figures only: the list under them is a stream of its own, which says so in its own rows */}
       {market.error && <div className="note hold"><span className="label">Observer</span><p>{failedWords(market)}: the period&rsquo;s figures could not be {m ? "refreshed" : "read"}.{m && market.fetchedAt ? ` They are the ones read at ${hhmm(market.fetchedAt)}.` : ""}</p></div>}
 
-      {/* the period's figures as tabs over the publishers ranked by the one picked */}
+      {/* the period's figures */}
       <PublishersTop m={pre ? null : m} win={win} list={list} all={all} now={now} pre={pre} onWin={setWin} />
 
       <section id="list" className="listing pl-list">
-        {/* the search over the table's right, above the escrow lane */}
+        {/* the escrow's parameters, then the search over the table's right, above the escrow lane */}
         <div className="lg-bar pl-bar">
+          <EscrowParams />
           <span className="pl-find">
             <Picker name="Find a publisher" icon={FIND_ICON} value="" text={null} choices={findChoices} find
               accept={(s) => (/^celestia1[0-9a-z]{38}$/.test(s) ? s : null)} placeholder="Address" onPick={(a) => { if (a) router.push(`/publisher/?addr=${a}`); }} />

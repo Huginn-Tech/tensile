@@ -10,13 +10,13 @@ import Chart from "@/components/Chart";
 import Warn from "@/components/Warn";
 
 /**
- * The Blobs page's top: how much was settled in the period and when. One frame:
- * the period's figures in a strip, three of them tabs (the settlements, their
- * total size, the fees they paid) over a chart that shows the one picked per
+ * The Blobs page's top: how much was settled in the period and when. The period's
+ * figures in a row of small frames, three of them tabs (the settlements, their
+ * total size, the fees they paid) over a panel with a chart of the one picked per
  * hour (per day past a day), titled with what a bar holds; the namespaces close
- * the strip, a figure with no chart. Past a day the chart stands taller, every
- * day's figure over its bar, on a scale that keeps a busy day from flattening the
- * rest (see dayscale.ts); its title names the unit, and the log scale when it is one.
+ * the row, a figure with no chart. Past a day the chart stands taller, every
+ * day's figure over its bar. It keeps a busy period from flattening the rest on
+ * one scale (see dayscale.ts); its title names the unit, and the log scale when it is one.
  *
  * Everything in it is one /v1/market answer: while another period loads, the
  * last answer stays whole under its own period, a step back, and the top
@@ -24,7 +24,7 @@ import Warn from "@/components/Warn";
  *
  * A filter or search narrows the list below, never these figures: while one is on, the top says it is network-wide.
  *
- * A period with no settlement folds the top to one band: the 0, when the last
+ * A period with no settlement folds the top to the row alone: the 0, when the last
  * blob settled (from the newest rows of /v1/blobs, which the page passes in),
  * and the shortest longer period that holds it, one click away.
  */
@@ -78,13 +78,14 @@ function useNow(skew: number): number {
 }
 
 /**
- * The chart's height at the page's width: its bars are 102 px under the figures, as they are on a tablet, 88 on a phone. The
- * page's HTML is drawn for a desktop and the browser takes it over as it is, so the width is read once it has: the
- * chart is measured then too, and draws nothing before.
+ * The chart's height at the page's width. The page's HTML is drawn for a desktop and the browser takes it over as it
+ * is, so the width is read once it has: the chart is measured then too, and draws nothing before.
  */
 const HEIGHTS: [string, number][] = [["(max-width: 720px)", 136], ["(max-width: 960px)", 150]];
-/** how much taller the chart stands on its scale: room for a figure over every bar, and for the months under the days */
-const ON_SCALE = 102;
+/** how much taller the chart stands past a day: room for the months under the days, and for a day far over the others */
+const ON_DAYS = 102;
+/** how much taller the hours stand: room for a figure over every bar */
+const ON_HOURS = 17;
 function useChartHeight(): number {
   const [h, setH] = useState(150);
   useEffect(() => {
@@ -120,7 +121,7 @@ const plural = (n: number, w: string) => `${int(n)} ${w}${n === 1 ? "" : "s"}`;
 
 /** the lead label: the measure in caps, then the answer's own period */
 export function Lbl({ name, per }: { name: string; per: string }) {
-  return <h2 className="tp-lbl">{name} <span className="per">· {per}</span></h2>;
+  return <h2 className="tc-k">{name} <span className="per">· {per}</span></h2>;
 }
 
 /**
@@ -178,27 +179,29 @@ export default function BlobsDeck({ win, onWin, market, record, newest, skew, na
 
   // another period is on its way: what is shown stays, a step back, until it lands
   const pending = !!m && m.window.name !== win;
-  const cls = (more: string) => `pan tp tp-b${more}${pending ? " is-pending" : ""}`;
+  const cls = (more: string) => `tp tc${more}${pending ? " is-pending" : ""}`;
 
   // ---- a period with no settlement: the 0, when the last one was, and the period that holds it ----
   if (m && m.settlements === 0) {
     const next = last && now ? holding(shownWin, lastAt, now) : null;
     return (
       <section className={cls(" is-quiet")} aria-label="The period's settlements" aria-busy={pending || undefined}>
-        <div className="tp-lead">
-          <Lbl name="Settlements" per={narrowed ? `${per} · network-wide` : per} />
-          <p className="tp-fig zero">0</p>
-        </div>
-        <div className="tp-plot">
-          <h2 className="tp-lbl">Last blob</h2>
-          <p className="tp-fig tp-quiet">
-            <span className="say">{last
-              ? <>settled {now
-                ? <Link className="age" href={`/blob/?hash=${last.promise_hash}`} title={`#${int(last.settlement_height)} · ${dayTime(last.settlement_time)}`}>{age(now - lastAt)} ago</Link>
-                : <span className="wait">0 d 00 h ago</span>}</>
-              : newest ? "None on record" : <span className="wait">settled 0 d 00 h ago</span>}</span>
-            {next && <ShowPeriod to={next} onWin={onWin} />}
-          </p>
+        <div className="tc-tabs">
+          <div className="tc-tab">
+            <Lbl name="Settlements" per={narrowed ? `${per} · network-wide` : per} />
+            <p className="tc-v zero">0</p>
+          </div>
+          <div className="tc-tab tc-say">
+            <h2 className="tc-k">Last blob</h2>
+            <p className="tc-v">
+              <span className="say">{last
+                ? <>settled {now
+                  ? <Link className="age" href={`/blob/?hash=${last.promise_hash}`} title={`#${int(last.settlement_height)} · ${dayTime(last.settlement_time)}`}>{age(now - lastAt)} ago</Link>
+                  : <span className="wait">0 d 00 h ago</span>}</>
+                : newest ? "None on record" : <span className="wait">settled 0 d 00 h ago</span>}</span>
+              {next && <ShowPeriod to={next} onWin={onWin} />}
+            </p>
+          </div>
         </div>
       </section>
     );
@@ -222,7 +225,7 @@ export default function BlobsDeck({ win, onWin, market, record, newest, skew, na
     if (to) { e.preventDefault(); pick(to); }
   };
   return (
-    <section className={cls(" tc")} aria-label="The period's settlements" aria-busy={pending || undefined}>
+    <section className={cls("")} aria-label="The period's settlements" aria-busy={pending || undefined}>
       <div className="tc-tabs" role="tablist" aria-label="What the chart shows" ref={tabsRef} onKeyDown={onKey}>
         {keys.map((k) => {
           const x = METRICS[k];
@@ -236,14 +239,14 @@ export default function BlobsDeck({ win, onWin, market, record, newest, skew, na
             </div>
           );
         })}
-        <div className="tc-tab tc-static" title="Namespaces the period's settlements used, of every namespace on record.">
+        <div className="tc-tab" title="Namespaces the period's settlements used, of every namespace on record.">
           <span className="tc-k">Namespaces</span>
           <span className="tc-v">{m?.namespaces != null ? <>{int(m.namespaces)}{m.namespaces_total != null && <span className="of"> of {int(m.namespaces_total)}</span>}</> : m ? "—" : <span className="wait">0 of 00</span>}</span>
         </div>
       </div>
-      <div className="tp-plot" role="tabpanel" id={`${uid}-plot`} aria-labelledby={`${uid}-${metric}`}>
+      <div className="pan tp-plot" role="tabpanel" id={`${uid}-plot`} aria-labelledby={`${uid}-${metric}`}>
         <h3 className="tp-ct">{M.chart} per {unitWord}<span className="tz">{scale.unit ? `${scale.unit} · ` : ""}UTC{scale.log && <> · <span title={LOG}>log scale</span></>}</span>{narrowed && <span className="tp-wide" title={WIDE}>Network-wide</span>}</h3>
-        <Chart key={metric} bare padTop={24} height={height + ON_SCALE} title={`${M.chart} per ${unitWord}`}
+        <Chart key={metric} bare padTop={24} height={height + (shownWin === "24h" ? ON_HOURS : ON_DAYS)} title={`${M.chart} per ${unitWord}`}
           series={[{ key: "v", label: M.unit, color: "var(--accent)" }]}
           rows={series.map((c) => ({ x: c.title, label: c.label, short: c.short, values: { v: M.of(c) }, note: M.note(c), partial: c.partial }))}
           fmt={M.fmt} empty={m ? "nothing settled" : "loading…"} scale={scale} />
