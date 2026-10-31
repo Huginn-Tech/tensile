@@ -1159,6 +1159,33 @@ client that leaves ends its stream at the API, and an API that ends it
 ends the client's. At a stop, site-server cuts the open streams and opens
 none, and exits within 5 s whatever is left.
 
+### The Analytics page
+
+A build that names its network (`NEXT_PUBLIC_NETWORK_LABEL`, Mocha's) has an
+Analytics page at `/analytics/`; the mainnet build leaves it out of the
+header and shows nothing there. The page draws every settlement and every
+validator's record, so it does not call the API: `fibre-analytics@<network>`
+reads the API on this host every quarter hour (`deploy/analytics-data.mjs`)
+and the page fetches the one file that makes. A later run reads only the
+newest settlements, and each validator's page once an hour.
+
+```bash
+sudo install -m 0644 deploy/analytics-data.mjs /usr/local/lib/fibre-observer/analytics-data.mjs
+sudo cp deploy/systemd/fibre-analytics@.service deploy/systemd/fibre-analytics@.timer /etc/systemd/system/
+sudo install -d -m 0755 /etc/systemd/system/fibre-site@mocha.service.d
+sudo cp deploy/systemd/fibre-site-analytics.conf /etc/systemd/system/fibre-site@mocha.service.d/analytics.conf
+sudo systemctl daemon-reload
+sudo systemctl start fibre-analytics@mocha   # the first run, half a minute
+sudo systemctl enable --now fibre-analytics@mocha.timer
+```
+
+The file lives in the unit's state directory and root copies it into the
+site after each run, since a deploy replaces the site's directory whole. The
+drop-in puts it back when the site restarts, so a deploy needs no step of its
+own. A run that fails leaves the last file, and the page's foot says when it
+was read. The script itself is installed like site-server: a site deploy does
+not replace it.
+
 ### The tip stream through a front proxy
 
 Every page reads the newest block and the newest blob from

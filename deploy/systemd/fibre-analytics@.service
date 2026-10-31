@@ -1,0 +1,42 @@
+[Unit]
+Description=Fibre observer (%i): the Analytics page's data file
+After=network-online.target fibre-api@%i.service
+Wants=network-online.target
+
+# Only for a network whose site has the Analytics page. Reads the API on this
+# host (deploy/analytics-data.mjs) and writes data.json into its own state
+# directory, with no way to write anywhere else; root then copies the file
+# into the site (the two ExecStartPost lines, a rename so a visitor never
+# reads half a file). A deploy replaces the site's directory whole, which is
+# why the file does not live there: fibre-site-analytics.conf copies it back
+# when the site starts. A run that cannot read something fails before it
+# writes, and the page keeps the last file.
+[Service]
+Type=oneshot
+DynamicUser=true
+StateDirectory=fibre-analytics/%i
+EnvironmentFile=/etc/fibre-observer/site-%i.env
+Environment=NETWORK=%i
+ExecStart=/usr/bin/node /usr/local/lib/fibre-observer/analytics-data.mjs
+ExecStartPost=+/usr/bin/install -m 0644 /var/lib/fibre-analytics/%i/data.json /srv/fibre-site/%i/analytics/data.json.new
+ExecStartPost=+/usr/bin/mv -f /srv/fibre-site/%i/analytics/data.json.new /srv/fibre-site/%i/analytics/data.json
+# The first run reads every settlement and every validator, on a disk the
+# validator may share.
+Nice=19
+IOSchedulingClass=idle
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+MemoryMax=256M

@@ -48,6 +48,12 @@ export const SELF_VALIDATOR = (process.env.NEXT_PUBLIC_SELF_VALIDATOR ?? "").tri
  */
 export const SITE_NAME = siteName(process.env.NEXT_PUBLIC_NETWORK_LABEL);
 
+/**
+ * The Analytics page, on Mocha alone for now: a build that names its network has it, and the mainnet build, which gives
+ * the name empty, keeps it out of the header and shows nothing at its address.
+ */
+export const ANALYTICS = !!process.env.NEXT_PUBLIC_NETWORK_LABEL;
+
 /** A shared link's preview image, by the same name: public/og.png on mainnet, public/og-mocha.png on Mocha. */
 export const PREVIEW_IMAGE_PATH = previewImage(process.env.NEXT_PUBLIC_NETWORK_LABEL);
 
