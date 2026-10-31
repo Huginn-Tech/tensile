@@ -1762,6 +1762,13 @@ a.rb-c:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; z-
 /* the bare chart: its tallest bar's count on the label's line, no glow on hover */
 .chart--bare svg .peak { font-family: var(--font-table); font-size: var(--t-small); font-weight: 500; fill: var(--text-2); font-variant-numeric: tabular-nums lining-nums; }
 .chart--bare svg .col.hover .bar { filter: none; }
+/* a chart of days: each day's figure over its bar, a busy day's in full ink */
+.chart svg .val { font-family: var(--font-table); font-size: 12px; font-weight: 400; fill: var(--text-2); font-variant-numeric: tabular-nums lining-nums; transition: fill var(--dur); }
+.chart svg .val.sm { font-size: 11px; }
+.chart svg .val.top { font-weight: 500; fill: var(--text); }
+.chart svg .val.zero { fill: var(--text-3); }
+.chart svg.hovering .col:not(.hover) .val { fill: var(--tick-dim); }
+.chart svg .col.hover .val { fill: var(--text); }
 
 /* ---- Blobs: the period's figures as one strip of tabs across the frame, a hairline between them, as analytics tools
    set theirs; under the strip's hairline, the chart of the one picked, titled with what a bar holds ---- */
@@ -3621,7 +3628,7 @@ a.lg-who, a.bd-ns, .lg-t .c-b a, .bd-meta a, .vd-own a, .cm-ev-t a { padding-top
 /* the small counts, the chart's ticks and a label's period ("· 24h") at the 12 px floor; the uppercase labels stay */
 .cp-q, .cp-q .ov-frac-n, .cp-q .ov-frac-d { font-size: 12px; }
 .tabs .n, #list .tabs .n, .vd-tab .n, .bd-sh h2 .n, .bd-vh .n, .pb-th .n { font-size: 12px; }
-.chart svg text.tick, .chart svg text.peak { font-size: 12px; }
+.chart svg text.tick, .chart svg text.peak, .chart svg text.val { font-size: 12px; }
 .vd-per, .pan-c dt .per { font-size: max(12px, 1em); }
 
 /* ------------------------------------------------------ overview top ---- */
