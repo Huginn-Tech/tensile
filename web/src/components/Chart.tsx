@@ -38,13 +38,14 @@ import { namedDays, type DayScale } from "@/lib/dayscale";
  * yet) takes a lighter tint of the series, so half a day is not read as a
  * drop. The tallest bar's bucket is always named on the axis.
  *
- * `scale`, on a bare chart of days, takes the heights from a DayScale (see
- * dayscale.ts): the scale's labels stand in a gutter on their gridlines, each
- * day's figure over its bar in place of the tallest bar's count, and the days
- * are named in two rows, the day numbers over the months. The figures are
- * all printed while they can sit side by side; when they cannot they drop
- * their commas, then a pixel, and past that only the tallest that stand clear
- * are printed. The readout keeps off the figures as it keeps off the bars.
+ * `scale`, on a bare chart, takes the heights from a DayScale (see dayscale.ts):
+ * the scale's labels stand in a gutter on their gridlines and each bucket's
+ * figure over its bar, in place of the tallest bar's count. Days are named in
+ * two rows, the day numbers over the months; hours, which have no short form,
+ * in one, as bare charts name them. The figures are all printed while they can
+ * sit side by side; when they cannot they drop their commas, then a pixel, and
+ * past that only the tallest that stand clear are printed. The readout keeps
+ * off the figures as it keeps off the bars.
  */
 export type Series = { key: string; label: string; color: string };
 /** `short`: the label without its month, "22" for "Sep 22" */
@@ -61,7 +62,7 @@ const SEG_GAP = 2;
 const CLEAR = 6;
 /** the gridlines of an empty chart, as fractions of the plot's height */
 const EMPTY_GRID = [0.25, 0.5, 0.75, 1];
-/** a chart of days: the gutter for the scale's labels, and the room under the baseline for the rows of names */
+/** a chart on a scale: the gutter for its labels; a chart of days: the room under the baseline for its rows of names */
 const DAY_GUTTER = 46, DAY_FOOT = 40, DAY_ROW = 17, MONTH_ROW = 33;
 /** a day's figure: its size, the size that may let them all fit (never on a phone, where 12px is the floor), its clear space over the bar */
 const VAL_PX = 12, VAL_SM = 11, VAL_GAP = 5, VAL_SM_FROM = 640;
@@ -165,7 +166,7 @@ export default function Chart({ series, rows, fmt, height = 200, fmtAxis, title,
   bare?: boolean;
   /** room over the plot, for the tallest bar's count when bare */
   padTop?: number;
-  /** the days' own scale, for a bare chart of days (see above) */
+  /** the buckets' own scale, for a bare chart (see above) */
   scale?: DayScale;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -210,7 +211,7 @@ export default function Chart({ series, rows, fmt, height = 200, fmtAxis, title,
   const totals = rows.map((r) => series.reduce((a, s) => a + (r.values[s.key] ?? 0), 0));
   const max = Math.max(0, ...totals);
   const hasData = max > 0;
-  const days = bare && hasData ? scale ?? null : null;
+  const scaled = bare && hasData ? scale ?? null : null;
   const step = niceStep(max, 4);
   // bare: the tallest bar fills the plot, its count printed over it in place of a scale
   const top = !hasData ? 1 : bare ? max : Math.ceil(max / step) * step;
@@ -218,17 +219,18 @@ export default function Chart({ series, rows, fmt, height = 200, fmtAxis, title,
   const ticks: number[] = [];
   if (hasData) for (let v = 0; v <= top + 1e-9; v += step) ticks.push(v); else ticks.push(0);
   // the left gutter from the widest tick label, and at least 56px, so charts side by side start their plots on one line
-  const left = days ? DAY_GUTTER : bare ? 0 : Math.max(56, Math.ceil(Math.max(...ticks.map((t) => tw(axisFmt(t))))) + 10);
+  const hours = !!scaled && rows.every((r) => !r.short);
+  const left = scaled ? DAY_GUTTER : bare ? 0 : Math.max(56, Math.ceil(Math.max(...ticks.map((t) => tw(axisFmt(t))))) + 10);
   const padT = bare ? padTop ?? PAD.top : PAD.top;
   const plotW = Math.max(0, width - left - PAD.right);
-  const plotH = height - padT - (days ? DAY_FOOT : PAD.bottom);
+  const plotH = height - padT - (scaled && !hours ? DAY_FOOT : PAD.bottom);
   const base = padT + plotH;
   const n = rows.length;
   const slot = n > 0 ? plotW / n : 0;
   const bw = Math.max(2, Math.round(bare ? Math.min(24, slot * 0.56) : Math.min(26, slot * 0.58)));
-  const y = (v: number) => (days ? base - plotH * days.at(v) : padT + plotH * (1 - v / top));
+  const y = (v: number) => (scaled ? base - plotH * scaled.at(v) : padT + plotH * (1 - v / top));
   // bare: a bucket with anything in it stands at least 3px, so it never reads as an empty one
-  const barPx = (v: number) => (v > 0 ? Math.max(bare ? 3 : 1, Math.round(days ? plotH * days.at(v) : (plotH * v) / top)) : 0);
+  const barPx = (v: number) => (v > 0 ? Math.max(bare ? 3 : 1, Math.round(scaled ? plotH * scaled.at(v) : (plotH * v) / top)) : 0);
   const cxOf = (i: number) => left + slot * i + slot / 2;
   const colX = (i: number) => Math.round(cxOf(i) - bw / 2);
   const single = series.length === 1;
@@ -245,7 +247,7 @@ export default function Chart({ series, rows, fmt, height = 200, fmtAxis, title,
   const full = rows.map((r) => r.label ?? r.x);
   const canShort = n > 0 && rows.every((r, i) => !!r.short && full[i].endsWith(r.short));
   const month = (i: number) => full[i].slice(0, full[i].length - (rows[i].short ?? "").length);
-  const peak = bare && hasData && !days ? totals.indexOf(max) : -1;
+  const peak = bare && hasData && !scaled ? totals.indexOf(max) : -1;
   const plan = (k: number, short: boolean, from = 0): Map<number, string> | null => {
     const out = new Map<number, string>();
     let prev = -1;
@@ -261,16 +263,16 @@ export default function Chart({ series, rows, fmt, height = 200, fmtAxis, title,
   // A chart of days: every date in full if they fit; else the day numbers over a row of months, a busy day always named,
   // the names that would touch it making room. The row under them also marks a day not over yet.
   const months: { x: number; s: string; end?: boolean }[] = [];
-  if (days) {
+  if (scaled && !hours) {
     const named = new Map<number, string>();
     if (slot >= Math.max(...full.map((s) => tw(s))) + LABEL_GAP) full.forEach((s, i) => named.set(i, s));
     else {
       const num = (i: number) => rows[i].short as string;
       namedDays(rows.map((r) => Number(r.short)), slot).forEach((i) => named.set(i, num(i)));
-      days.busy.forEach((i) => {
+      scaled.busy.forEach((i) => {
         if (named.has(i)) return;
         [...named.keys()].forEach((k) => {
-          if (!days.busy.has(k) && Math.abs(k - i) * slot < (tw(num(i)) + tw(named.get(k) as string)) / 2 + 5) named.delete(k);
+          if (!scaled.busy.has(k) && Math.abs(k - i) * slot < (tw(num(i)) + tw(named.get(k) as string)) / 2 + 5) named.delete(k);
         });
         named.set(i, num(i));
       });
@@ -292,7 +294,8 @@ export default function Chart({ series, rows, fmt, height = 200, fmtAxis, title,
     });
     names = named;
   } else if (bare) {
-    for (let k = Math.max(1, Math.ceil(80 / slot)); !names && k <= n; k++) names = plan(k, false, peak >= 0 ? peak % k : 0);
+    const from = hours ? totals.indexOf(max) : peak;
+    for (let k = Math.max(1, Math.ceil(80 / slot)); !names && k <= n; k++) names = plan(k, false, from >= 0 ? from % k : 0);
   } else {
     names = plan(1, false) ?? (canShort ? plan(1, true) : null);
     for (let k = 2; !names && k <= n; k++) names = plan(k, false);
@@ -304,12 +307,12 @@ export default function Chart({ series, rows, fmt, height = 200, fmtAxis, title,
 
   // The days' figures over their bars (see the head of this file): `printed` holds a figure for the days that get one.
   const valY = (i: number) => base - (totals[i] > 0 ? barPx(totals[i]) : 3) - VAL_GAP;
-  const valFont = (px: number, i: number) => `${days?.busy.has(i) ? 500 : 400} ${px}px ${figures}`;
+  const valFont = (px: number, i: number) => `${scaled?.busy.has(i) ? 500 : 400} ${px}px ${figures}`;
   let printed: (string | undefined)[] = [];
   let valPx = VAL_PX;
-  if (days && width > 0) {
-    const inFull = totals.map((v, i) => (days.busy.has(i) ? fmt(v) : days.short(v)));
-    const noCommas = inFull.map((s, i) => (days.busy.has(i) ? s : s.replace(/,/g, "")));
+  if (scaled && width > 0) {
+    const inFull = totals.map((v, i) => (scaled.busy.has(i) ? fmt(v) : scaled.short(v)));
+    const noCommas = inFull.map((s, i) => (scaled.busy.has(i) ? s : s.replace(/,/g, "")));
     // a figure keeps clear of the bars beside it, and of the next figures unless they stand at another height
     const clearOfBars = (i: number, w: number) => {
       const reach = Math.ceil(w / slot) + 1;
@@ -348,7 +351,7 @@ export default function Chart({ series, rows, fmt, height = 200, fmtAxis, title,
     const yTop = padT - 8;
     const yLow = -headH;
     type Box = { x0: number; x1: number; top: number; weight: number };
-    const boxes: Box[] = [{ x0: 0, x1: left - CLEAR, top: (days ? padT : y(top)) - 8, weight: 50 }];
+    const boxes: Box[] = [{ x0: 0, x1: left - CLEAR, top: (scaled ? padT : y(top)) - 8, weight: 50 }];
     // the tallest bar bare carries its count over it: the readout keeps off that too
     for (let i = 0; i < n; i++) if (totals[i] > 0) boxes.push({ x0: colX(i), x1: colX(i) + bw, top: i === peak ? 0 : base - barPx(totals[i]), weight: i === on ? 1 : 5 });
     printed.forEach((s, i) => {
@@ -434,10 +437,10 @@ export default function Chart({ series, rows, fmt, height = 200, fmtAxis, title,
                 <stop offset="1" style={{ stopColor: single ? series[0].color : "var(--accent)", stopOpacity: "var(--band-op)" }} />
               </linearGradient>
             </defs>
-            {days && (
+            {scaled && (
               <>
-                {!(days.ticks.length > 0 && base - y(days.ticks[0].v) < DAY_ROW) && <text x={0} y={base - 5} className="tick">0</text>}
-                {days.ticks.map((t) => {
+                {!(scaled.ticks.length > 0 && base - y(scaled.ticks[0].v) < DAY_ROW) && <text x={0} y={base - 5} className="tick">0</text>}
+                {scaled.ticks.map((t) => {
                   const ly = Math.round(y(t.v)) + 0.5;
                   return (
                     <g key={t.label}>
@@ -496,15 +499,15 @@ export default function Chart({ series, rows, fmt, height = 200, fmtAxis, title,
                   {totals[i] === 0 && (!bare || hasData) && <rect x={Math.round(cx - Math.min(bw, 10) / 2)} y={base - 3} width={Math.min(bw, 10)} height={2} rx={1} className="quiet" />}
                   {fig !== undefined && (
                     <text x={valX(i, textWidth(fig, valFont(valPx, i)))} y={valY(i)} textAnchor="middle"
-                      className={"val" + (days?.busy.has(i) ? " top" : "") + (totals[i] === 0 ? " zero" : "") + (valPx === VAL_SM && !days?.busy.has(i) ? " sm" : "")}>{fig}</text>
+                      className={"val" + (scaled?.busy.has(i) ? " top" : "") + (totals[i] === 0 ? " zero" : "") + (valPx === VAL_SM && !scaled?.busy.has(i) ? " sm" : "")}>{fig}</text>
                   )}
                   {showName(i) && (
-                    <text x={cx} y={days ? base + DAY_ROW : height - (bare ? 9 : 7)} textAnchor="middle" className={isOn ? "tick on" : on !== null ? "tick dim" : "tick"}>{isOn ? full[i] : names.get(i)}</text>
+                    <text x={cx} y={scaled ? base + DAY_ROW : height - (bare ? 9 : 7)} textAnchor="middle" className={isOn ? "tick on" : on !== null ? "tick dim" : "tick"}>{isOn ? full[i] : names.get(i)}</text>
                   )}
                 </g>
               );
             })}
-            <line x1={days ? 0 : left} x2={left + plotW} y1={base + 0.5} y2={base + 0.5} className="axis" />
+            <line x1={scaled ? 0 : left} x2={left + plotW} y1={base + 0.5} y2={base + 0.5} className="axis" />
             {months.map((m) => <text key={m.s + m.x} x={m.x} y={base + MONTH_ROW} textAnchor={m.end ? "end" : "middle"} className="tick">{m.s}</text>)}
             {peak >= 0 && (() => {
               // the tallest bar's count over it, kept inside the plot at either edge
