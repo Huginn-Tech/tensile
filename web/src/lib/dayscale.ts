@@ -1,6 +1,6 @@
 /**
- * The height scale of a period of days on the Blobs chart. A very busy day must
- * not flatten the quiet ones, so when the tallest day runs far past an ordinary
+ * The height scale of the Blobs chart, its hours as its days. A very busy day must
+ * not flatten the quiet ones, so when the tallest bar runs far past an ordinary
  * one the bars stand on a log scale: each step of ten the same height, a zero
  * still a zero (no bar), and every day's figure printed over its bar. When the
  * days are of a size it is a plain linear scale, where 3 reads as three times 1.
@@ -27,8 +27,8 @@ export type DayScale = {
   short: (v: number) => string;
 };
 
-/** the tallest day is at least this many ordinary days: below it the days are of a size */
-export const LOG_AT = 8;
+/** the tallest bar is at least this many ordinary ones: below it the bars are of a size */
+export const LOG_AT = 5;
 
 /** the day names under the bars keep this far apart */
 const NAME_GAP = 18;

@@ -14,6 +14,16 @@ const load = (file) => {
 const { dayScale, namedDays, LOG_AT } = await load("./dayscale.ts");
 const MIB = 2 ** 20;
 
+// a day of Mocha's hours, one of them 7.6 ordinary ones
+test("an hour far over the rest takes the log scale too", () => {
+  const hours = [3, 4, 5, 5, 3, 5, 4, 5, 5, 6, 11, 8, 38, 5, 4, 5, 10, 5, 5, 4, 5, 4, 5, 5, 1];
+  const s = dayScale(hours, "n");
+  assert.equal(s.log, true);
+  assert.deepEqual(s.ticks.map((t) => t.label), ["1", "10"]);
+  assert.ok(s.at(5) >= 0.45);
+  assert.equal(s.at(38), 1);
+});
+
 // Mocha's days on record: one day of 8,472 among days of tens and hundreds
 const mocha = [132, 21, 0, 8472, 0, 0, 2, 6, 0, 74, 12, 163, 24, 30, 34, 24, 1, 65, 97, 98, 91, 88, 0, 63, 266, 212, 58, 254, 337, 260, 113, 107, 95, 86, 111, 60];
 
