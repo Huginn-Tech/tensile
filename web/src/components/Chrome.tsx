@@ -62,7 +62,7 @@ type Theme = "light" | "dark";
 
 /** Two states, sun and moon. The site starts dark; from the first switch on the choice is the reader's and is
  *  remembered. */
-function ThemeToggle() {
+function useTheme() {
   const [theme, setTheme] = useState<Theme>("dark");
   useEffect(() => {
     let t: string | null = null;
@@ -71,22 +71,21 @@ function ThemeToggle() {
     setTheme(t as Theme);
     document.documentElement.dataset.theme = t;
   }, []);
-  const apply = (t: Theme) => {
+  const flip = () => {
+    const t: Theme = theme === "light" ? "dark" : "light";
     setTheme(t);
     document.documentElement.dataset.theme = t;
     try { localStorage.setItem("theme", t); } catch { /* fine */ }
   };
-  const next: Theme = theme === "light" ? "dark" : "light";
+  return { theme, flip };
+}
+
+const MOON = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg>;
+const SUN = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" /></svg>;
+
+function ThemeToggle({ theme, flip }: ReturnType<typeof useTheme>) {
   const title = theme === "light" ? "Theme: light. Switch to dark." : "Theme: dark. Switch to light.";
-  return (
-    <button type="button" className="theme" onClick={() => apply(next)} title={title} aria-label={title}>
-      {theme === "dark" ? (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg>
-      ) : (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4" /><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" /></svg>
-      )}
-    </button>
-  );
+  return <button type="button" className="theme" onClick={flip} title={title} aria-label={title}>{theme === "dark" ? MOON : SUN}</button>;
 }
 
 /** "mocha-5" as the chip prints it; the mainnet chain id is "celestia" */
@@ -108,9 +107,10 @@ const HEIGHT_WAIT = process.env.NEXT_PUBLIC_NETWORK_LABEL ? "0,000,000" : "00,00
  * own state as its dot. It opens as a menu of where else to go: each sibling
  * deployment configured in NEXT_PUBLIC_NETWORKS as a link with Celestia's
  * mark (the chip already names this site's network), and Mainnet as a
- * placeholder until Fibre is there and an observer follows it.
+ * placeholder until Fibre is there and an observer follows it. On a phone the
+ * tabs take the whole strip, so the theme is this menu's last line there.
  */
-function NetworkChip({ meta, error }: { meta: Meta | null; error: string | null }) {
+function NetworkChip({ meta, error, theme, flip }: { meta: Meta | null; error: string | null } & ReturnType<typeof useTheme>) {
   const [origin, setOrigin] = useState("");
   const box = useRef<HTMLDetailsElement>(null);
   useEffect(() => { setOrigin(window.location.origin); }, []);
@@ -145,6 +145,9 @@ function NetworkChip({ meta, error }: { meta: Meta | null; error: string | null 
         {!mainnetHere && !mainnetLinked && (
           <span className="soon" aria-disabled="true" title="Fibre is not on mainnet yet. This observer will follow it there.">Mainnet<i className="tagx">soon</i></span>
         )}
+        <button type="button" className="theme-row" role="menuitem" onClick={() => { flip(); if (box.current) box.current.open = false; }}>
+          {theme === "dark" ? SUN : MOON}{theme === "dark" ? "Light theme" : "Dark theme"}
+        </button>
       </div>
     </details>
   );
@@ -235,6 +238,7 @@ export function Header() {
   const at = usePathname();
   const path = LIST_OF[at] ?? at;
   useTabsTuck(usePhone());
+  const look = useTheme();
   return (
     <header className="top">
       <div className="wrap">
@@ -249,9 +253,9 @@ export function Header() {
         <HeaderSearch />
         <div className="right">
           <BlockTicker meta={meta} />
-          <NetworkChip meta={meta} error={error} />
+          <NetworkChip meta={meta} error={error} {...look} />
           <span className="divider" aria-hidden="true" />
-          <ThemeToggle />
+          <ThemeToggle {...look} />
         </div>
       </div>
     </header>
