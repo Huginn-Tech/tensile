@@ -2629,6 +2629,8 @@ button.warn:focus-visible { outline-offset: 0; }
 .vd-id { display: inline; min-width: 0; }
 .vd-id .mono { overflow-wrap: break-word; }
 .vd-id .cp { vertical-align: -4px; }
+/* an address too long to share its line: the mark beside the label, in the label's line height */
+.vd-fact dt .cp { height: 16px; margin-left: 2px; vertical-align: top; }
 /* the Blobs list's copy mark, at full strength: a frame of facts has no row to hover */
 .vd-pf .cp { display: inline-grid; place-items: center; flex: none; width: 20px; height: 18px; margin-left: 4px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--text-3); cursor: pointer; transition: color var(--dur), background var(--dur); }
 .vd-pf .cp:hover { color: var(--accent-ink); background: var(--accent-tint); }
@@ -2747,6 +2749,8 @@ button.warn:focus-visible { outline-offset: 0; }
 @media (min-width: 721px) {
   .vd-fact:has(> .vd-chk) { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 10px; align-items: baseline; align-content: start; }
   .vd-fact { padding-bottom: 14px; }
+  /* the address runs up to the divider before its copy mark gives up the line */
+  .vd-fact:first-child { padding-right: 6px; }
   .vd-fact dd.vd-chk { display: contents; }
   .vd-chk > span:first-child { line-height: 16px; }
   .vd-chk > em { grid-column: 1 / -1; }

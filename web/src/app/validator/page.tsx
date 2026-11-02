@@ -1,5 +1,5 @@
 "use client";
-import { Fragment, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { Fragment, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useApi, type EndpointEvent, type ValidatorDetail, type ValidatorReading, type Window, type RecordThrough, type Obligations, type Meta, type EndpointCheck, int, pctOf, bytes, utcWord, dateUTC, whenUTC, shortMid, notFound, rateTone, notCountedText, badRequest, MIN_RATED, API_BASE, provisionalNow, type ProvisionalFaults, type NetworkReference,
@@ -200,6 +200,34 @@ const shortHash = (h: string) => `${h.slice(0, 6)}…${h.slice(-4)}`;
 function Host({ s }: { s: string }) {
   const parts = s.split(".");
   return <span className="mono">{parts.map((part, i) => <Fragment key={i}>{i > 0 && <wbr />}{part}{i < parts.length - 1 && "."}</Fragment>)}</span>;
+}
+
+/** the copy mark's width and its margin (.vd-pf .cp) */
+const COPY_MARK_PX = 24;
+
+/**
+ * The Endpoint fact: the copy mark follows the address while the two fit one line. A longer address keeps the line and
+ * the mark moves up beside the label, so it never drops onto a line of its own.
+ */
+function EndpointFact({ host, since }: { host: string; since: string | null }) {
+  const box = useRef<HTMLElement>(null);
+  const [up, setUp] = useState(false);
+  useLayoutEffect(() => {
+    const dd = box.current, address = dd?.querySelector<HTMLElement>(".mono");
+    if (!dd || !address) return;
+    // its lines added up: the width it would take on one line, wrapped or not
+    const fit = () => setUp([...address.getClientRects()].reduce((wide, line) => wide + line.width, 0) + COPY_MARK_PX > dd.clientWidth);
+    fit();
+    const seen = new ResizeObserver(fit);
+    seen.observe(dd);
+    document.fonts.ready.then(fit);
+    return () => seen.disconnect();
+  }, [host]);
+  const mark = <CopyMark text={host} label="the endpoint" />;
+  return <>
+    <dt>Endpoint{up && mark}</dt>
+    <dd ref={box}><span className="vd-id"><Host s={host} />{!up && mark}</span>{since && <em title={`Registered ${utcWord(since)}`}>since {shortDate(since)}</em>}</dd>
+  </>;
 }
 
 
@@ -596,7 +624,7 @@ function Page() {
         <dl className="vd-facts">
           <div className="vd-fact">
             {v.host
-              ? <><dt>Endpoint</dt><dd><span className="vd-id"><Host s={v.host} /><CopyMark text={v.host} label="the endpoint" /></span>{endpointSince && <em title={`Registered ${utcWord(endpointSince)}`}>since {shortDate(endpointSince)}</em>}</dd></>
+              ? <EndpointFact host={v.host} since={endpointSince} />
               : v.last_host
                 ? <><dt>Last endpoint</dt><dd title="Still registered on chain; the validator left the bonded set."><span className="vd-id"><Host s={v.last_host} /></span>{v.endpoint_closed_at && <em>left {dateUTC(v.endpoint_closed_at)}</em>}</dd></>
                 : <><dt>Endpoint</dt><dd className="vd-none" title={noEndpoint && diag ? diag.text : undefined}><em>none registered</em>
