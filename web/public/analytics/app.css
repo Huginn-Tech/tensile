@@ -152,7 +152,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec); font-weight: 600; line-height: 36px; letter-spacing: -.01em; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-.page { padding: 20px 0 0; }
+.page { padding: 36px 0 0; }
 /* a jump leaves the section's head clear of the pinned bar */
 .sec { scroll-margin-top: calc(var(--stick) + 12px); }
 .ctl { flex: none; display: flex; align-items: center; gap: 6px; margin-left: auto; }
@@ -176,9 +176,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 .bar .seg { height: 36px; }
 .jump button { padding: 0 12px; color: var(--ink2); }
 .jump button:hover, .jump button.on { color: var(--ink); }
-/* what Fibre is, once, under the title */
-.lede { margin: 0 0 12px; font-size: var(--fs-lab); line-height: 18px; color: var(--ink2); }
-.lede + .sec { margin-top: 0; }
+.bar + .sec { margin-top: 0; }
 
 /* segmented control, built by seg() */
 .seg { position: relative; display: inline-flex; height: 34px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; }
@@ -192,7 +190,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #seg-win button.on, #seg-win button.on:hover { color: var(--t-on-ink); }
 
 /* section head */
-.sec { margin-top: 40px; }
+.sec { margin-top: 44px; }
 .sec-h { display: flex; align-items: baseline; gap: 12px; height: 36px; margin-bottom: var(--g); }
 .sec-h p { margin: 0; font-size: var(--fs-lab); color: var(--ink2); white-space: nowrap; }
 
@@ -537,7 +535,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting .h.on .h1::after { border-top-color: currentColor; border-bottom-width: 0; opacity: 1; }
 #hosting .h.on.asc .h1::after { border-top-width: 0; border-top-color: transparent; border-bottom-width: 3.5px; border-bottom-color: currentColor; }
 /* flush right on the figures like every other head; the rest of the label overhangs the empty head to the left */
-#hosting .h.wt { justify-self: start; width: var(--slot); }
+#hosting .h.wt { grid-area: 1 / 2; justify-self: start; width: var(--slot); }
 
 /* every figure on the row's centre line, the name and its place around it, as Publishers' rows */
 #hosting .rw { --rowbg: transparent; position: relative; align-items: center; height: 40px; line-height: 18px; border-radius: var(--r3); background: var(--rowbg); cursor: pointer; transition: background .12s; }
@@ -588,14 +586,10 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting .vb { position: relative; display: grid; grid-template-columns: var(--slot) minmax(0, 1fr); column-gap: 8px; align-items: center; min-width: 0; }
 #hosting .lb { position: relative; display: block; height: 8px; width: calc(100% * var(--f)); min-width: 2px; border-radius: 0 2px 2px 0; background: var(--c); transition: opacity .14s; }
 #hosting .vv { justify-self: end; font-size: var(--fs-lab); font-weight: 400; color: var(--ink2); text-align: right; white-space: nowrap; }
-/* the hint stands where the sum has no bar, beside the rows it talks about, and ends where the bars do */
-#hosting .hint { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; text-align: right; white-space: nowrap; }
-#hosting .ask, #hosting .next { font-size: var(--fs-note); line-height: 18px; color: var(--ink2); }
-#hosting .next { display: flex; align-items: center; gap: 8px; }
-#hosting .ask2 { font-size: var(--fs-tick); line-height: 14px; color: var(--ink3); }
-#hosting .ask3 { font-size: var(--fs-tick); line-height: 14px; color: var(--ink2); }
-#hosting :is(.ask, .ask2, .ask3, .next)[hidden] { display: none; }
-#hosting .tb.vs .ask2 { display: none; }
+/* the way into Compare stands in the head, over the bars, and ends where they do */
+#hosting .hint { grid-area: 1 / 2; justify-self: end; display: flex; align-items: center; gap: 8px; min-width: 0; padding-bottom: 8px; line-height: 14px; white-space: nowrap; }
+#hosting .next { display: flex; }
+#hosting :is(.ask, .ask3, .next)[hidden] { display: none; }
 #hosting .tb.focus .rw:not(.lit):not(.on):not(.sum) .lb { opacity: .45; }
 
 /* columns */
@@ -715,9 +709,15 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #hosting .k-a em { opacity: 0; }
 }
 
-/* the hint's long line clears the sum's figure from here up */
-@media (max-width: 1160px) {
-  #hosting .up { display: none; }
+/* the hint gets shorter as the bars do, so it keeps clear of the head's label */
+@media (max-width: 1120px) {
+  #hosting .up, #hosting .ask3 { display: none; }
+}
+@media (max-width: 1060px) {
+  #hosting .rows { display: none; }
+}
+@media (min-width: 980px) and (max-width: 989px) {
+  #hosting .ask { display: none; }
 }
 @media (max-width: 1100px) {
   #hosting .mkey { position: static; margin-top: 4px; }
@@ -807,7 +807,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #publishers .pb-rule { position: static; flex-wrap: wrap; gap: 4px 14px; min-height: 40px; margin-top: 2px; }
 
   /* hosting: the ring and its key, then the map the width of the card, then the regions */
-  #hosting .up { display: inline; }
+  #hosting .up, #hosting .rows { display: inline; }
   #hosting .sec-h p { flex: 1 1 100%; overflow: visible; }
   #hosting .band { grid-template-columns: minmax(0, 1fr); row-gap: 20px; }
   #hosting .say .lead { white-space: normal; }
@@ -824,9 +824,10 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 
   /* the rows: name and validators; the weighing with its bar; four figures, each with its own name */
   #hosting .tb { padding: 0 var(--pad); }
-  #hosting .tb-list > .top { position: static; }
-  #hosting .th, #hosting .tb.vs .tr.th { display: none; }
-  #hosting .sorter { padding: 6px 0; }
+  #hosting .tb-list > .top { position: static; display: flex; flex-direction: column; }
+  #hosting .th, #hosting .tb.vs .tr.th { order: 1; display: block; height: auto; margin: 0; padding: 0; border: 0; }
+  #hosting .th > :not(.hint), #hosting .tb.vs .th .h.on:not(.wt) { display: none; }
+  #hosting .sorter { order: -1; padding: 6px 0; }
   #hosting .rw, #hosting .tb.vs .tr { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-areas: "a a a a" "v v v v" "n r s k"; gap: 6px 8px; align-items: end; }
   #hosting .rw { height: auto; padding: 8px; }
   #hosting .tr.rw { padding-inline: 0; border-top: 1px solid var(--line); border-radius: 0; }
@@ -862,8 +863,8 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #hosting .k-s { grid-area: s; }
   #hosting .k-v { grid-area: k; }
   #hosting .fl { display: block; font-size: var(--fs-tick); line-height: 14px; }
-  #hosting .hint { grid-column: 1 / -1; grid-row: 4; align-items: flex-start; text-align: left; white-space: normal; }
-  #hosting .tb.vs .ask2 { display: block; }
+  #hosting .hint { grid-area: auto; justify-self: start; display: block; padding: 0; white-space: normal; }
+  #hosting .ask { display: block; padding: 8px 8px 2px; }
 
   /* the picks ride along at the foot of the screen for as long as the list lasts */
   #hosting .hint .next { display: none; }
@@ -906,7 +907,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   .jump button { flex: 1 1 auto; padding: 0 4px; }
   .seg button { min-width: 44px; padding: 0 9px; }
   .sel select { font-size: 16px; }
-  .lede { margin: 8px 0 14px; }
+  .bar + .sec { margin-top: 12px; }
 
   /* top: one tile to a line where two would clip */
   #top .grid { grid-template-rows: auto repeat(2, 144px); }
@@ -982,7 +983,6 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #publishers tbody td.d { text-align: left; }
   #publishers tbody td.d .pb-d { justify-content: flex-start; }
   #hosting .rw, #hosting .tb.vs .tr { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "a a" "v v" "n r" "s k"; }
-  #hosting .hint { grid-row: 5; }
   .seg button { min-width: 40px; padding: 0 7px; }
   #hosting .tray button { padding: 0 9px; }
   #hosting .whobox { grid-template-columns: 126px minmax(0, 1fr); column-gap: 10px; }
