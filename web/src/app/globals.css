@@ -3507,8 +3507,9 @@ header.top .wrap {
 .top .hs-veil { position: fixed; inset: calc(52px + env(safe-area-inset-top, 0px)) 0 0; z-index: -1; background: color-mix(in srgb, var(--canvas) 74%, transparent); }
 header.top:has(.hs.on)::after, .top:has(.hs.on) nav, .top:has(.hs.on) .theme { visibility: hidden; }
 
-/* the tabs: the filled pill of the current page, inside a full-height tap row; the first pill on the mark's edge */
-.top nav { grid-area: 2 / 1 / 3 / 5; position: relative; z-index: 2; pointer-events: auto; order: 0; flex-basis: auto; height: 44px; margin-left: 0; gap: 2px; overflow: visible; transition: transform 220ms cubic-bezier(.2, .7, .2, 1); }
+/* the tabs: the filled pill of the current page, inside a full-height tap row; the first pill on the mark's edge. Tabs
+   past the strip's end scroll inside it, clear of the theme button */
+.top nav { grid-area: 2 / 1 / 3 / 5; position: relative; z-index: 2; pointer-events: auto; order: 0; flex-basis: auto; height: 44px; margin-left: 0; gap: 2px; overflow-x: auto; transition: transform 220ms cubic-bezier(.2, .7, .2, 1); }
 .top nav a, .top nav a:hover { position: relative; isolation: isolate; height: 44px; padding: 0 12px; border-radius: 0; background: none; font-size: 15px; color: var(--text-2); }
 .top nav a::before { content: ""; position: absolute; inset: 6px 0; z-index: -1; border-radius: 9px; }
 .top nav a.on, .top nav a.on:hover { background: none; color: #fff; }
