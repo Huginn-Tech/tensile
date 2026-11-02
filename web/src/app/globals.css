@@ -262,37 +262,27 @@ button { font: inherit; color: inherit; }
 .hs-wait { color: var(--text-3); }
 @media (hover: none) { .hs-key { display: none; } }
 .top .lead { display: contents; }
-/* Header, drawn in: the bar stands on the exact page centre, the menu and the right group
-   come in to it with one equal gap. Word to bar = --cg + the link's 12 px padding; bar to
-   block = --cg + the right group's 12 px margin. --lead is the width of logo plus links, so
-   the two 1fr tracks stay equal when the bar has to shrink. It matters only then; update it
-   if a label changes (Overview, Blobs, Publishers, API; Analytics is the fifth link).
+/* Header: the row ends on the right edge of the page frames. Word to bar = 16 + the link's
+   12 px padding; bar to block = 16 + the right group's 12 px margin. Four links fit the frame,
+   so Tensile starts on its left edge and the bar shares what is left between its two sides.
    302 is the floor: the search shows its whole placeholder only from 302 px up. */
 @media (min-width: 1120px) {
-  .top .wrap { --cg: 16px; --lead: 392px; display: grid; grid-template-columns: 1fr clamp(302px, calc(100% - 2 * var(--cg) - 2 * var(--lead)), 360px) 1fr; column-gap: var(--cg); max-width: none; padding: 0 16px; }
-  .top .lead { display: flex; align-items: center; gap: 16px; justify-self: end; }
+  .top .wrap { justify-content: flex-end; gap: 16px; max-width: none; padding: 0 max(16px, calc((100% - 1120px) / 2)); }
+  .top .lead { display: flex; align-items: center; flex: none; gap: 16px; }
   .top nav { min-width: max-content; }
-  .top .right { margin: 0 0 0 12px; justify-self: start; }
+  .top .hs { flex: 0 1 360px; min-width: 302px; margin: 0 auto; }
+  .top .right { flex: none; margin: 0 0 0 12px; }
   .top .blocktick { margin-right: 8px; }
 
-  /* Five links on a laptop: the menu closes up, so the bar keeps 360 on the centre down to
-     1337 and the exact centre down to 1279. The gap steps from 28 to 24, then 20. */
-  @media (max-width: 1399px) {
-    .top:has(nav a:nth-child(5)) .wrap { --cg: 12px; --lead: 457px; }
+  /* Five links are wider than the frame: the row keeps its right end, Tensile stands out past
+     the frame's left edge, and in a narrow window the row closes up. */
+  .top:has(nav a:nth-child(5)) .wrap { padding-left: 16px; }
+  .top:has(nav a:nth-child(5)) .hs { margin: 0; }
+  @media (max-width: 1151px) {
+    .top:has(nav a:nth-child(5)) .wrap { gap: 8px; }
     .top:has(nav a:nth-child(5)) .lead { gap: 10px; }
     .top:has(nav a:nth-child(5)) nav { gap: 0; }
     .top:has(nav a:nth-child(5)) .blocktick { margin-right: 4px; }
-  }
-  @media (max-width: 1349px) {
-    .top:has(nav a:nth-child(5)) .wrap { --cg: 8px; }
-  }
-
-  /* Four links have the room for 28 down to 1224; under that the same closed-up step, 20. */
-  @media (max-width: 1223px) {
-    .top .wrap { --cg: 8px; --lead: 374px; }
-    .top .lead { gap: 10px; }
-    .top nav { gap: 0; }
-    .top .blocktick { margin-right: 4px; }
   }
 }
 @media (max-width: 1119px) {
