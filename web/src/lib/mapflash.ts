@@ -1,7 +1,8 @@
 /**
  * The overview map's endorsement flash, as the recent blobs drive it: when blobs come into the grid while the page is
- * open, the places of the validators that endorsed them burst, once, together (lib/mapburst.ts). This module is the rule,
- * without the page: which blobs flash, which validators count as their endorsers, and when.
+ * open, the places of the validators that endorsed them burst, one burst for each blob as its square comes in
+ * (burstsOf, lib/mapburst.ts). This module is the rule, without the page: which blobs flash, which validators count as
+ * their endorsers, and when.
  *
  * - The grid says which blobs just came in (Arrival, one per move of its squares; the blobs of one block come in one
  *   move), and only those flash: a blob the grid does not show never does, and none flashes twice.
@@ -36,11 +37,26 @@ export type ArrivedBlob = {
  */
 export type Arrival = { id: number; blobs: ArrivedBlob[]; live: boolean };
 
-/** one blob of a flash: its endorsers on its record (null when the record did not answer) and on the card */
-export type FlashBlob = { hash: string; height: number; endorsers: number | null; card: number | null };
+/** one blob of a flash: how many endorsers its record names and who (null when it did not answer), and the card's count */
+export type FlashBlob = { hash: string; height: number; endorsers: number | null; who: string[] | null; card: number | null };
 
 /** one flash: the moves it covers, their blobs, and the union of their endorsers (consensus addresses, lower case) */
 export type Flash = { moves: number[]; blobs: FlashBlob[]; endorsers: string[] };
+
+/** the most bursts one flash sends: a block of many blobs stays a run of bursts and does not become a blur */
+export const MAX_BURSTS = 6;
+
+/**
+ * A flash's bursts, in the order their squares come onto the grid (lib/conveyor.ts): the oldest blob first, one burst
+ * of its endorsers for each blob. Past max blobs the oldest go out together as the first burst. A blob whose endorsers
+ * are not known sends none.
+ */
+export function burstsOf(fl: Flash, max = MAX_BURSTS): string[][] {
+  const each = fl.blobs.map((b) => b.who ?? []).filter((w) => w.length > 0).reverse();
+  if (each.length <= max) return each;
+  const cut = each.length - max + 1;
+  return [[...new Set(each.slice(0, cut).flat())], ...each.slice(cut)];
+}
 
 /** the validators that endorsed a blob, as its card counts them: with rows, and their signature verified */
 export function endorsersOf(assignments: Signer[]): string[] {
@@ -149,7 +165,7 @@ export class Flasher {
         const es = this.got.get(b.promise_hash) ?? null;
         this.got.delete(b.promise_hash);
         if (es) for (const e of es) all.add(e);
-        blobs.push({ hash: b.promise_hash, height: b.settlement_height, endorsers: es ? es.length : null, card: b.attested_with_rows ?? null });
+        blobs.push({ hash: b.promise_hash, height: b.settlement_height, endorsers: es ? es.length : null, who: es, card: b.attested_with_rows ?? null });
       }
     }
     return { moves: moves.map((m) => m.id), blobs, endorsers: [...all] };

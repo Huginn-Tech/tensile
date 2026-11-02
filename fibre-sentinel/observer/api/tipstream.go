@@ -12,13 +12,19 @@ package api
 // One producer reads the tip's cache (cachedTip) while any stream is open,
 // the way /v1/tip reads it and at its pace, and hands each change to every
 // stream: a stream costs the node and the store nothing of its own, and
-// however many are open the tip is read at most four times a second.
+// however many are open the tip is read four times a second at most, and
+// once more when the collector says a new blob is in the store.
 //
 // On connecting, and whenever a field of the answer other than server_time
 // changes:
 //
 //	event: tip
 //	data: <the answer /v1/tip gives, on one line>
+//
+// in front of a tip that names a new blob, the block's rows (tipblobs.go):
+//
+//	event: blobs
+//	data: {"blobs":[...],"total":n}
 //
 // every tipStreamKeepAlive:
 //
@@ -102,6 +108,9 @@ type tipStreams struct {
 	keepAlive time.Duration
 	lifetime  time.Duration
 	read      func() (tipResponse, uint64)
+	// blobsErrAt is when a failure to read a new blob's rows was last logged
+	// (tipblobs.go); the producer's alone.
+	blobsErrAt time.Time
 	// For the journal alone (logTipStats, logTipRefusals): the most open at
 	// once since the API started and since the last line on them, the
 	// streams refused at the cap since the API started and since that line,
@@ -313,11 +322,16 @@ func (s *Server) tipProducer() {
 	}()
 	tick := time.NewTicker(tipStreamTick)
 	defer tick.Stop()
+	marked, stopMark := s.blobMarkWatch()
+	defer stopMark()
 	var last tipEvent
+	var sent tipBlob // the newest blob whose rows went out (tipblobs.go)
 	for {
 		select {
 		case <-s.streams.end:
 		case <-tick.C:
+		case <-marked:
+			s.expireTip()
 		}
 		if !s.tipStreamsWanted() {
 			return
@@ -330,6 +344,9 @@ func (s *Server) tipProducer() {
 		if bytes.Equal(key, last.key) {
 			last.gen = gen
 			continue
+		}
+		if blobs := s.tipBlobsFrame(&sent, v.LatestBlob); blobs != nil {
+			frame = append(blobs, frame...)
 		}
 		last = tipEvent{gen: gen, key: key, frame: frame}
 		s.handTipEvent(last)

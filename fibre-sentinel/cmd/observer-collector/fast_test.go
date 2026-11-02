@@ -244,3 +244,28 @@ func TestFastTickStoresABlobWithItsCost(t *testing.T) {
 		t.Fatalf("the blob went into the store before its cost")
 	}
 }
+
+// A tick that stored a new blob says so, once; one that found nothing new
+// does not.
+func TestFastTickSaysWhenABlobLanded(t *testing.T) {
+	st := openStore(t)
+	dir := t.TempDir()
+	pubsPath := filepath.Join(dir, "publications.jsonl")
+	ft := newFastTick(st, filepath.Join(dir, "state.json"), filepath.Join(dir, txcost.FileName), pubsPath, filepath.Join(dir, "payments.jsonl"), func(string, ...any) {}, func(string) {})
+	told := 0
+	ft.landed = func() { told++ }
+	at := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
+	ft.run(at)
+	if told != 0 {
+		t.Fatalf("told %d times with nothing stored", told)
+	}
+	appendLine(t, pubsPath, jsonLine(t, scan.Publication{SchemaVersion: 1, PromiseHash: strings.Repeat("cd", 32), SettlementHeight: 100, SettlementTime: at}))
+	ft.run(at.Add(time.Second))
+	if told != 1 {
+		t.Fatalf("told %d times of one blob", told)
+	}
+	ft.run(at.Add(2 * time.Second))
+	if told != 1 {
+		t.Fatalf("told %d times after a tick that stored nothing", told)
+	}
+}

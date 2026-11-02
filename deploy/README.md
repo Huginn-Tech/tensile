@@ -1164,10 +1164,10 @@ none, and exits within 5 s whatever is left.
 A build that names its network (`NEXT_PUBLIC_NETWORK_LABEL`, Mocha's) has an
 Analytics page at `/analytics/`; the mainnet build leaves it out of the
 header and shows nothing there. The page draws every settlement and every
-validator's record, so it does not call the API: `fibre-analytics@<network>`
+validator's host, so it does not call the API: `fibre-analytics@<network>`
 reads the API on this host every quarter hour (`deploy/analytics-data.mjs`)
 and the page fetches the one file that makes. A later run reads only the
-newest settlements, and each validator's page once an hour.
+newest settlements, and the validators' list.
 
 ```bash
 sudo install -m 0644 deploy/analytics-data.mjs /usr/local/lib/fibre-observer/analytics-data.mjs

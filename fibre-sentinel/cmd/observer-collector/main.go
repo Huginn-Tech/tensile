@@ -371,6 +371,19 @@ func main() {
 	var wakeC <-chan struct{}
 	costPath := coll.Paths.TxCosts
 	fast := newFastTick(st, *statePath, costPath, *pubsPath, *payPath, log.Printf, live.Error)
+	// The API's word of a new blob. It only makes the blob reach the pages
+	// sooner, so a failure is said when it changes and costs nothing else.
+	markErr := ""
+	fast.landed = func() {
+		msg := ""
+		if err := status.MarkBlob(*dataDir); err != nil {
+			msg = err.Error()
+		}
+		if msg != markErr && msg != "" {
+			log.Printf("WARNING: fast tick: cannot tell the API of a new blob: %s", msg)
+		}
+		markErr = msg
+	}
 	if *fastEvery > 0 {
 		ft := time.NewTicker(*fastEvery)
 		defer ft.Stop()

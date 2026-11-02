@@ -203,6 +203,25 @@ test("while the page polls, an answer older than the tip on screen does not repl
   stop();
 });
 
+test("a new blob's rows reach whoever listens; rows that cannot be read are dropped and the stream goes on", () => {
+  const { feed, src, stop } = setup();
+  const heard = [];
+  const off = feed.onBlobs((b) => heard.push(b.total));
+  src.cur().send("tip", tip(1, Date.now()));
+  assert.equal(feed.last().height, 1);
+  src.cur().send("blobs", JSON.stringify({ blobs: [{ promise_hash: "a" }], total: 7 }));
+  assert.deepEqual(heard, [7]);
+  src.cur().send("blobs", "{not json");
+  src.cur().send("blobs", JSON.stringify({ total: 8 }));
+  assert.deepEqual(heard, [7]);
+  assert.equal(feed.phase(), "live");
+  off();
+  src.cur().send("blobs", JSON.stringify({ blobs: [], total: 9 }));
+  assert.deepEqual(heard, [7]);
+  stop();
+  mock.timers.tick(2000);
+});
+
 test("a tip that cannot be read is a failure", () => {
   const { feed, poll, src, stop } = setup();
   src.cur().send("tip", "not json");

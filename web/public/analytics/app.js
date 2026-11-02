@@ -1324,8 +1324,8 @@ try {
 const { $, $$, el, esc, sum, calm, keptFor, token, pct, readyPct, sharePct, int, count, N, U, TAIL, RANKS, inkOn, agg, regions, regionOf, seg, showTip, tipAt, hideTip, tipHead, tipRow, area, on, state, lit, pin, MAX_PINS } = M;
 
 const root = $("#hosting"), box = $(".tb", root), list = $(".tb-list", root), vs = $(".tb-vs", root), line = $(".sec-h p", root);
-// SORTED_TOP: rows before the others. SUB_NAMES: validators a row names when they fit..
-const SORTED_TOP = 8, SUB_NAMES = 3, VS_NAMES = 8, TAU = Math.PI * 2, DEG = Math.PI / 180;
+// SUB_NAMES: validators a row names when they fit. KEY_NAMES: the most the ring's key has room for.
+const SUB_NAMES = 3, KEY_NAMES = 10, VS_NAMES = 8, TAU = Math.PI * 2, DEG = Math.PI / 180;
 // Under this share ready, with hosts that do not report, a row has no reading worth printing.
 const READY_MIN = .001;
 // hot is what the pointer lights: { key, vs, name, share, hosts, colour, from }.
@@ -1336,6 +1336,18 @@ const SHORT = { "Hong Kong SAR China": "Hong Kong", "United Arab Emirates": "UAE
 const prov = () => S.by === "provider";
 const keyFn = { provider: (v) => v.company, country: (v) => v.cc, city: (v) => v.city + "|" + v.cc };
 const keyOf = (g) => (prov() ? g.name : S.by === "country" ? g.cc : g.name + "|" + g.cc);
+// Groups, biggest first, until what is left holds at most a third of all voting power, the share that can hold a blob back.
+function toLastThird(rows, total) {
+  let left = sum(rows, (g) => g.vp), n = 0;
+  for (const g of [...rows].sort((a, b) => b.vp - a.vp)) { if (left <= total / 3) break; left -= g.vp; n++; }
+  return n;
+}
+// The key's tone: the ramp's own step up to five; a longer key cuts the same ramp finer, and its leaders and seams tell neighbours apart.
+function keyTone(i, n) {
+  if (n <= RANKS) return `var(--p${i + 1})`;
+  const at = i * (RANKS - 1) / (n - 1), lo = Math.floor(at), part = at - lo;
+  return part ? `color-mix(in oklab, var(--p${lo + 1}) ${Math.round((1 - part) * 100)}%, var(--p${lo + 2}))` : `var(--p${lo + 1})`;
+}
 const srcOf = () => (prov() ? N().providers : S.by === "country" ? N().countries : N().cities);
 const noun = () => (prov() ? "providers" : S.by === "country" ? "countries" : "cities");
 const noun1 = () => (prov() ? "provider" : S.by === "country" ? "country" : "city");
@@ -1375,13 +1387,14 @@ function model() {
   hosted.forEach((v) => { const k = key(v); (mem.get(k) || mem.set(k, []).get(k)).push(v); });
   const src = srcOf().map((g) => { const k = keyOf(g), vs = mem.get(k) || []; return { ...g, key: k, rep: sum(vs.filter((v) => v.readiness !== "not_reported"), (v) => v.vp) }; });
   // The weighing ranks the ring's groups. The table is one list, largest first in whatever column it is sorted by.
-  const ranked = [...src].sort((a, b) => weight(b) - weight(a) || b.vp - a.vp), named = ranked.slice(0, RANKS), unnamed = ranked.slice(RANKS);
-  const resting = S.sort === S.weigh && S.dir < 0, top = ordered(src).slice(0, SORTED_TOP), shown = new Set(top.map((g) => g.key));
+  const cut = toLastThird(src, n.totals.voting_power), onKey = Math.min(cut, KEY_NAMES);
+  const ranked = [...src].sort((a, b) => weight(b) - weight(a) || b.vp - a.vp), named = ranked.slice(0, onKey), unnamed = ranked.slice(onKey);
+  const resting = S.sort === S.weigh && S.dir < 0, top = ordered(src).slice(0, cut), shown = new Set(top.map((g) => g.key));
   const tail = src.filter((g) => !shown.has(g.key));
   const rest = { ...agg(tail, "__rest", `${tail.length} more`), sum: true, rep: sum(tail, (g) => g.rep) };
   // The scale is the weighing's, so a bar keeps its length through every sort. The others are a figure, or their bar would halve every other.
   const scale = weight(ranked[0]);
-  V = { src, ranked, named, unnamed, top, tail, rest, scale, resting, tailKeys: new Set(tail.map((g) => g.key)), step: new Map(named.map((g, i) => [g.key, `var(--p${i + 1})`])), mem, byKey: new Map() };
+  V = { src, ranked, named, unnamed, top, tail, rest, scale, resting, tailKeys: new Set(tail.map((g) => g.key)), step: new Map(named.map((g, i) => [g.key, keyTone(i, named.length)])), mem, byKey: new Map() };
   [...src, rest].forEach((g) => V.byKey.set(g.key, g));
 }
 
@@ -1569,20 +1582,20 @@ function placeNames() {
   // A phone has no room for the leaders: the key stands beside the ring, its swatches name the slices.
   const tight = M.phone();
   const k = r.width / (2 * C), cx = r.left - b.left + C * k, cy = r.top - b.top + C * k, out = (R1 + 3) * k;
-  const rest = seq.filter((s) => s.tail), n = V.named.length, rows = n + (rest.length ? 1 : 0), pitch = b.height > 240 ? 32 : 23, lx = b.width - namesBox.clientWidth, ex = lx - RUN;
+  const rest = seq.filter((s) => s.tail), n = V.named.length, rows = n + (rest.length ? 1 : 0), pitch = Math.min(b.height > 240 ? 32 : 23, b.height / rows), lx = b.width - namesBox.clientWidth, ex = lx - RUN;
   const parts = V.named.map((g) => { const on = seq.filter((s) => s.g === g.key); return [arcs.get(on[0].id).b0, arcs.get(on.at(-1).id).b1]; });
   // The block of rows centres on the ring, so nothing hangs off its foot.
   const ys = Array.from({ length: rows }, (_, i) => cy + (i - (rows - 1) / 2) * pitch);
   const turn = tight ? 0 : bestTurn(parts, ys, cy, out), lane = cx + out + LANE;
   seq.forEach((s) => { const a = arcs.get(s.id); a.a0 = a.b0 + turn; a.a1 = a.b1 + turn; });
   kick();
-  const items = V.named.map((g, i) => ({ g, y: ys[i], c: `var(--p${i + 1})`, name: nameOf(g), val: weighText(g), a: anchorFor(parts[i][0] + turn, parts[i][1] + turn, ys[i], cy, out) }));
+  const items = V.named.map((g, i) => ({ g, y: ys[i], c: V.step.get(g.key), name: nameOf(g), val: weighText(g), a: anchorFor(parts[i][0] + turn, parts[i][1] + turn, ys[i], cy, out) }));
   if (rest.length) { const f = restFocus(); items.push({ rest: true, y: ys[n], c: "var(--hosting-tail)", name: f.name, val: S.weigh === "vp" ? sharePct(f.share) : f.hosts }); }
   S.pitch = pitch;
   items.forEach((it) => {
     const row = document.createElement("div");
     row.className = "nl" + (it.rest ? " oth" : ""); row.style.top = tight ? "" : it.y.toFixed(1) + "px";
-    // The key names the five; their figures stand in the rows below. Only the rest, which no row shows, keeps one.
+    // The key names the biggest; their figures stand in the rows below. Only the rest, which no row shows, keeps one.
     row.innerHTML = `<i style="background:${it.c}"></i><span>${esc(it.name)}</span>${it.rest ? `<b>${it.val}</b>` : ""}`;
     namesBox.append(row); it.row = row; it.dot = $("i", row);
     if (it.a != null && !tight) {
@@ -1617,15 +1630,20 @@ function paintNames(only) {
   });
   pickedKey();
 }
-// A pick past the five takes the rest's row and those under it: left lit, the rest would read as picked whole.
+// A pick past the key takes the rest's row and those under it: left lit, the rest would read as picked whole. A long key
+// has no room under the rest, so its last rows nobody picked give way, their leaders with them.
 function pickedKey() {
   $$(".nl.px", namesBox).forEach((n) => n.remove());
   const rest = names.find((it) => it.rest), out = picks().map((k) => V.byKey.get(k)).filter((g) => g && !V.named.includes(g));
   if (!rest) return;
   rest.row.hidden = !!out.length;
+  const under = M.phone() ? out.length : Math.max(1, Math.floor((namesBox.clientHeight - 11 - rest.y) / S.pitch) + 1), short = Math.max(0, out.length - under);
+  const give = short ? names.filter((it) => it.g && !picks().includes(it.g.key)).slice(-short) : [];
+  names.forEach((it) => { if (it.g) { it.row.hidden = give.includes(it); it.line?.classList.toggle("gone", give.includes(it)); } });
+  const ys = [...give.map((it) => it.y), ...out.slice(give.length).map((_, i) => rest.y + i * S.pitch)];
   out.forEach((g, i) => {
     const row = document.createElement("div");
-    row.className = "nl px"; row.style.top = M.phone() ? "" : (rest.y + i * S.pitch).toFixed(1) + "px";
+    row.className = "nl px"; row.style.top = M.phone() ? "" : ys[i].toFixed(1) + "px";
     row.innerHTML = `<i style="background:${tint(g)}"></i><span>${esc(nameOf(g))}</span><b>${weighText(g)}</b>`;
     row.addEventListener("click", () => { if (!M.touch()) togglePick(g.key); });
     namesBox.append(row);
@@ -1684,7 +1702,7 @@ function row(g, kind) {
   const pickable = kind === "lead" || kind === "tail", vb = kind === "rest" ? "" : bar(weight(g) / V.scale);
   const mark = kind === "rest" ? `<button type="button" class="ex" aria-expanded="${S.open}" aria-label="${S.open ? "Hide" : "Show"} ${esc(g.name)}">${CHEV}</button>` : pickable ? `<button type="button" class="pk" data-t="name" aria-pressed="false" aria-label="Pick ${esc(g.name)}">${CHECK}</button>` : "";
   const code = S.by === "city" && pickable ? `<code>${esc(g.cc)}</code>` : "";
-  const rank = !V.resting ? "" : kind === "lead" ? V.top.indexOf(g) + 1 : kind === "tail" ? SORTED_TOP + ordered(V.tail).indexOf(g) + 1 : "", sub = kind === "rest" ? "" : subOf(g);
+  const rank = !V.resting ? "" : kind === "lead" ? V.top.indexOf(g) + 1 : kind === "tail" ? V.top.length + ordered(V.tail).indexOf(g) + 1 : "", sub = kind === "rest" ? "" : subOf(g);
   return `<div class="tr rw ${kind}${kind === "rest" && S.open ? " opened" : ""}" data-k="${esc(g.key)}"${pickable ? " data-p" : ""} style="--c:${kind === "rest" ? "var(--ink3)" : rowTone(g)}">
     <span class="k-a">${mark}<em>${rank}</em><span class="nm"${pickable ? ' data-t="list"' : ""}>${esc(nameOf(g))}</span>${code}${sub ? `<small class="sub"${pickable ? ' data-t="list"' : ""}>${sub}</small>` : ""}</span>
     <span class="vb"><b class="vv${S.sort === S.weigh ? " srt" : ""}" data-t="${S.weigh}" data-l="${labelOf().own}">${weighText(g)}</b>${vb}</span>

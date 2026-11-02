@@ -4,8 +4,10 @@
  *
  * - Pop: each place's badge squeezes a little, swells to 1.2x (a lone dot to 1.35x) and settles back, in POP_MS,
  *   while a fill in its ring colour (white on a lone dot) shows over its body and fades. Its transform and the fill's
- *   opacity alone animate, on the compositor; nothing of the badge is read to do it.
- * - Ring: one thin ring per place leaves the badge's rim and slows as it goes (ease-out-quart) over RING_MS, light
+ *   opacity alone animate, on the compositor; nothing of the badge is read to do it. A burst that comes while the
+ *   last one still plays (the next blob of a block: run()) goes on top of it, half as strong, so the badge never jumps
+ *   back to rest in between.
+ * - Ring: one thin ring per burst leaves the badge's rim and slows as it goes (ease-out-quart) over RING_MS, light
  *   (--cm-burst-hi: white on the dark map) for its first third and then the map's teal (--cm-live), fading as
  *   (1 - t)^2.5; a place of many endorsers sends it further and a little brighter. Every ring is on one canvas under
  *   the badges, drawn at most FPS times a second and only while a ring is out.
@@ -60,6 +62,8 @@ export class Burst {
   private raf = 0;
   private drawn = 0;
   private step: ReturnType<typeof setInterval> | undefined;
+  /** the bursts of a run still to go out */
+  private later = new Set<ReturnType<typeof setTimeout>>();
   private ctx: CanvasRenderingContext2D | null;
   private dpr = 1;
   private teal: [number, number, number] = [51, 179, 191];
@@ -84,6 +88,15 @@ export class Burst {
     if (this.rings.length === 0) this.ctx?.clearRect(0, 0, W, H);
   }
 
+  /** bursts one after another, gapMs apart, the first now; stop() takes back those that have not gone out */
+  run(bursts: BurstPlace[][], gapMs: number): void {
+    bursts.forEach((places, i) => {
+      if (i === 0) { this.fire(places); return; }
+      const t = setTimeout(() => { this.later.delete(t); this.fire(places); }, i * gapMs);
+      this.later.add(t);
+    });
+  }
+
   /** a beat's places: each pops, sends its ring and warms, now. The colours are read once, before anything moves */
   fire(places: BurstPlace[], now = performance.now()): void {
     if (places.length === 0) return;
@@ -94,11 +107,11 @@ export class Burst {
       const at = this.where(p.id);
       if (!at) continue;
       const el = this.els(p.id);
-      if (el?.badge) this.pop(el.badge, el.pop, at.one);
-      const w = warmer(this.warmth.get(p.id), p.n, now);
+      const was = this.warmth.get(p.id);
+      if (el?.badge) this.pop(el.badge, el.pop, at.one, !!was && now - was.t < POP_MS);
+      const w = warmer(was, p.n, now);
       this.warmth.set(p.id, w);
       if (el?.trace) el.trace.style.opacity = w.h.toFixed(3);
-      this.rings = this.rings.filter((r) => r.id !== p.id);
       this.rings.push({ id: p.id, n: p.n, t0: now });
     }
     if (!this.raf) this.raf = requestAnimationFrame(this.frame);
@@ -107,6 +120,8 @@ export class Burst {
 
   /** what is out goes: the page was hidden, or the map went away; the warmth holds where it was until wake() */
   stop(): void {
+    for (const t of this.later) clearTimeout(t);
+    this.later.clear();
     cancelAnimationFrame(this.raf);
     this.raf = 0;
     this.rings = [];
@@ -122,8 +137,14 @@ export class Burst {
     if (this.warmth.size > 0 && this.step === undefined) this.step = setInterval(this.cool, STEP_MS);
   }
 
-  private pop(badge: HTMLElement, fill: HTMLElement | null, one: boolean) {
+  private pop(badge: HTMLElement, fill: HTMLElement | null, one: boolean, again: boolean) {
     const up = one ? 1.35 : 1.2;
+    if (again) {
+      const over = { duration: POP_MS, easing: "ease-out", composite: "add" as const };
+      badge.animate([{ transform: "scale(1)" }, { transform: `scale(${1 + (up - 1) / 2})`, offset: 0.4 }, { transform: "scale(1)" }], over);
+      fill?.animate([{ opacity: 0 }, { opacity: 0.3, offset: 0.3 }, { opacity: 0 }], over);
+      return;
+    }
     badge.animate([
       { transform: "scale(1)" },
       { transform: "scale(0.96)", offset: 0.1 },

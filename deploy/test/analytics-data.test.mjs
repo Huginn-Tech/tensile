@@ -16,7 +16,7 @@ const blob = (height, t) => ({
   charge: { fee_utia: 10 }, attested_voting_power: 2, total_voting_power: 3, reconstructable: { status: "recoverable" }, namespace: "00000000" + Buffer.from("krews").toString("hex"),
 });
 const validator = (n, extra = {}) => ({
-  operator_address: `celestiavaloper1${n}`, moniker: `v${n}`, voting_power: 10, host: "h", reachable: true, readiness: "ready", obligations: { total: 4, served: 4, broken: 0 }, signing: { assigned: 2, signed: 2 },
+  operator_address: `celestiavaloper1${n}`, moniker: `v${n}`, voting_power: 10, host: "h", readiness: "ready",
   hosting: { provider: "Other", as_org: "SERVERS-COM", asn: 7979, country: "DE", city: "Berlin", lat: 52.52, lon: 13.4 }, ...extra,
 });
 
@@ -33,9 +33,6 @@ function answer(req, res) {
     return send({ blobs: blobs.filter((b) => b.settlement_height < before).slice(0, 100) });
   }
   if (p === "/v1/validators") return send({ computed_at: "2026-10-31T00:00:00Z", validators: [validator(1), validator(2, { host: "", hosting: null })] });
-  if (p.startsWith("/v1/validators/")) return send({ validator: { reachability_window: { num: 9, den: 10 }, endpoint_since: "2026-10-01T00:00:00Z" }, endpoint_history: [{ outcome: "registered" }] });
-  if (p === "/v1/tip") return send({ height: 42 });
-  if (p === "/v1/hosting") return send({ sources: { looked_up_at: "2026-10-31T00:00:00Z" } });
   if (p === "/v1/params") return send({ price_formula: { base_gas: 1 }, protocol: {}, current: { effective_from_time: "2026-09-24T00:00:00Z" } });
   if (p === "/v1/market") return send({ window: { name: u.searchParams.get("window") }, settlements: blobs.length, daily: [], withdrawal_queue: {} });
   if (p === "/v1/publishers") return send({ publishers: [{ publisher: "celestia1aaaaaaaaaaaaaaaa", namespaces: [{ namespace: "00000000" + Buffer.from("krews").toString("hex") }] }] });
@@ -72,21 +69,22 @@ test("a first run reads every page and writes one file", async () => {
   assert.deepEqual(d.usage.addresses.sort(), ["celestia1aaaaaaaaaaaaaaaa", "celestia1bbbbbbbbbbbbbbbb"]);
   assert.equal(asked.filter((p) => p.startsWith("/v1/blobs")).length, 3);
   assert.equal(d.data.totals.hosts, 1);
-  assert.equal(d.data.totals.no_host_validators, 1);
+  assert.equal(d.data.totals.validators_bonded, 2);
   assert.equal(d.data.providers[0].name, "Servers.com");
   assert.equal(d.data.fibre_live_at, "2026-09-24T00:00:00Z");
-  assert.equal(d.data.validators[0].moves, 1);
+  assert.deepEqual(Object.keys(d.data.validators[0]).sort(), ["cc", "city", "company", "country", "has_host", "lat", "lon", "moniker", "readiness", "share", "valoper", "vp"]);
+  assert.deepEqual(Object.keys(d.data.providers[0]).sort(), ["cities", "companies", "countries", "host_share", "hosts", "name", "not_ready_hosts", "not_reported_hosts", "rank", "ready_hosts", "ready_share", "share", "validators", "vp"]);
+  assert.equal(asked.filter((p) => p.startsWith("/v1/validators/")).length, 0, "no validator's own page");
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("a later run reads the newest page and leaves validators' pages for the hour", async () => {
+test("a later run reads the newest page", async () => {
   assert.equal(await run(), 0);
   blobs = [blob(1001, NOW + 60), ...blobs];
   asked = [];
   assert.equal(await run(), 0);
   assert.equal(data().usage.settlements.length, 251);
   assert.deepEqual(asked.filter((p) => p.startsWith("/v1/blobs")), ["/v1/blobs?limit=100"]);
-  assert.equal(asked.filter((p) => p.startsWith("/v1/validators/")).length, 0);
   rmSync(dir, { recursive: true, force: true });
 });
 
