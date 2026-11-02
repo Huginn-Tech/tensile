@@ -261,15 +261,15 @@ button { font: inherit; color: inherit; }
 .hs-dd .hs-note { margin: 6px 10px 4px; font-size: 12.5px; line-height: 18px; color: var(--text-2); }
 .hs-wait { color: var(--text-3); }
 @media (hover: none) { .hs-key { display: none; } }
-/* Tensile and the menu to the left, the block, the network and the theme to the right, the search between two equal
-   sides: wider than the page under it, for the menu's room. Where the menu needs more than its side, the search stands
-   24 px after it */
+/* The search on the page's centre line, Tensile and the menu drawn in on its left, the block, the network and the theme
+   on its right: 36 px from the search to the last menu word and to the block alike (a menu link carries 12 px of its
+   own). Where the menu needs more than its side, the search stands after it */
 .top .lead { display: contents; }
 @media (min-width: 1120px) {
-  .top .wrap { display: grid; grid-template-columns: 1fr minmax(160px, 328px) 1fr; column-gap: 24px; max-width: 1440px; padding: 0 20px; }
-  .top .lead { display: flex; align-items: center; gap: 40px; }
+  .top .wrap { display: grid; grid-template-columns: 1fr minmax(160px, 360px) 1fr; column-gap: 24px; max-width: none; padding: 0 16px; }
+  .top .lead { display: flex; align-items: center; gap: 28px; justify-self: end; }
   .top nav { min-width: max-content; }
-  .top .right { margin-left: 0; justify-self: end; }
+  .top .right { margin-left: 12px; justify-self: start; }
 }
 @media (max-width: 1119px) {
   .top .wrap { flex-wrap: wrap; height: auto; min-height: 56px; row-gap: 0; }
