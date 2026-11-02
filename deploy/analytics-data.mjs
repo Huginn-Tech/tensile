@@ -1,6 +1,6 @@
-// The Analytics page's one data file. The page draws every settlement and every validator's record, some two hundred
-// API reads, so a timer on the API's host reads them once (fibre-analytics@) and each visitor fetches the result. No IPs
-// and no host strings go in. Node's standard library only, as site-server.cjs.
+// The Analytics page's one data file. The page draws every settlement and every validator's host, many API reads, so a
+// timer on the API's host reads them once (fibre-analytics@) and each visitor fetches the result. No IPs and no host
+// strings go in. Node's standard library only, as site-server.cjs.
 //
 //   API_LISTEN       observer-api's host:port, default 127.0.0.1:8081, the same variable its unit reads
 //   NETWORK          the network's name, the instance of the unit
@@ -16,8 +16,6 @@ const DIR = process.env.STATE_DIRECTORY || ".";
 const WINDOWS = ["24h", "7d", "30d", "all"];
 // The last day of settlements is read again each run: a recent blob's availability is still being decided.
 const REREAD_S = 24 * 3600;
-// A validator's own page costs the database a third of a second, and what is taken from it moves slowly.
-const DETAILS_EVERY_MS = 3600 * 1e3;
 
 const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
 async function get(p) {
@@ -118,55 +116,36 @@ async function usage(rows) {
   };
 }
 
-// What each validator's own page adds to the list, kept between runs.
-async function details(list, known) {
-  if (known.read_at && Date.now() - known.read_at < DETAILS_EVERY_MS && list.every((v) => known.by[v.operator_address])) return known;
-  const by = {};
-  for (const v of list) {
-    const d = await get(`/validators/${v.operator_address}?window=30d`);
-    by[v.operator_address] = { reach: d.validator?.reachability_window ?? null, endpoint_since: d.validator?.endpoint_since ?? null, moves: (d.endpoint_history ?? []).length };
-    await sleep(100);
-  }
-  return { read_at: Date.now(), by };
-}
-
-function hosting(listed, by, tip, host, params) {
+function hosting(listed, params) {
   const list = listed.validators;
   const bonded = (v) => !v.jailed && (!v.bond_status || v.bond_status === "BOND_STATUS_BONDED");
   const T = list.filter(bonded).reduce((a, v) => a + (v.voting_power || 0), 0);
-  const rows = list.map((v) => {
-    const d = by[v.operator_address] || {};
+  const rows = list.filter(bonded).map((v) => {
     const h = v.hosting || null;
     const company = h ? (h.provider && h.provider !== "Other" ? h.provider : pretty(h.as_org, h.asn)) : null;
     return {
-      moniker: v.moniker, valoper: v.operator_address, vp: v.voting_power || 0, share: bonded(v) && T ? +(v.voting_power / T).toFixed(6) : 0, bonded: bonded(v), jailed: !!v.jailed, has_host: !!v.host,
-      company, asn: h?.asn ?? null, cc: h?.country ?? null, country: h?.country ? cname(h.country) : null, city: h?.city ?? null, lat: h?.lat != null ? +h.lat.toFixed(2) : null, lon: h?.lon != null ? +h.lon.toFixed(2) : null,
-      reachable_now: v.reachable ?? null, readiness: v.readiness ?? null, reach: d.reach ? { num: d.reach.num, den: d.reach.den } : null,
-      obligations: v.obligations ? { total: v.obligations.total, served: v.obligations.served, broken: v.obligations.broken } : null,
-      signing: v.signing ? { assigned: v.signing.assigned, signed: v.signing.signed } : null, endpoint_since: d.endpoint_since ?? null, moves: d.moves ?? 0,
+      moniker: v.moniker, valoper: v.operator_address, vp: v.voting_power || 0, share: T ? +(v.voting_power / T).toFixed(6) : 0, has_host: !!v.host,
+      company, cc: h?.country ?? null, country: h?.country ? cname(h.country) : null, city: h?.city ?? null, lat: h?.lat != null ? +h.lat.toFixed(2) : null, lon: h?.lon != null ? +h.lon.toFixed(2) : null,
+      readiness: v.readiness ?? null,
     };
   }).sort((a, b) => b.vp - a.vp);
-  const hosted = rows.filter((r) => r.has_host && r.bonded);
+  const hosted = rows.filter((r) => r.has_host);
   const group = (keyf) => {
     const m = new Map();
     for (const r of hosted) {
       const k = keyf(r); if (k == null) continue;
-      if (!m.has(k)) m.set(k, { key: k, vp: 0, hosts: 0, validators: [], countries: new Set(), cities: new Set(), companies: new Set(), asns: new Set(), rn: 0, rd: 0, ready_vp: 0, ready: 0, not_ready: 0, not_reported: 0, served: 0, total: 0, broken: 0, signed: 0, assigned: 0 });
+      if (!m.has(k)) m.set(k, { key: k, vp: 0, hosts: 0, validators: [], countries: new Set(), cities: new Set(), companies: new Set(), ready_vp: 0, ready: 0, not_ready: 0, not_reported: 0 });
       const g = m.get(k);
       g.vp += r.vp; g.hosts++; g.validators.push({ moniker: r.moniker, share: r.share });
       if (r.cc) g.countries.add(r.cc);
       if (r.city) g.cities.add(r.city);
       if (r.company) g.companies.add(r.company);
-      if (r.asn) g.asns.add(r.asn);
-      if (r.reach) { g.rn += r.reach.num; g.rd += r.reach.den; }
       if (r.readiness === "ready") { g.ready++; g.ready_vp += r.vp; } else if (r.readiness === "not_ready") g.not_ready++; else g.not_reported++;
-      if (r.obligations) { g.served += r.obligations.served; g.total += r.obligations.total; g.broken += r.obligations.broken; }
-      if (r.signing) { g.signed += r.signing.signed; g.assigned += r.signing.assigned; }
     }
     return [...m.values()].sort((a, b) => b.vp - a.vp).map((g, i) => ({
-      rank: i + 1, name: g.key, share: +(g.vp / T).toFixed(6), vp: g.vp, hosts: g.hosts, host_share: +(g.hosts / hosted.length).toFixed(6), countries: [...g.countries], cities: [...g.cities], companies: [...g.companies], asns: [...g.asns],
-      reachability: rate(g.rn, g.rd), checks: g.rd, failed_checks: g.rd - g.rn, ready_hosts: g.ready, not_ready_hosts: g.not_ready, not_reported_hosts: g.not_reported, ready_share: rate(g.ready_vp, g.vp),
-      served: g.served, shards: g.total, not_served: g.broken, signed: g.signed, assigned: g.assigned, validators: g.validators.sort((a, b) => b.share - a.share),
+      rank: i + 1, name: g.key, share: +(g.vp / T).toFixed(6), vp: g.vp, hosts: g.hosts, host_share: +(g.hosts / hosted.length).toFixed(6), countries: [...g.countries], cities: [...g.cities], companies: [...g.companies],
+      ready_hosts: g.ready, not_ready_hosts: g.not_ready, not_reported_hosts: g.not_reported, ready_share: rate(g.ready_vp, g.vp),
+      validators: g.validators.sort((a, b) => b.share - a.share),
     }));
   };
   const providers = group((r) => r.company);
@@ -175,24 +154,22 @@ function hosting(listed, by, tip, host, params) {
     const [city, cc] = c.name.split("|"), f = hosted.find((r) => r.city === city && r.cc === cc);
     return { ...c, name: city, cc, country: cname(cc), lat: f?.lat ?? null, lon: f?.lon ?? null };
   });
-  const noHost = rows.filter((r) => !r.has_host && r.bonded);
   return {
-    read_at: listed.computed_at, height: tip.height, hosting_looked_up_at: host.sources?.looked_up_at,
+    read_at: listed.computed_at,
     fibre_live_at: params.history?.[0]?.effective_from_time ?? params.current?.effective_from_time ?? null,
     totals: {
-      voting_power: T, validators_bonded: rows.filter((r) => r.bonded).length, hosts: hosted.length, host_vp_share: +hosted.reduce((a, r) => a + r.share, 0).toFixed(6), no_host_validators: noHost.length, no_host_vp_share: +noHost.reduce((a, r) => a + r.share, 0).toFixed(6),
-      providers: providers.length, countries: countries.length, cities: cities.length, asns: new Set(hosted.map((r) => r.asn).filter(Boolean)).size,
-      ready_hosts: hosted.filter((r) => r.readiness === "ready").length, not_ready_hosts: hosted.filter((r) => r.readiness === "not_ready").length, not_reported_hosts: hosted.filter((r) => !["ready", "not_ready"].includes(r.readiness)).length, ready_vp_share: +hosted.filter((r) => r.readiness === "ready").reduce((a, r) => a + r.share, 0).toFixed(6),
+      voting_power: T, validators_bonded: rows.length, hosts: hosted.length, host_vp_share: +hosted.reduce((a, r) => a + r.share, 0).toFixed(6),
+      providers: providers.length, countries: countries.length, cities: cities.length,
+      ready_hosts: hosted.filter((r) => r.readiness === "ready").length, not_ready_hosts: hosted.filter((r) => r.readiness === "not_ready").length, not_reported_hosts: hosted.filter((r) => !["ready", "not_ready"].includes(r.readiness)).length,
     },
-    providers, countries, cities, validators: rows.filter((r) => r.bonded),
+    providers, countries, cities, validators: rows,
   };
 }
 
-const state = readJson("state.json", { rows: [], details: {} });
+const state = readJson("state.json", { rows: [] });
 const rows = await settlements(state.rows);
 const listed = await get("/validators?window=30d");
-const known = await details(listed.validators, state.details);
-const [tip, host, params] = [await get("/tip"), await get("/hosting"), await get("/params")];
-writeJson("data.json", { net: NET, usage: await usage(rows), data: hosting(listed, known.by, tip, host, params) });
-writeJson("state.json", { rows, details: known });
+const params = await get("/params");
+writeJson("data.json", { net: NET, usage: await usage(rows), data: hosting(listed, params) });
+writeJson("state.json", { rows });
 console.log(`analytics-data: ${rows.length} settlements, ${listed.validators.length} validators`);
