@@ -231,12 +231,14 @@ export function Header() {
   return (
     <header className="top">
       <div className="wrap">
-        <Link className="brand" href="/" aria-label="Tensile, the independent observer for Celestia Fibre"><Mark />Tensile</Link>
-        <nav aria-label="site">
-          {NAV.map(([href, name]) => (
-            <Link key={href} href={href} className={(href === "/" ? path === "/" : path.startsWith(href)) ? "on" : ""}>{name}</Link>
-          ))}
-        </nav>
+        <div className="lead">
+          <Link className="brand" href="/" aria-label="Tensile, the independent observer for Celestia Fibre"><Mark />Tensile</Link>
+          <nav aria-label="site">
+            {NAV.map(([href, name]) => (
+              <Link key={href} href={href} className={(href === "/" ? path === "/" : path.startsWith(href)) ? "on" : ""}>{name}</Link>
+            ))}
+          </nav>
+        </div>
         <HeaderSearch />
         <div className="right">
           <BlockTicker meta={meta} />

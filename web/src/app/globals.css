@@ -212,11 +212,9 @@ button { font: inherit; color: inherit; }
 .net { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-size: var(--t-cell); font-weight: 500; height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--wash); white-space: nowrap; }
 .net .dot { margin-right: 0; }
 
-/* The site search (HeaderSearch.tsx): 24 px after the nav, so nothing that loads to its right (the network chip says
-   "connecting…" until the API answers) moves it; at least 40 px clear of the block, filled rather than outlined until
-   it has focus. Under 1120 px that space is too narrow for it, so it takes a row of
-   its own under the header line. */
-.top .hs { flex: 1; min-width: 0; display: flex; justify-content: flex-start; margin: 0 0 0 -16px; }
+/* The site search (HeaderSearch.tsx): on the page's centre line, filled rather than outlined until it has focus.
+   Under 1120 px that space is too narrow for it, so it takes a row of its own under the header line. */
+.top .hs { flex: 1; min-width: 0; display: flex; justify-content: flex-start; }
 .hs-box { position: relative; width: 100%; max-width: 360px; }
 .hs-field { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 8px 0 12px; border: 1px solid transparent; border-radius: 9px; background: var(--wash); color: var(--text-3); cursor: text; transition: background var(--dur), border-color var(--dur), box-shadow var(--dur); }
 .hs-field:hover { border-color: var(--border); }
@@ -263,9 +261,16 @@ button { font: inherit; color: inherit; }
 .hs-dd .hs-note { margin: 6px 10px 4px; font-size: 12.5px; line-height: 18px; color: var(--text-2); }
 .hs-wait { color: var(--text-3); }
 @media (hover: none) { .hs-key { display: none; } }
-/* the block, the network and the theme nearer the edge than the page under them, for the search's room: 48 px out
-   where the page has a margin to take it from, never closer than 16 px to the window's edge */
-@media (min-width: 1120px) { .top .right { margin-right: calc(-1 * min(48px, 24px + max(0px, (100vw - var(--page)) / 2))); } }
+/* Tensile and the menu to the left, the block, the network and the theme to the right, the search between two equal
+   sides: wider than the page under it, for the menu's room. Where the menu needs more than its side, the search stands
+   24 px after it */
+.top .lead { display: contents; }
+@media (min-width: 1120px) {
+  .top .wrap { display: grid; grid-template-columns: 1fr minmax(160px, 328px) 1fr; column-gap: 24px; max-width: 1440px; padding: 0 20px; }
+  .top .lead { display: flex; align-items: center; gap: 40px; }
+  .top nav { min-width: max-content; }
+  .top .right { margin-left: 0; justify-self: end; }
+}
 @media (max-width: 1119px) {
   .top .wrap { flex-wrap: wrap; height: auto; min-height: 56px; row-gap: 0; }
   .top .hs { order: 4; flex-basis: 100%; margin: 0; padding: 2px 0 12px; }
