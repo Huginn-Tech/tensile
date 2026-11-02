@@ -1336,12 +1336,6 @@ const SHORT = { "Hong Kong SAR China": "Hong Kong", "United Arab Emirates": "UAE
 const prov = () => S.by === "provider";
 const keyFn = { provider: (v) => v.company, country: (v) => v.cc, city: (v) => v.city + "|" + v.cc };
 const keyOf = (g) => (prov() ? g.name : S.by === "country" ? g.cc : g.name + "|" + g.cc);
-// Groups, biggest first, until what is left holds at most a third of all voting power, the share that can hold a blob back.
-function toLastThird(rows, total) {
-  let left = sum(rows, (g) => g.vp), n = 0;
-  for (const g of [...rows].sort((a, b) => b.vp - a.vp)) { if (left <= total / 3) break; left -= g.vp; n++; }
-  return n;
-}
 // The key's tone: the ramp's own step up to five; a longer key cuts the same ramp finer, and its leaders and seams tell neighbours apart.
 function keyTone(i, n) {
   if (n <= RANKS) return `var(--p${i + 1})`;
@@ -1387,7 +1381,8 @@ function model() {
   hosted.forEach((v) => { const k = key(v); (mem.get(k) || mem.set(k, []).get(k)).push(v); });
   const src = srcOf().map((g) => { const k = keyOf(g), vs = mem.get(k) || []; return { ...g, key: k, rep: sum(vs.filter((v) => v.readiness !== "not_reported"), (v) => v.vp) }; });
   // The weighing ranks the ring's groups. The table is one list, largest first in whatever column it is sorted by.
-  const cut = toLastThird(src, n.totals.voting_power), onKey = Math.min(cut, KEY_NAMES);
+  // The list and the key name the fewest groups that can hold a blob back; the two thirds it needs are the rest.
+  const cut = Math.max(1, toStop(src, n.totals.voting_power).n), onKey = Math.min(cut, KEY_NAMES);
   const ranked = [...src].sort((a, b) => weight(b) - weight(a) || b.vp - a.vp), named = ranked.slice(0, onKey), unnamed = ranked.slice(onKey);
   const resting = S.sort === S.weigh && S.dir < 0, top = ordered(src).slice(0, cut), shown = new Set(top.map((g) => g.key));
   const tail = src.filter((g) => !shown.has(g.key));
