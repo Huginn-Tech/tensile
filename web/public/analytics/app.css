@@ -538,6 +538,8 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting .rw:hover, #hosting .rw.lit { --rowbg: var(--wash2); }
 #hosting .tb.wide .rw.lit:not(:hover):not(.rest) { --rowbg: transparent; }
 #hosting .rw.rest { --rowbg: var(--wash2); margin-top: 3px; }
+#hosting .lim { display: flex; align-items: center; column-gap: 8px; height: 17px; padding: 0 8px; font-size: var(--fs-tick); font-weight: 500; line-height: 1; color: var(--ink2); }
+#hosting .lim::after { content: ""; flex: 1; height: 1px; background: var(--line2); }
 #hosting .rw.rest:hover, #hosting .rw.rest.lit { --rowbg: var(--wash3); }
 
 /* rank, name. A row's hover swaps the rank for the pick. */
@@ -641,7 +643,10 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 
 /* name with its validators, the weighing and its bar, the other figure */
 #hosting { --cols: 320px minmax(0, 1fr) 96px; --gap: 14px; --th: 30px; --slot: 42px; }
-#hosting .band { grid-template-columns: 384px minmax(0, 1fr); column-gap: 24px; }
+#hosting .band { grid-template-columns: 384px minmax(0, 1fr); column-gap: 10px; }
+/* the map has the band's whole height; the count and the key stand in its top strip, and the land starts under them */
+#hosting .where { position: relative; grid-template-rows: minmax(0, 1fr); row-gap: 0; }
+#hosting .where .say { position: absolute; inset: 0 0 auto; z-index: 3; pointer-events: none; }
 #hosting .ringbox { left: -3px; top: 18px; width: 188px; height: 188px; }
 #hosting .names { width: 176px; }
 #hosting .nl { font-size: var(--fs-note); }
@@ -652,13 +657,13 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting .say p small { font-size: var(--fs-note); line-height: 17px; color: var(--ink); }
 /* two lines in every view, so the ring and the map stay put when the weighing changes */
 #hosting .say-who small { min-height: 17px; }
-/* level with that second line, so the map under it stays where it is */
-#hosting .say-where { padding-top: 19px; }
-/* the frame stands around the line, which keeps its height: the map under it stays put */
-#hosting .say p.say-where small { width: fit-content; margin-block: -5px; padding: 4px 10px; border: 1px solid var(--line2); border-radius: var(--r3); font-size: var(--fs-row); }
-#hosting .mkey { font-size: var(--fs-tick); }
+#hosting .say p.say-where small { width: fit-content; padding: 4px 10px; background: var(--card); border: 1px solid var(--line2); border-radius: var(--r3); font-size: var(--fs-row); }
+#hosting .mkey { top: 3px; bottom: auto; font-size: var(--fs-tick); }
 #hosting .mreg > div > u { display: none; }
-#hosting .mside { width: 132px; }
+/* the rail in a clear frame; the card's own colour keeps the land out from under it */
+#hosting .mside { width: 170px; padding: 7px 10px 8px; border: 1px solid var(--line2); border-radius: var(--r3); background: var(--card); }
+#hosting .mreg { background: none; }
+#hosting .mhd { display: block; overflow: hidden; line-height: var(--pitch, 20px); text-overflow: ellipsis; }
 #hosting .tr { padding-inline: 8px; }
 #hosting .tb { padding: 0 8px; }
 #hosting .th { margin: 0 -8px; padding: 0 16px; }
@@ -692,8 +697,8 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #hosting .ask3 { display: none; }
 }
 @media (max-width: 1100px) {
-  #hosting .mkey { position: static; margin-top: 4px; }
   #hosting .sec-h { flex-wrap: wrap; row-gap: 8px; }
+  #hosting .mside { width: 156px; padding-inline: 9px; }
   #hosting .sec-h p { flex: 0 0 auto; }
   #hosting .ctl { flex: 0 0 100%; margin-left: 0; }
   #hosting { --cols: 260px minmax(0, 1fr) 96px; --gap: 12px; }
@@ -781,16 +786,16 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #hosting .sec-h p { flex: 1 1 100%; overflow: visible; }
   #hosting .band { grid-template-columns: minmax(0, 1fr); row-gap: 20px; }
   #hosting .say .lead { white-space: normal; }
-  #hosting .say-where { padding-top: 0; }
-  #hosting .say p.say-where small { margin-block: 0; }
+  #hosting .where { grid-template-rows: auto 1fr; row-gap: 12px; }
+  #hosting .where .say { position: relative; inset: auto; }
   #hosting .say-who small:empty { display: none; }
   #hosting .whobox { max-width: 384px; }
-  #hosting .mkey { flex-wrap: wrap; height: auto; }
+  #hosting .mkey { position: static; flex-wrap: wrap; height: auto; margin-top: 4px; }
   #hosting .mp { height: auto; overflow: visible; }
   #hosting .mp canvas { position: relative; inset: auto; height: auto; aspect-ratio: 2.27; }
   #hosting .mp > svg { inset: 0 0 auto; height: auto; aspect-ratio: 2.27; }
-  #hosting .mside { position: static; width: auto; margin-top: 8px; pointer-events: auto; }
-  #hosting .mhd { height: 20px; }
+  #hosting .mside { position: static; width: auto; margin-top: 8px; padding: 8px 12px; pointer-events: auto; }
+  #hosting .mhd { height: 20px; line-height: 20px; }
   #hosting .mreg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 24px; background: none; }
   #hosting .mreg > div { height: 40px; padding: 0 6px; margin: 0 -6px; }
 
@@ -802,6 +807,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #hosting .rw, #hosting .tb.vs .tr { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "a" "v" "n"; gap: 6px; align-items: end; }
   #hosting .rw { height: auto; padding: 8px; }
   #hosting .tr.rw { padding-inline: 0; border-top: 1px solid var(--line); border-radius: 0; }
+  #hosting .lim { padding-inline: 0; }
   #hosting .rw:hover, #hosting .rw.lit { --rowbg: transparent; }
   #hosting .rw.rest, #hosting .tb.vs .rw.rest { margin-top: 2px; padding: 10px 8px; border: 0; border-radius: var(--r3); }
   #hosting .k-a { grid-area: a; grid-template-columns: 26px minmax(0, 1fr) auto; column-gap: 0; }

@@ -1325,7 +1325,7 @@ const { $, $$, el, esc, sum, calm, keptFor, token, pct, readyPct, sharePct, int,
 
 const root = $("#hosting"), box = $(".tb", root), list = $(".tb-list", root), vs = $(".tb-vs", root), line = $(".sec-h p", root);
 // SUB_NAMES: validators a row names when they fit. KEY_NAMES: the most the ring's key has room for.
-const SUB_NAMES = 3, KEY_NAMES = 10, VS_NAMES = 8, TAU = Math.PI * 2, DEG = Math.PI / 180;
+const SUB_NAMES = 3, KEY_NAMES = 11, VS_NAMES = 8, TAU = Math.PI * 2, DEG = Math.PI / 180;
 // Under this share ready, with hosts that do not report, a row has no reading worth printing.
 const READY_MIN = .001;
 // hot is what the pointer lights: { key, vs, name, share, hosts, colour, from }.
@@ -1381,15 +1381,18 @@ function model() {
   hosted.forEach((v) => { const k = key(v); (mem.get(k) || mem.set(k, []).get(k)).push(v); });
   const src = srcOf().map((g) => { const k = keyOf(g), vs = mem.get(k) || []; return { ...g, key: k, rep: sum(vs.filter((v) => v.readiness !== "not_reported"), (v) => v.vp) }; });
   // The weighing ranks the ring's groups. The table is one list, largest first in whatever column it is sorted by.
-  // The list and the key name the fewest groups that can hold a blob back; the two thirds it needs are the rest.
-  const cut = Math.max(1, toStop(src, n.totals.voting_power).n), onKey = Math.min(cut, KEY_NAMES);
+  // The list and the key run to the two thirds of all voting power a settlement needs; a third is what can hold one back.
+  const byPower = [...src].sort((a, b) => b.vp - a.vp), past = (part) => { let held = 0, i = 0; while (i < byPower.length && held <= n.totals.voting_power * part) held += byPower[i++].vp; return i; };
+  const cut = Math.max(1, past(2 / 3)), onKey = Math.min(cut, KEY_NAMES);
   const ranked = [...src].sort((a, b) => weight(b) - weight(a) || b.vp - a.vp), named = ranked.slice(0, onKey), unnamed = ranked.slice(onKey);
   const resting = S.sort === S.weigh && S.dir < 0, top = ordered(src).slice(0, cut), shown = new Set(top.map((g) => g.key));
   const tail = src.filter((g) => !shown.has(g.key));
   const rest = { ...agg(tail, "__rest", `${tail.length} more`), sum: true, rep: sum(tail, (g) => g.rep) };
   // The scale is the weighing's, so a bar keeps its length through every sort. The others are a figure, or their bar would halve every other.
   const scale = weight(ranked[0]);
-  V = { src, ranked, named, unnamed, top, tail, rest, scale, resting, tailKeys: new Set(tail.map((g) => g.key)), step: new Map(named.map((g, i) => [g.key, keyTone(i, named.length)])), mem, byKey: new Map() };
+  // The lines say so only while the rows run down voting power.
+  const limits = new Map(S.sort === "vp" && S.dir < 0 ? [[past(1 / 3), "&gt;33%"], [past(2 / 3), "&gt;66%"]] : []);
+  V = { src, ranked, named, unnamed, top, tail, rest, scale, resting, limits, tailKeys: new Set(tail.map((g) => g.key)), step: new Map(named.map((g, i) => [g.key, keyTone(i, named.length)])), mem, byKey: new Map() };
   [...src, rest].forEach((g) => V.byKey.set(g.key, g));
 }
 
@@ -1606,15 +1609,17 @@ function placeNames() {
   names = items;
   alignRail();
 }
-// The region rail keeps the names' rhythm, and the two lists end on one line.
+// The region rail opens on the key's first line, in a pitch that keeps its frame inside the band.
+const RAIL_ROW = 20;
 function alignRail() {
-  const end = namesBox.lastElementChild, rows = regBox.children.length;
+  const first = namesBox.firstElementChild, rows = regBox.children.length;
   // A narrow page has the regions under the map, in their own rows.
   if (M.narrow()) { side.style.top = ""; side.style.setProperty("--pitch", "40px"); return; }
-  if (!end || !rows) return;
-  const c = end.getBoundingClientRect(), m = mp.getBoundingClientRect(), y = c.top + c.height / 2 - m.top;
-  side.style.setProperty("--pitch", S.pitch + "px");
-  side.style.top = y - (rows + .5) * S.pitch + "px";
+  if (!first || !rows) return;
+  const c = first.getBoundingClientRect(), m = mp.getBoundingClientRect(), y = c.top + c.height / 2 - m.top;
+  side.style.setProperty("--pitch", RAIL_ROW + "px");
+  const top = y - RAIL_ROW / 2 - side.clientTop - parseFloat(getComputedStyle(side).paddingTop);
+  side.style.top = Math.min(top, mp.clientHeight - side.offsetHeight) + "px";
 }
 let names = [];
 function paintNames(only) {
@@ -1703,6 +1708,8 @@ function row(g, kind) {
     <span class="vb"><b class="vv${S.sort === S.weigh ? " srt" : ""}" data-t="${S.weigh}" data-l="${labelOf().own}">${weighText(g)}</b>${vb}</span>
     ${cells(g)}</div>`;
 }
+// A thin line under the row where the list passes a third, then two thirds, of all voting power.
+const limitLine = (n) => (V.limits.has(n) ? `<div class="lim">${V.limits.get(n)}</div>` : "");
 // What one pick leaves to do, in the head, over the bars and ending where they do.
 const HINT = () => `<span class="hint"><span class="ask3" hidden>Pick one more</span><span class="next" hidden><button type="button" class="clear">Clear picks</button></span></span>`;
 // A narrow list is long and Compare stands under it, so the picks ride along at the foot of the screen.
@@ -1720,7 +1727,7 @@ function render() {
   box.dataset.by = S.by;
   say();
   list.innerHTML = `<div class="top">${head()}</div>`
-    + ordered(V.top).map((g) => row(g, "lead")).join("")
+    + ordered(V.top).map((g, i) => row(g, "lead") + limitLine(i + 1)).join("")
     + (V.tail.length ? `<div class="tailbox${S.open ? " open" : ""}"><div>${ordered(V.tail).map((g) => row(g, "tail")).join("")}</div></div>` + row(V.rest, "rest") : "") + TRAY;
   if (!calm) $$(".tr.rw", list).forEach((r) => {
     const y = was.get(r.dataset.k); if (y == null) return;
@@ -1923,7 +1930,7 @@ root.addEventListener("click", (e) => { if (e.target.closest(".clear")) clearPic
 /* ---------- map ---------- */
 // World units: all the land. The band has a sentence above it now, so a crop would read as a cut across the card.
 // EDGE: land stops this far from the card's text edge. RAIL_GAP: what the westmost mark keeps from the rail, past RAIL_R, the room its disc takes.
-const LANDS = { x0: 14, y0: 5, x1: 4777, y1: 2100 }, EDGE = 4, RAIL_GAP = 12, RAIL_R = 8, SMALL = 640;
+const LANDS = { x0: 14, y0: 5, x1: 4777, y1: 2100 }, EDGE = 4, RAIL_GAP = 12, RAIL_R = 8, KEY_GAP = 4, SMALL = 640;
 // SAME: how close two cities must sit to be one point on the map. Anything further apart stays two discs, overlapping if it must.
 // HIT: how far past its edge a mark answers, HIT_MIN how near its centre at least.
 const K = 23, RMIN = 2.6, SAME = 16, HIT = 3, HIT_MIN = 6, LABEL_MIN = .03, LABEL_TOP = 4, LABEL_TOP_NARROW = 3, NARROW = 800, BIG = .045;
@@ -1947,9 +1954,11 @@ function buildGeo() {
 function frameCam() {
   P.w = canvas.clientWidth; P.h = canvas.clientHeight;
   // The land hangs from the right edge, at the scale that keeps every mark off the rail: the rail then has the Pacific in any weighing. A narrow page has it under the map.
+  // It starts under the key, which stands in the top corner.
   const bh = LANDS.y1 - LANDS.y0, west = Math.min(...geo.cities.filter((g) => g.vs.length).map((g) => g.wx));
-  const s = Math.min(P.h / bh, (P.w - EDGE - (M.narrow() ? 0 : side.offsetWidth + RAIL_GAP) - RAIL_R) / (LANDS.x1 - west));
-  P.cam = { s, x: LANDS.x1 - (P.w - EDGE) / s, y: LANDS.y0 - (P.h - bh * s) / 2 / s };
+  const top = M.narrow() ? 0 : keyBox.getBoundingClientRect().bottom - mp.getBoundingClientRect().top + KEY_GAP;
+  const s = Math.min((P.h - top) / bh, (P.w - EDGE - (M.narrow() ? 0 : side.offsetWidth + RAIL_GAP) - RAIL_R) / (LANDS.x1 - west));
+  P.cam = { s, x: LANDS.x1 - (P.w - EDGE) / s, y: LANDS.y0 - (top + (P.h - top - bh * s) / 2) / s };
 }
 const at = (wx, wy) => ({ x: (wx - P.cam.x) * P.cam.s, y: (wy - P.cam.y) * P.cam.s });
 function drawLand() {
@@ -1993,16 +2002,16 @@ function drawBase() {
 /* ---------- labels: marks never move, a label finds room around its mark ---------- */
 function reserved() {
   if (M.narrow()) return [];
-  // The rail's whole column, top to bottom: a label above it would read as its heading.
-  const m = mp.getBoundingClientRect(), b = side.getBoundingClientRect();
-  return [{ x0: b.left - m.left, x1: b.right - m.left + RAIL_CLEAR, y0: 0, y1: m.height }];
+  // The rail's whole column, top to bottom: a label above it would read as its heading. The key stands over the land's top corner.
+  const m = mp.getBoundingClientRect(), b = side.getBoundingClientRect(), k = keyBox.getBoundingClientRect();
+  return [{ x0: b.left - m.left, x1: b.right - m.left + RAIL_CLEAR, y0: 0, y1: m.height }, { x0: k.left - m.left, x1: k.right - m.left, y0: k.top - m.top, y1: k.bottom - m.top }];
 }
 const ANGLES = [0, 180, -90, 90, -45, 45, -135, 135, 60, 120, -60, -120, 30, 150, -30, -150, 75, 105, -75, -105, 15, 165, -15, -165], GAPS = [5, 14, 24, 36, 50, 66], NO_LINE = 6, LINE_CLEAR = 24;
 // The big cities take the top, so the crowd around them keeps its sides.
 const ANGLES_BIG = [-90, -135, ...ANGLES.filter((a) => a !== -90 && a !== -135)];
 // COAST: text across a coast loses both edges, so a clean spot is worth this many px. LEAD: a leader at all costs this many.
 // ORDER: a price on two column labels read against their size.
-const LINE_T = Array.from({ length: 17 }, (_, i) => i / 16), LABEL_H = 16, COAST = 8, LEAD = 12, SPOTS = 40, BUDGET = 40000, LINE_MAX = 60, RAIL_CLEAR = 32, ORDER = 30;
+const LINE_T = Array.from({ length: 17 }, (_, i) => i / 16), LABEL_H = 16, COAST = 8, LEAD = 12, SPOTS = 40, BUDGET = 40000, LINE_MAX = 60, RAIL_CLEAR = 12, ORDER = 30;
 // Europe's labels have the North Atlantic: a right-aligned column off Ireland, on rows ATL_Y apart.
 const ATL_LON = -24, ATL_LAT = 50, ATL_Y = 6, ATL_TOP = 14, ATL_ROWS = 22, ATL_PULL = 30;
 const along = (l, t) => [l.x1 + (l.x2 - l.x1) * t, l.y1 + (l.y2 - l.y1) * t];
@@ -2176,17 +2185,19 @@ function drawRegions(only) {
   }).join("");
 }
 const regTitle = (f) => (f ? `${f.name}, by region` : `${S.weigh === "vp" ? "Voting power" : "Fibre hosts"} by region`);
+// A name too long for the frame stands alone; the regions under it say the rest.
+function titleRegions(f) { regHead.textContent = regTitle(f); if (f && regHead.scrollWidth > regHead.clientWidth) regHead.textContent = f.name; }
 function paintMap(f) {
   const only = f && new Set(f.vs), sig = only ? [...only].map((v) => v.valoper).sort().join() + (f.colour || "") : "";
   if (sig === S.sig) return;
   S.sig = sig; S.city = null;
   // The figures change scope, so the list's title says so.
-  regHead.textContent = regTitle(f);
+  titleRegions(f);
   drawIso(f); drawRegions(only); heat();
 }
 function renderKey() {
   const vp = S.weigh === "vp", total = N().totals.hosts;
-  regHead.textContent = regTitle(null);
+  titleRegions(null);
   keyBox.textContent = "";
   const steps = vp ? [[.03, "≤3%"], [.06, "6%"], [.12, "12%"]] : [[1 / total, "1"], [4 / total, "4"], [9 / total, "9"]];
   steps.forEach(([s, label]) => {
