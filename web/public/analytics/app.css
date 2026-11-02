@@ -513,7 +513,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting .tb-list { min-width: 0; }
 #hosting .tr { display: grid; grid-template-columns: var(--cols); column-gap: var(--gap); align-items: center; padding: 0 12px; }
 #hosting .tb-list > .top { position: sticky; top: var(--stick); z-index: 4; background: var(--card); }
-/* every label on the head's foot; each head says its own period */
+/* every label on the head's foot */
 #hosting .th { align-items: end; height: var(--th); margin: 0 -12px; padding: 0 24px; border-bottom: 1px solid var(--line); font-size: var(--fs-lab); color: var(--ink2); }
 #hosting .th .k-a { display: flex; align-items: baseline; gap: 8px; padding: 0 0 8px 22px; line-height: 14px; white-space: nowrap; }
 #hosting .h { display: flex; align-items: flex-end; justify-content: flex-end; min-width: 0; padding-bottom: 8px; font-weight: 400; line-height: 14px; text-align: right; white-space: nowrap; transition: color .12s; }
@@ -579,15 +579,12 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting .tb.focus .rw:not(.lit):not(.on) .lb { opacity: .45; }
 
 /* columns */
-#hosting :is(.k-n, .k-r, .k-s) { min-width: 0; font-size: var(--fs-row); text-align: right; color: var(--ink2); white-space: nowrap; }
+#hosting .k-n { min-width: 0; font-size: var(--fs-row); text-align: right; color: var(--ink2); white-space: nowrap; }
 /* digits of one width, so points and percent signs stand in line down a column */
-#hosting :is(.vv, .k-n, .k-r, .k-s), #publishers :is(.pb-n, .pb-d b, .pb-d em, [data-c="mib"], [data-c="left"]) { font-family: "IBM Plex Sans", var(--f); font-variant-numeric: tabular-nums; }
-#hosting :is(.k-r, .k-s).nil { color: var(--ink3); }
+#hosting :is(.vv, .k-n), #publishers :is(.pb-n, .pb-d b, .pb-d em, [data-c="mib"], [data-c="left"]) { font-family: "IBM Plex Sans", var(--f); font-variant-numeric: tabular-nums; }
 
 /* sort shows in the column's figures */
-#hosting :is(.vv, .k-n, .k-r, .k-s).srt { color: var(--ink); }
-/* a whole column at 100.00% recedes as one block, so any shortfall stands out */
-#hosting .rw :is(.k-r, .k-s).full { color: var(--ink3); }
+#hosting :is(.vv, .k-n).srt { color: var(--ink); }
 
 /* expansion */
 #hosting .tailbox { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .26s cubic-bezier(.3,.7,.2,1); }
@@ -600,16 +597,14 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 /* one rule from the list across the gutter and the panel to the card's edge */
 #hosting .tb.vs .tb-vs::before { content: ""; position: absolute; left: -8px; right: -8px; top: calc(var(--th) - 1px); height: 1px; background: var(--line); }
 #hosting .tb.vs .vs-m:nth-child(2) { border-top-color: transparent; }
-#hosting .tb.young.vs { --th: 30px; }
 #hosting .tb.vs .tr { grid-template-columns: var(--vs1, 178px) minmax(0, 1fr); column-gap: 14px; }
 #hosting .tb[data-by="city"] { --vs1: 178px; }
-#hosting .tb.vs :is(.k-n, .k-r, .k-s) { display: none; }
+#hosting .tb.vs .k-n { display: none; }
 #hosting .tb.vs .th .h:not(.wt) { display: none; }
 /* a sort still in force names the order, in the first head's place: the list has no room for the column */
 #hosting .tb.vs .th .h.on:not(.wt) { display: flex; grid-column: 1; grid-row: 1; justify-self: start; padding-left: 22px; }
 #hosting .tb.vs .th .h.on:not(.wt) .h1::after { right: auto; left: calc(100% + 4px); }
 #hosting .tb.vs .th:has(.h.on:not(.wt)) .fh { visibility: hidden; }
-#hosting .tb.vs .per { display: none; }
 #hosting .tb.vs .th .k-a { grid-column: 1; grid-row: 1; }
 #hosting .tb.vs .tb-vs { display: block; min-width: 0; position: sticky; top: calc(var(--stick) + 12px); align-self: start; }
 #hosting .vs-g { display: grid; grid-template-columns: 116px repeat(var(--n), minmax(0, 1fr)); gap: 0 8px; }
@@ -643,12 +638,8 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 @keyframes hs-fade { from { opacity: 0; } }
 @keyframes hs-pop { from { transform: scale(0); } }
 
-/* name, weighing, then three equal tracks, so right edges step evenly */
-#hosting { --cols: 196px minmax(0, 1fr) repeat(3, 166px); --gap: 14px; --th: 30px; --slot: 42px; }
-/* the period steps back, so the heavy part of each head ends sooner */
-#hosting .per { color: var(--ink3); }
-/* under 30 days the period takes a line of its own, and every label stays on the foot */
-#hosting .tb.young { --th: 44px; }
+/* name with its validators, the weighing and its bar, the other figure */
+#hosting { --cols: 320px minmax(0, 1fr) 96px; --gap: 14px; --th: 30px; --slot: 42px; }
 #hosting .band { grid-template-columns: 384px minmax(0, 1fr); column-gap: 24px; }
 #hosting .ringbox { left: -3px; top: 18px; width: 188px; height: 188px; }
 #hosting .names { width: 176px; }
@@ -703,7 +694,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #hosting .sec-h { flex-wrap: wrap; row-gap: 8px; }
   #hosting .sec-h p { flex: 0 0 auto; }
   #hosting .ctl { flex: 0 0 100%; margin-left: 0; }
-  #hosting { --cols: 196px minmax(0, 1fr) repeat(3, 157px); --gap: 12px; }
+  #hosting { --cols: 260px minmax(0, 1fr) 96px; --gap: 12px; }
   #hosting .vs-g { grid-template-columns: 100px repeat(var(--n), minmax(0, 1fr)); }
   #hosting .vs-col { padding: 0 8px; }
   /* three columns leave a long name two lines, inside the head's height */
@@ -800,12 +791,12 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #hosting .mreg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 24px; background: none; }
   #hosting .mreg > div { height: 40px; padding: 0 6px; margin: 0 -6px; }
 
-  /* the rows: name and validators; the weighing with its bar; four figures, each with its own name */
+  /* the rows: name and validators; the weighing with its bar; the other figure. Each figure says its own name */
   #hosting .tb { padding: 0 var(--pad); }
   #hosting .tb-list > .top { position: static; }
   #hosting .th, #hosting .tb.vs .tr.th { display: none; }
   #hosting .sorter { padding: 6px 0; }
-  #hosting .rw, #hosting .tb.vs .tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-areas: "a a a" "v v v" "n r s"; gap: 6px 8px; align-items: end; }
+  #hosting .rw, #hosting .tb.vs .tr { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "a" "v" "n"; gap: 6px; align-items: end; }
   #hosting .rw { height: auto; padding: 8px; }
   #hosting .tr.rw { padding-inline: 0; border-top: 1px solid var(--line); border-radius: 0; }
   #hosting .rw:hover, #hosting .rw.lit { --rowbg: transparent; }
@@ -827,12 +818,9 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #hosting .pk::before { inset: 0; }
 
   #hosting .vb { grid-area: v; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; }
-  #hosting .vv { display: flex; align-items: baseline; gap: 8px; justify-self: start; font-weight: 500; }
-  #hosting .vv::before { display: inline; }
-  #hosting :is(.k-n, .k-r, .k-s), #hosting .tb.vs :is(.k-n, .k-r, .k-s) { display: block; text-align: left; white-space: normal; }
+  #hosting .vv, #hosting .k-n, #hosting .tb.vs .k-n { display: flex; align-items: baseline; gap: 8px; justify-self: start; font-weight: 500; text-align: left; }
+  #hosting :is(.vv, .k-n)::before { display: inline; }
   #hosting .k-n { grid-area: n; }
-  #hosting .k-r { grid-area: r; }
-  #hosting .k-s { grid-area: s; }
 
   /* the picks ride along at the foot of the screen for as long as the list lasts */
   #hosting .tray { position: sticky; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 5; visibility: hidden; display: flex; align-items: center; gap: 6px; height: 0; }
@@ -931,7 +919,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #hosting .vs-col .vs-hd { order: 1; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; height: auto; gap: 0; padding-bottom: 8px; }
   #hosting .vs-l .vs-m { grid-column: 1 / -1; padding: 10px 0 0; border-top: 1px solid var(--line); }
   #hosting .vs-col .vs-m { min-width: 0; padding: 2px 0 10px; border-top: 0; }
-  #hosting .vs-m.vp { --o: 2; } #hosting .vs-m.hosts { --o: 4; } #hosting .vs-m.geo { --o: 6; } #hosting .vs-m.reach { --o: 8; } #hosting .vs-m.served { --o: 10; } #hosting .vs-m.ready { --o: 12; }
+  #hosting .vs-m.vp { --o: 2; } #hosting .vs-m.hosts { --o: 4; } #hosting .vs-m.geo { --o: 6; } #hosting .vs-m.ready { --o: 8; }
   #hosting .vs-l .vs-m { order: var(--o); }
   #hosting .vs-col .vs-m { order: calc(var(--o) + 1); }
   #hosting .vs-col .vs-hd b { grid-column: 1 / -1; grid-row: 2; display: block; font-size: var(--fs-lab); line-height: 16px; white-space: normal; overflow-wrap: anywhere; }
