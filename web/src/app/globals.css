@@ -2762,19 +2762,21 @@ button.warn:focus-visible { outline-offset: 0; }
 .vd-oc-lead .vd-ocf:not(.lead) .vd-fv { margin-top: 14px; }
 .vd-oc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; row-gap: 14px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
 
-/* the newest check: its time on the label's line, its stages under them in the frame of the state chips over them; and
-   On chain's figures in the Observed frames, the last endorsement bare beside the lead. A phone keeps them unframed, as
+/* the newest check: its time and Readiness on the label's line, the other stages under them, all in the frame of the
+   state chips over them; and On chain's figures in the Observed frames, the last endorsement bare beside the lead. A phone keeps them unframed, as
    it keeps the Observed figures */
 @media (min-width: 721px) {
-  .vd-fact:has(> .vd-chk) { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 10px; align-items: baseline; align-content: start; }
+  .vd-fact:has(> .vd-chk) { display: flex; flex-wrap: wrap; gap: 3px 4px; align-items: baseline; align-content: start; padding-right: 12px; }
+  .vd-fact:has(> .vd-chk)::after { content: ""; order: 3; flex-basis: 100%; }
+  .vd-fact:has(> .vd-chk) dt { margin-right: 6px; }
   .vd-fact { padding-bottom: 14px; }
   /* the address runs up to the divider before its copy mark gives up the line */
   .vd-fact:first-child { padding-right: 6px; }
-  .vd-fact dd.vd-chk { display: contents; }
-  .vd-chk > span:first-child { line-height: 16px; }
-  .vd-chk > em { grid-column: 1 / -1; }
-  .vd-stages { grid-column: 1 / -1; gap: 3px 4px; margin-top: 6px; }
-  .vd-stages > span { display: inline-block; height: 20px; padding: 0 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--paper); box-shadow: var(--shadow-sm); line-height: 18px; }
+  .vd-fact dd.vd-chk, .vd-chk .vd-stages { display: contents; }
+  .vd-chk > span:first-child { order: 1; line-height: 16px; }
+  .vd-chk > em { order: 5; flex-basis: 100%; }
+  .vd-stages > span:nth-child(5) { order: 2; margin: -2px 0 -2px 10px; }
+  .vd-stages > span { order: 4; display: inline-block; height: 20px; padding: 0 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--paper); box-shadow: var(--shadow-sm); line-height: 18px; }
   .vd-oc-lead, .vd-oc-grid { column-gap: 10px; }
   .vd-oc-grid { row-gap: 10px; margin-top: 10px; padding-top: 0; border-top: 0; }
   .vd-ocf { justify-content: center; min-height: 50px; padding: 4px 14px 5px; border-radius: 10px; background: var(--obs-bg); box-shadow: var(--obs-edge); }
@@ -2792,6 +2794,8 @@ button.warn:focus-visible { outline-offset: 0; }
 @media (min-width: 1080px) and (max-width: 1199px) {
   .vd-stat { grid-template-columns: minmax(0, 1fr) 380px; }
   .vd-facts { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 380px; }
+  /* a Readiness with a note is too wide for the time's line here: it stays with the other stages */
+  .vd-stages > span:nth-child(5):has(em) { order: 4; margin: 0; }
   .vd-svc-top { grid-template-columns: minmax(0, 1fr) 416px; column-gap: 20px; }
   .vd-strip { grid-template-columns: repeat(20, 17px); grid-auto-rows: 17px; }
 }
@@ -3470,8 +3474,6 @@ header.top .wrap {
 .top .net.menu summary::before { content: ""; position: absolute; inset: 7px 0; z-index: -1; border-radius: 999px; background: var(--paper); box-shadow: var(--shadow-sm), 0 0 0 1px var(--border); }
 .top .net.menu .list { top: 44px; }
 .top .net.menu .list a, .top .net.menu .list span { min-height: 44px; }
-/* until the first block is read its place stays out of the bar, so the network's "connecting…" has the room */
-.top .blocktick:has(.bt-n.wait) { display: none; }
 
 /* the site search: a button in the bar; tapped, it takes the whole bar (HeaderSearch.tsx adds Cancel and the veil) */
 .top .hs { grid-area: 1 / 5; justify-self: end; position: relative; z-index: 4; pointer-events: auto; flex: none; width: 44px; height: 44px; margin: 0; padding: 0; }

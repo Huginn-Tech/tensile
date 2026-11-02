@@ -97,6 +97,13 @@ export function netName(id: string | undefined): string {
 }
 
 /**
+ * The header before the first answer: this build's network by the name the chip will give it, and a height of as many
+ * digits as this network's, so nothing in the row moves when the answer comes.
+ */
+const NET_WAIT = process.env.NEXT_PUBLIC_NETWORK_LABEL ? `${process.env.NEXT_PUBLIC_NETWORK_LABEL}-5` : "Mainnet";
+const HEIGHT_WAIT = process.env.NEXT_PUBLIC_NETWORK_LABEL ? "0,000,000" : "00,000,000";
+
+/**
  * The network chip: which chain this observer watches, with the observer's
  * own state as its dot. It opens as a menu of where else to go: each sibling
  * deployment configured in NEXT_PUBLIC_NETWORKS as a link with Celestia's
@@ -125,7 +132,7 @@ function NetworkChip({ meta, error }: { meta: Meta | null; error: string | null 
       meta.chain_height ? `chain tip #${int(Number(meta.chain_height))}` : "",
       meta.app_version ? (meta.fibre_active ? `Fibre live on app v${meta.app_version}` : `Fibre not live: app v${meta.app_version}`) : "",
     ].filter(Boolean).join(" · ");
-  const label = meta ? netName(meta.chain_id) : "connecting…";
+  const label = meta ? netName(meta.chain_id) : NET_WAIT;
   const others = NETWORKS.filter(([, url]) => origin === "" || url.replace(/\/$/, "") !== origin);
   const mainnetHere = meta?.chain_id === "celestia";
   const mainnetLinked = others.some(([name]) => netName(name) === "Mainnet");
@@ -168,7 +175,7 @@ function BlockTicker({ meta }: { meta: Meta | null }) {
     // until the first answer the ticker keeps its place, so the chips beside it do not move when it arrives
     return error
       ? <span className="blocktick" title={`Observer API unreachable: ${error}`}><i className="bt-ic none" aria-hidden="true">{CUBE}</i><span className="sr-only">Block</span><span className="bt-n">—</span></span>
-      : <span className="blocktick" aria-hidden="true"><i className="bt-ic none">{CUBE}</i><span className="bt-n wait">0,000,000</span></span>;
+      : <span className="blocktick" aria-hidden="true"><i className="bt-ic none">{CUBE}</i><span className="bt-n wait">{HEIGHT_WAIT}</span></span>;
   }
   // The server's clock, not the reader's: a laptop a minute fast would
   // otherwise call every block a minute old.
