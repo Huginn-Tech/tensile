@@ -279,12 +279,11 @@ const uniq = (a) => [...new Set(a)];
 // Rolls rows of N().providers, .countries or .cities into one row of the same shape.
 // agg(N().providers) is the "all providers" row; ready_share keeps the rows' base.
 function agg(list, key = "all", name = "All") {
-  const of = (f) => sum(list, f), checks = of((g) => g.checks), failed = of((g) => g.failed_checks), vp = of((g) => g.vp);
+  const of = (f) => sum(list, f), vp = of((g) => g.vp);
   return { key, name, tail: true, n: list.length, vp, share: of((g) => g.share), hosts: of((g) => g.hosts), host_share: of((g) => g.host_share),
     countries: uniq(list.flatMap((g) => g.countries || [])), companies: uniq(list.flatMap((g) => g.companies || [])), cities: uniq(list.flatMap((g) => g.cities || [])),
-    reachability: checks ? 1 - failed / checks : null, checks, failed_checks: failed,
     ready_hosts: of((g) => g.ready_hosts), not_ready_hosts: of((g) => g.not_ready_hosts), not_reported_hosts: of((g) => g.not_reported_hosts),
-    ready_share: vp ? of((g) => g.ready_share * g.vp) / vp : 0, served: of((g) => g.served), shards: of((g) => g.shards), not_served: of((g) => g.not_served) };
+    ready_share: vp ? of((g) => g.ready_share * g.vp) / vp : 0 };
 }
 
 /* ---------- regions: UN geoscheme by country; the Americas split at Panama/Colombia ---------- */
@@ -357,8 +356,7 @@ function chrome() {
   $("#foot").innerHTML = `<span>${esc(`Data as of ${stamp(U().read_at)}`)}</span><span class="how"><span>${how[0]} to compare, up to ${MAX_PINS}</span><span>${how[1]} for what it means</span></span>`;
   $('#seg-win [data-v="30d"]').hidden = young(state.net);
   $('#seg-win [data-v="24h"]').hidden = !U().market["24h"];
-  // In Hosting the switch would claim a period the section does not follow, so the pinned bar says what it does follow.
-  $(".hold").textContent = `Hosts now, checks and shards ${young(state.net) ? "since launch" : "last 30 days"}`;
+  $(".hold").textContent = "Hosts now";
   syncSegs();
 }
 /* ---------- the pinned bar: where the reader is, and the way to the other parts ---------- */
@@ -410,7 +408,7 @@ function boot() {
 }
 
 return { $, $$, el, esc, sum, calm, narrow, phone, touch, keptFor, sorter, token, pct, sharePct, readyPct, int, count, bytes, size, tiaN, tia, tiaRange, day, dayOf, stamp,
-  state, hourly, stepS, on, set, lit, pin, MAX_PINS, area, boot, N, U, market, span, pubs, settled, fee, perMib, young,
+  state, hourly, stepS, on, set, lit, pin, MAX_PINS, area, boot, N, U, market, span, pubs, settled, fee, perMib,
   activeDays, dayTicks, dailyRate, newPublishers, escrowFlow, blobEver, blobsLeft, runway, TAIL, RANKS, inkOn, agg, regionOf, regions, seg, showTip, tipAt, hideTip, tipHead, tipRow };
 })();
 
@@ -1323,11 +1321,11 @@ area("publishers", (why) => {
 
 /* ---------- hosting ---------- */
 try {
-const { $, $$, el, esc, sum, calm, keptFor, token, pct, readyPct, sharePct, int, count, day, N, U, TAIL, RANKS, inkOn, agg, regions, regionOf, seg, showTip, tipAt, hideTip, tipHead, tipRow, area, on, state, lit, pin, MAX_PINS } = M;
+const { $, $$, el, esc, sum, calm, keptFor, token, pct, readyPct, sharePct, int, count, N, U, TAIL, RANKS, inkOn, agg, regions, regionOf, seg, showTip, tipAt, hideTip, tipHead, tipRow, area, on, state, lit, pin, MAX_PINS } = M;
 
 const root = $("#hosting"), box = $(".tb", root), list = $(".tb-list", root), vs = $(".tb-vs", root), line = $(".sec-h p", root);
 // SORTED_TOP: rows before the others. SUB_NAMES: validators a row names when they fit..
-const SORTED_TOP = 8, SUB_NAMES = 3, VS_NAMES = 8, SHORT_WINDOW = .6, TAU = Math.PI * 2, DEG = Math.PI / 180;
+const SORTED_TOP = 8, SUB_NAMES = 3, VS_NAMES = 8, TAU = Math.PI * 2, DEG = Math.PI / 180;
 // Under this share ready, with hosts that do not report, a row has no reading worth printing.
 const READY_MIN = .001;
 // hot is what the pointer lights: { key, vs, name, share, hosts, colour, from }.
@@ -1354,26 +1352,14 @@ const weight = (g) => (S.weigh === "vp" ? g.vp : g.hosts);
 // Shares are rounded, so a small holder can read 0. It still counts: sharePct prints it as <0.01%.
 const shareOf = (g) => g.share || (g.vp > 0 ? 1e-9 : 0);
 const finePct = (x) => (x < 1e-4 ? "<0.01%" : pct(x, 2));
-const servedScope = () => (M.young(state.net) ? "Since launch" : "Last 30 days");
-// Shards count once served or not served; the rest are still pending.
-const settled = (g) => g.served + g.not_served;
-const srate = (g) => (settled(g) ? g.served / settled(g) : null);
-// Two decimals always, and never 100 unless it is 100.
-const rate2 = (r) => (r === 1 ? "100.00%" : r >= .99995 ? ">99.99%" : pct(r, 2));
-const srateText = (g) => { const r = srate(g); return r == null ? "no shards yet" : rate2(r); };
-const reachText = (g) => (g.reachability == null ? "no checks yet" : rate2(g.reachability));
 // What reports ready is a floor while any host stays silent.
 const silent = (g) => g.not_reported_hosts > 0;
 const readyKnown = (g) => !silent(g) || g.ready_share >= READY_MIN;
 
-// A null never leads a column, in either direction.
 const SORT = {
-  vp: (g) => g.vp, hosts: (g) => g.hosts, reach: (g) => g.reachability, served: srate,
+  vp: (g) => g.vp, hosts: (g) => g.hosts,
 };
-// These open on the worst figure, where the reader is looking for trouble.
-const WORST_LOW = new Set(["reach", "served"]);
-const ordered = (rows) => [...rows].sort((a, b) => { const x = SORT[S.sort](a), y = SORT[S.sort](b); return (x == null) - (y == null) || S.dir * (x - y) || b.vp - a.vp; });
-const midOf = (a) => [...a].sort((x, y) => x - y)[a.length >> 1];
+const ordered = (rows) => [...rows].sort((a, b) => S.dir * (SORT[S.sort](a) - SORT[S.sort](b)) || b.vp - a.vp);
 
 let V = null;
 function members(g) {
@@ -1382,13 +1368,6 @@ function members(g) {
   const out = N().validators.filter((v) => v.has_host && match(v));
   V.mem.set(g.key, out);
   return out;
-}
-// A group with far fewer checks per host joined the window late, so its reachability is not like for like.
-function windowOf(g) {
-  if (g.checks / g.hosts >= SHORT_WINDOW * V.midChecks) return null;
-  const hosts = members(g), late = hosts.filter((v) => (v.reach?.den ?? 0) < SHORT_WINDOW * V.midChecks);
-  const first = late.map((v) => v.endpoint_since).sort()[0];
-  return first ? { on: day(first.slice(0, 10)), n: late.length, of: hosts.length } : null;
 }
 
 function model() {
@@ -1399,14 +1378,11 @@ function model() {
   const ranked = [...src].sort((a, b) => weight(b) - weight(a) || b.vp - a.vp), named = ranked.slice(0, RANKS), unnamed = ranked.slice(RANKS);
   const resting = S.sort === S.weigh && S.dir < 0, top = ordered(src).slice(0, SORTED_TOP), shown = new Set(top.map((g) => g.key));
   const tail = src.filter((g) => !shown.has(g.key));
-  const all = agg(src, "__all", "All");
   const rest = { ...agg(tail, "__rest", `${tail.length} more`), sum: true, rep: sum(tail, (g) => g.rep) };
   // The scale is the weighing's, so a bar keeps its length through every sort. The others are a figure, or their bar would halve every other.
   const scale = weight(ranked[0]);
-  V = { src, ranked, named, unnamed, top, tail, all, rest, scale, resting, tailKeys: new Set(tail.map((g) => g.key)), step: new Map(named.map((g, i) => [g.key, `var(--p${i + 1})`])), mem, byKey: new Map(),
-    midChecks: midOf(hosted.map((v) => v.reach?.den ?? 0)) };
+  V = { src, ranked, named, unnamed, top, tail, rest, scale, resting, tailKeys: new Set(tail.map((g) => g.key)), step: new Map(named.map((g, i) => [g.key, `var(--p${i + 1})`])), mem, byKey: new Map() };
   [...src, rest].forEach((g) => V.byKey.set(g.key, g));
-  src.forEach((g) => { g.win = windowOf(g); });
 }
 
 /* ---------- what is lit: the pointer wins, picks hold ---------- */
@@ -1682,7 +1658,6 @@ const CHEV = `<svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke
 const CROSS = `<svg viewBox="0 0 10 10" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M2 2l6 6M8 2l-6 6"/></svg>`;
 
 const bar = (f) => `<span class="lb" data-t="list" style="--f:${f.toFixed(4)}"></span>`;
-const missedText = (g) => `${int(g.failed_checks)} of ${int(g.checks)} missed`;
 // Under a name: the validators on it, by voting power.
 function subOf(g, k = SUB_NAMES) {
   const all = [...members(g)].sort((a, b) => b.share - a.share), more = all.length - Math.min(k, all.length);
@@ -1696,22 +1671,15 @@ function vsNames(g, k = VS_NAMES) {
 }
 
 /* ---------- rows ---------- */
-const shardText = (g) => `${int(g.not_served)} of ${int(settled(g))}`;
-// A narrow row has no heads over it, so each figure carries its own name: the table's, period included.
-const periodNote = () => (M.young(state.net) ? scope() : "30d");
-const labelOf = () => { const vp = S.weigh === "vp"; return { own: vp ? "Voting power" : "Fibre hosts", other: vp ? "Fibre hosts" : "Voting power", reach: `Checks answered, ${periodNote()}`, served: `Blob shards served, ${periodNote()}` }; };
+// A narrow row has no heads over it, so each figure carries its own name.
+const labelOf = () => { const vp = S.weigh === "vp"; return { own: vp ? "Voting power" : "Fibre hosts", other: vp ? "Fibre hosts" : "Voting power" }; };
 // A share ready is a floor while any host stays silent, and says so in words. With next to nothing ready it gives no figure: 0.0% would read as a failure.
 const unheard = (g) => silent(g) && !g.ready_hosts && !g.not_ready_hosts;
 const readyParts = (g) => (!silent(g) ? ["", readyPct(g.ready_share)] : readyKnown(g) ? ["at least ", readyPct(Math.min(g.ready_share, .999))] : unheard(g) ? ["", "not reported"] : ["under ", "0.1%"]);
 const readyText = (g) => readyParts(g).join("");
 const weighText = (g) => (S.weigh === "vp" ? sharePct(shareOf(g)) : g.hosts);
 const otherText = (g) => (S.weigh === "vp" ? g.hosts : sharePct(shareOf(g)));
-function cells(g) {
-  const s = (k) => (S.sort === k ? " srt" : ""), vp = S.weigh === "vp", o = vp ? "hosts" : "vp", L = labelOf();
-  return `<span class="k-n${s(o)}" data-t="${o}" data-l="${L.other}">${otherText(g)}</span>
-    <span class="k-r${s("reach")}${g.reachability == null ? " nil" : g.reachability === 1 ? " full" : ""}" data-t="reach" data-l="${L.reach}">${reachText(g)}</span>
-    <span class="k-s${s("served")}${settled(g) ? (srate(g) === 1 ? " full" : "") : " nil"}" data-t="served" data-l="${L.served}">${srateText(g)}</span>`;
-}
+const cells = (g) => { const o = S.weigh === "vp" ? "hosts" : "vp"; return `<span class="k-n${S.sort === o ? " srt" : ""}" data-t="${o}" data-l="${labelOf().other}">${otherText(g)}</span>`; };
 function row(g, kind) {
   const pickable = kind === "lead" || kind === "tail", vb = kind === "rest" ? "" : bar(weight(g) / V.scale);
   const mark = kind === "rest" ? `<button type="button" class="ex" aria-expanded="${S.open}" aria-label="${S.open ? "Hide" : "Show"} ${esc(g.name)}">${CHEV}</button>` : pickable ? `<button type="button" class="pk" data-t="name" aria-pressed="false" aria-label="Pick ${esc(g.name)}">${CHECK}</button>` : "";
@@ -1728,17 +1696,15 @@ const HINT = () => `<span class="hint"><span class="ask3" hidden>Pick one more</
 const TRAY = `<div class="tray"><span class="tray-n"></span><button type="button" class="go">Compare</button><button type="button" class="clear">Clear picks</button></div>`;
 const firstHead = () => (prov() ? "Provider" : S.by === "country" ? "Country" : "City");
 function head() {
-  const th = (k, name, cls = "", tail = "") =>
-    `<button type="button" class="h${cls}${S.sort === k ? " on" : ""}${S.sort === k && S.dir > 0 ? " asc" : ""}" data-s="${k}" aria-pressed="${S.sort === k}" aria-label="Sort by ${name}"><span class="h1"><span${HEAD[k] ? ' class="dt"' : ""}>${name}</span>${tail}</span></button>`;
-  const vp = S.weigh === "vp", per = M.young(state.net) ? `<span class="per"><br>${scope()}</span>` : `<span class="per">, 30d</span>`;
-  const L = labelOf(), sorts = [[S.weigh, L.own], [vp ? "hosts" : "vp", L.other], ["reach", L.reach], ["served", L.served]];
-  return `<div class="tr th"><span class="k-a"><span class="fh">${firstHead()}</span></span>${th(S.weigh, vp ? "Voting power" : "Fibre hosts", " wt")}${vp ? th("hosts", "Fibre hosts") : th("vp", "Voting power")}${th("reach", "Checks answered", "", per)}${th("served", "Blob shards served", "", per)}${HINT()}</div><div class="sorter">${M.sorter(sorts, S.sort, S.dir)}</div>`;
+  const th = (k, name, cls = "") =>
+    `<button type="button" class="h${cls}${S.sort === k ? " on" : ""}${S.sort === k && S.dir > 0 ? " asc" : ""}" data-s="${k}" aria-pressed="${S.sort === k}" aria-label="Sort by ${name}"><span class="h1"><span${HEAD[k] ? ' class="dt"' : ""}>${name}</span></span></button>`;
+  const vp = S.weigh === "vp", L = labelOf(), sorts = [[S.weigh, L.own], [vp ? "hosts" : "vp", L.other]];
+  return `<div class="tr th"><span class="k-a"><span class="fh">${firstHead()}</span></span>${th(S.weigh, vp ? "Voting power" : "Fibre hosts", " wt")}${vp ? th("hosts", "Fibre hosts") : th("vp", "Voting power")}${HINT()}</div><div class="sorter">${M.sorter(sorts, S.sort, S.dir)}</div>`;
 }
 function render() {
   model();
   const was = new Map($$(".tr.rw", list).map((r) => [r.dataset.k, r.getBoundingClientRect().top]));
   box.dataset.by = S.by;
-  box.classList.toggle("young", M.young(state.net));
   say();
   list.innerHTML = `<div class="top">${head()}</div>`
     + ordered(V.top).map((g) => row(g, "lead")).join("")
@@ -1800,16 +1766,14 @@ function paintRows() {
 
 /* ---------- head to head ---------- */
 const VS_ROW = 54, VS_ROW_MAX = 104, VS_NAMES_PHONE = 3;
-// The table's own heads, period included, so one figure never has two names.
-const METRIC = () => { const per = M.young(state.net) ? scope() : "30d"; return [["vp", "Voting power"], ["hosts", "Fibre hosts"], ["geo", ""], ["reach", `Checks answered, ${per}`], ["served", `Blob shards served, ${per}`], ["ready", "Hosts ready now"]]; };
+// The table's own heads, so one figure never has two names.
+const METRIC = () => [["vp", "Voting power"], ["hosts", "Fibre hosts"], ["geo", ""], ["ready", "Hosts ready now"]];
 const label = (m) => m[1] || (prov() ? "Countries" : "Providers");
 // Value and its mark.
 function vsCell(k, g, ps) {
   if (k === "vp") return [sharePct(shareOf(g)), bar(shareOf(g) / Math.max(...ps.map(shareOf)))];
   if (k === "hosts") return [g.hosts, `<small class="vn" data-t="list">${vsNames(g)}</small>`];
   if (k === "geo") return [geoOf(g).length, prov() ? `<span class="chips">${g.countries.map((x) => `<code>${x}</code>`).join("")}</span>` : `<span class="mk dots">${g.companies.map(() => `<u class="c"></u>`).join("")}</span>`];
-  if (k === "reach") return [reachText(g), g.reachability == null ? "" : `<small>${missedText(g)}</small>`];
-  if (k === "served") return [srateText(g), settled(g) ? `<small>${shardText(g)} not served</small>` : ""];
   return [`${g.ready_hosts} of ${g.hosts}`, `<small>${unheard(g) ? "Voting power not reported" : `${readyText(g)} of its voting power`}</small>`];
 }
 function renderVs(keys) {
@@ -1853,10 +1817,8 @@ function fitVs() {
 /* ---------- table tooltips ---------- */
 const ccName = (cc) => (N().countries.find((c) => c.cc === cc) || {}).name || cc;
 const hd = (g) => tipHead(nameOf(g), g.sum ? null : tint(g));
-const worst = () => V.tail.filter((x) => x.failed_checks).sort((a, b) => b.failed_checks - a.failed_checks).slice(0, 3);
 // Every validator on the row; a long list takes two columns, as the map's tooltip does.
 const hostList = (g) => { const hosts = [...members(g)].sort((a, b) => b.share - a.share), html = hosts.map((v) => tipRow(v.moniker, finePct(v.share))).join(""); return hosts.length > 6 ? `<div class="cols">${html}</div>` : html; };
-const scope = () => servedScope().toLowerCase();
 const geoNames = (g, n) => { const a = geoOf(g).map((x) => short(prov() ? ccName(x) : x)); return a.slice(0, n).join(", ") + (a.length > n ? ` and ${a.length - n} more` : ""); };
 const TIP = {
   name: (g) => hd(g) + (g.country && short(g.country) !== nameOf(g) ? tipRow(short(g.country)) : "") + tipRow(picks().includes(g.key) ? `Picked, ${M.touch() ? "tap" : "click"} to remove` : `Pick to compare, up to ${MAX_PINS}`),
@@ -1864,21 +1826,13 @@ const TIP = {
   vp: (g) => hd(g) + tipRow("Voting power", int(g.vp)) + tipRow("Share", finePct(shareOf(g))),
   hosts: (g) => hd(g) + tipRow("Fibre hosts", String(g.hosts)) + tipRow("Of all Fibre hosts", pct(g.host_share)),
   geo: (g) => hd(g) + geoOf(g).slice(0, 8).map((x) => tipRow(short(prov() ? ccName(x) : x))).join("") + (geoOf(g).length > 8 ? tipRow(`+${geoOf(g).length - 8} more`) : ""),
-  reach: (g) => hd(g) + tipRow(`Checks answered, ${scope()}`, reachText(g))
-    + (g.win ? tipRow("Checked since", g.win.n < g.win.of ? `${g.win.on}, ${g.win.n} of ${g.win.of} hosts` : g.win.on) : "")
-    + tipRow("Checks", `${int(g.checks - g.failed_checks)} of ${int(g.checks)}`) + tipRow("Missed", int(g.failed_checks))
-    + (V.all.failed_checks ? tipRow("Of all missed", pct(g.failed_checks / V.all.failed_checks)) : "")
-    + (g.sum && worst().length ? tipRow("Most missed") + worst().map((x) => tipRow(nameOf(x), int(x.failed_checks))).join("") : ""),
   ready: (g) => hd(g) + tipRow("Hosts ready", `${g.ready_hosts} of ${g.hosts}`) + (g.not_ready_hosts ? tipRow("Not ready", String(g.not_ready_hosts)) : "") + (g.not_reported_hosts ? tipRow("Hosts not reported", String(g.not_reported_hosts)) : "")
     + (unheard(g) ? "" : tipRow("Of its voting power, ready", readyText(g))) + (g.rep < g.vp ? tipRow("Voting power not reported", readyPct(1 - g.rep / g.vp)) : "")
     + (silent(g) && !unheard(g) ? tipRow("The share may be higher") : "") + (silent(g) ? tipRow("Not reported is not the same as down") : ""),
-  served: (g) => { const open = g.shards - settled(g); return hd(g) + tipRow(`Blob shards served, ${scope()}`, srateText(g)) + (settled(g) ? tipRow("Shards", `${int(g.served)} of ${int(settled(g))}`) + tipRow("Not served", int(g.not_served)) : "") + (open > 0 ? tipRow("Pending or not counted", int(open)) : ""); },
 };
 const HEAD = {
   vp: () => tipHead("Voting power") + tipRow("Share of all voting power, bonded TIA"),
   hosts: () => tipHead("Fibre hosts") + tipRow(`A server a validator runs for Fibre.${keptFor() ? ` It keeps a blob's shards for ${keptFor()}.` : ""}`),
-  reach: () => tipHead("Checks answered") + tipRow("A connection to each host, no data asked for. A miss alone does not stop a blob") + tipRow("Period", scope()),
-  served: () => tipHead("Blob shards served") + tipRow("A shard is a piece of a blob, read back from a host that endorsed it") + tipRow("Period", scope()),
   ready: () => tipHead("Hosts ready now") + tipRow("Hosts that say they can take uploads now") + tipRow("Hosts that do not report are not counted as failing"),
 };
 // A narrow row has no heads: its figures say what the head would.
@@ -1919,7 +1873,7 @@ list.addEventListener("transitionend", (e) => {
 list.addEventListener("change", (e) => {
   const k = e.target.closest(".sorter select")?.value;
   if (!k) return;
-  S.sort = k; S.dir = WORST_LOW.has(k) ? 1 : -1;
+  S.sort = k; S.dir = -1;
   render(); if (S.hot) paint();
 });
 list.addEventListener("click", (e) => {
@@ -1928,7 +1882,7 @@ list.addEventListener("click", (e) => {
   const h = e.target.closest("[data-s]");
   if (h) {
     const k = h.dataset.s;
-    if (S.sort === k) S.dir *= -1; else { S.sort = k; S.dir = WORST_LOW.has(k) ? 1 : -1; }
+    if (S.sort === k) S.dir *= -1; else { S.sort = k; S.dir = -1; }
     render(); if (S.hot) paint();
     if (e.detail === 0) $(`[data-s="${k}"]`, list).focus({ preventScroll: true });
     return;
