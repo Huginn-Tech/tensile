@@ -9,7 +9,8 @@ const stop = new AbortController();
 const siteTheme = () => (document.documentElement.dataset.theme === "light" ? "light" : "dark");
 shadow.host.dataset.theme = siteTheme();
 shadow.querySelector("#page").innerHTML = `<main class="page">
-<div class="bar"><h1>Analytics</h1><div class="seg" id="seg-win" role="group" aria-label="Period for usage, cost and publishers"></div></div>
+<div class="bar"><h1>Analytics</h1><nav class="jump seg" aria-label="On this page"><i></i><button type="button" data-to="cost">What a blob costs</button><button type="button" data-to="publishers">Publishers</button><button type="button" data-to="hosting">Hosting</button></nav><div class="ctl"><span class="ctl-l"><span class="dt">Period</span></span><div class="seg" id="seg-win" role="group" aria-label="Period for usage, cost and publishers"></div><span class="hold"></span></div></div>
+<p class="lede"></p>
 
 <section class="sec" id="top" aria-label="Usage">
     <div class="grid">
@@ -29,7 +30,7 @@ shadow.querySelector("#page").innerHTML = `<main class="page">
         <svg class="plot" data-c="rate" aria-hidden="true"></svg>
       </article>
       <article class="card tile" data-tile="escrow">
-        <h3>Escrow used since launch</h3>
+        <h3>Escrow used</h3>
         <p class="fig" data-f="escrow"></p>
         <svg class="plot" data-c="escrow" aria-hidden="true"></svg>
       </article>
@@ -47,6 +48,7 @@ shadow.querySelector("#page").innerHTML = `<main class="page">
       <p class="key"></p>
       <p class="fig" data-f="head"></p>
       <svg class="plot" role="img" tabindex="0"></svg>
+      <div class="ctab"></div>
     </article>
   </section>
 
@@ -58,15 +60,15 @@ shadow.querySelector("#page").innerHTML = `<main class="page">
         <div class="pb-bar" role="img"></div>
       </div>
       <div class="pb-wrap">
+        <div class="sorter"></div>
         <table class="pb-t">
-          <colgroup><col class="c-who"><col><col class="c-data"><col class="c-mib"><col class="c-avg"><col class="c-days"><col class="c-left"><col class="c-since"></colgroup>
+          <colgroup><col class="c-who"><col><col class="c-data"><col class="c-mib"><col class="c-avg"><col class="c-left"></colgroup>
           <thead><tr></tr></thead>
           <tbody></tbody>
           <tfoot>
-            <tr class="pb-key"><td>Height, data per hour</td><td class="a"><div class="pb-rule"></div></td><td colspan="6"></td></tr>
+            <tr class="pb-key"><td>Data per hour</td><td class="a"><div class="pb-rule"></div></td><td colspan="4"></td></tr>
           </tfoot>
         </table>
-        <div class="pb-notes"></div>
         <i class="pb-x"></i>
         <i class="pb-ring"></i>
       </div>
@@ -77,10 +79,10 @@ shadow.querySelector("#page").innerHTML = `<main class="page">
     <div class="sec-h">
       <h2>Hosting</h2><p></p>
       <div class="ctl">
-        <span class="ctl-l">Ring and table by</span>
-        <div class="seg" id="hs-by" role="group" aria-label="Ring and table by"></div>
-        <span class="ctl-l">Size all by</span>
-        <div class="seg" id="hs-weigh" role="group" aria-label="Size all by"></div>
+        <span class="ctl-l">Group by</span>
+        <div class="seg" id="hs-by" role="group" aria-label="Group by"></div>
+        <span class="ctl-l">Size by</span>
+        <div class="seg" id="hs-weigh" role="group" aria-label="Size by"></div>
       </div>
     </div>
     <div class="card hs">
@@ -104,14 +106,10 @@ shadow.querySelector("#page").innerHTML = `<main class="page">
           </div>
         </div>
       </div>
-      <div class="how">
-        <div class="say-r"><button type="button" class="clear" hidden>Clear picks</button><span>Click rows to compare, up to 3</span></div>
-      </div>
       <div class="tb">
         <div class="tb-list"></div>
         <div class="tb-vs"></div>
       </div>
-      <div class="notes"></div>
     </div>
   </section>
 
@@ -119,7 +117,7 @@ shadow.querySelector("#page").innerHTML = `<main class="page">
 </main>
 <div id="tip" role="tooltip"></div>`;
 
-// Shared by every area. The rules for using it are in CONTRACT.md.
+// Shared by every area.
 const M = (() => {
 "use strict";
 
@@ -130,6 +128,9 @@ const el = (t, a = {}, p) => { const e = document.createElementNS(SVGNS, t); for
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const sum = (a, f) => a.reduce((s, x) => s + f(x), 0);
 const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+// The page's two narrow layouts, on the same lines as app.css, and a screen that has no hover at all.
+const [narrowQ, phoneQ, touchQ] = ["(max-width: 979px)", "(max-width: 720px)", "(hover: none)"].map((q) => matchMedia(q));
+const narrow = () => narrowQ.matches, phone = () => phoneQ.matches, touch = () => touchQ.matches;
 const root = shadow.host;
 // For canvas, which cannot read var(): takes "--x" or "var(--x)", resolved for the current theme.
 const token = (name) => getComputedStyle(root).getPropertyValue(name.replace(/^var\((.+)\)$/, "$1")).trim();
@@ -325,6 +326,8 @@ function showTip(html, x, y, floor, ceil) {
   let tx = x + 14, ty = y + 14;
   if (tx + r.width > W - 8) tx = x - r.width - 14;
   if (ty + r.height > H - 8) ty = y - r.height - 14;
+  // Over the finger, not under it, and centred on it where the screen allows.
+  if (touch()) { tx = Math.min(W - r.width - 8, x - r.width / 2); ty = y - r.height - 18; if (ty < 8) ty = Math.min(H - r.height - 8, y + 18); }
   if (floor != null) ty = Math.min(ty, floor - r.height - 6);
   if (ceil != null) ty = Math.max(ty, ceil);
   tip.style.transform = `translate(${Math.max(8, tx)}px, ${Math.max(8, ty)}px)`;
@@ -337,15 +340,42 @@ function tipAt(html, place) {
 }
 const hideTip = () => tip.classList.remove("on");
 const tipHead = (title, colour) => `<h4>${colour ? `<i style="--c:${colour}"></i>` : ""}${esc(title)}</h4>`;
-const tipRow = (label, value) => (value == null ? `<div class="w">${esc(label)}</div>` : `<div>${esc(label)} <b>${esc(value)}</b></div>`);
+const tipRow = (label, value) => (value == null ? `<div>${esc(label)}</div>` : `<div>${esc(label)} <b>${esc(value)}</b></div>`);
+
+// How long a host keeps what it took, from the file.
+const keptFor = () => { const s = U().params?.shard_retention_s; return s ? (s % 3600 ? count(s / 60, "minute") : count(s / 3600, "hour")) : null; };
+// Where a table's heads cannot stand its sorts are a list: the same names, and a button for the direction.
+const ARROW = `<svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2v8M2.5 6.5 6 10l3.5-3.5"/></svg>`;
+const sorter = (opts, key, dir) => `<label class="ctl-l">Sort by<span class="sel"><select>${opts.map(([k, t]) => `<option value="${k}"${k === key ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></span></label><button type="button" class="dir${dir > 0 ? " asc" : ""}" aria-label="Reverse the order">${ARROW}</button>`;
 
 /* ---------- header and foot: nobody's area ---------- */
 function chrome() {
-  const n = N();
-  $("#foot").innerHTML = [`Data as of ${stamp(U().read_at)}`, `Hosts located ${stamp(n.hosting_looked_up_at)}`, "IP geolocation by DB-IP · IPtoASN"].map((t) => `<span>${esc(t)}</span>`).join("");
+  const n = N(), kept = keptFor();
+  $(".lede").textContent = `Fibre lets anyone post data to Celestia as blobs.${kept ? ` Validators' hosts keep each blob for ${kept}.` : ""}`;
+  $("#foot").innerHTML = [`Data as of ${stamp(U().read_at)}`, `Hosts located ${stamp(n.hosting_looked_up_at)}`, "ASN data by IPtoASN"].map((t) => `<span>${esc(t)}</span>`).join("");
   $('#seg-win [data-v="30d"]').hidden = young(state.net);
+  // In Hosting the switch would claim a period the section does not follow, so the pinned bar says what it does follow.
+  $(".hold").textContent = `Hosts now, checks and shards ${young(state.net) ? "since launch" : "last 30 days"}`;
   syncSegs();
 }
+/* ---------- the pinned bar: where the reader is, and the way to the other parts ---------- */
+const SPY_LINE = .4;
+function spy() {
+  if (stop.signal.aborted) return;
+  const bar = $(".bar"), page = $(".page"), jump = $(".jump"), thumb = jump.firstElementChild, end = scrollY + innerHeight >= document.documentElement.scrollHeight - 2;
+  // On a phone the bar pins under the site's header, with its first line tucked behind it.
+  bar.classList.toggle("stuck", phone() ? bar.getBoundingClientRect().top <= parseFloat(getComputedStyle(bar).top) + 1 : page.getBoundingClientRect().top + parseFloat(getComputedStyle(page).paddingTop) < 0);
+  const now = end ? "hosting" : ["cost", "publishers", "hosting"].filter((id) => $("#" + id).getBoundingClientRect().top <= innerHeight * SPY_LINE).at(-1) ?? null;
+  bar.classList.toggle("hs", now === "hosting");
+  thumb.style.opacity = now ? 1 : 0;
+  $$("button", jump).forEach((b) => {
+    const on = b.dataset.to === now;
+    b.classList.toggle("on", on);
+    if (on) { b.setAttribute("aria-current", "true"); thumb.style.width = b.offsetWidth + "px"; thumb.style.transform = `translateX(${b.offsetLeft}px)`; } else b.removeAttribute("aria-current");
+  });
+}
+let spyFrame = 0;
+const spySoon = () => { if (!spyFrame) spyFrame = requestAnimationFrame(() => { spyFrame = 0; spy(); }); };
 // The site's own toggle sets the theme on the document.
 const theme = new MutationObserver(() => set("theme", siteTheme()));
 theme.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
@@ -359,12 +389,24 @@ on("win", syncSegs);
 
 function boot() {
   seg("#seg-win", [["7d", "7d"], ["30d", "30d"], ["all", "All"]], () => state.win, (v) => { chosen = true; set("win", v); });
+  $(".jump").addEventListener("click", (e) => { const b = e.target.closest("[data-to]"); if (b) $("#" + b.dataset.to).scrollIntoView({ behavior: calm ? "auto" : "smooth" }); });
+  // The title is the way back up once the bar has pinned.
+  const h1 = $(".bar h1"), period = $(".bar .ctl-l");
+  h1.addEventListener("click", () => { if ($(".bar").classList.contains("stuck")) scrollTo({ top: 0, behavior: calm ? "auto" : "smooth" }); });
+  h1.addEventListener("mousemove", (e) => showTip(tipHead("Analytics") + tipRow("What goes through Fibre, what it costs, who pays and who hosts it"), e.clientX, e.clientY));
+  period.addEventListener("mousemove", (e) => showTip(tipHead("Period") + tipRow("Moves usage, cost and publishers. Hosting keeps its own periods"), e.clientX, e.clientY));
+  for (const n of [h1, period]) n.addEventListener("mouseleave", hideTip);
+  // A tap is a touch screen's hover: the tooltip it opened goes with the next touch, wherever that lands.
+  addEventListener("pointerdown", (e) => { if (e.pointerType === "touch") hideTip(); }, { capture: true, passive: true, signal: stop.signal });
   chrome();
   emit("boot");
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(syncSegs);
+  addEventListener("scroll", spySoon, { passive: true, signal: stop.signal });
+  on("resize", spySoon);
+  spy();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { syncSegs(); spy(); });
 }
 
-return { $, $$, el, esc, sum, calm, token, pct, sharePct, readyPct, int, count, bytes, size, tiaN, tia, tiaRange, day, dayOf, stamp,
+return { $, $$, el, esc, sum, calm, narrow, phone, touch, keptFor, sorter, token, pct, sharePct, readyPct, int, count, bytes, size, tiaN, tia, tiaRange, day, dayOf, stamp,
   state, on, set, lit, pin, MAX_PINS, area, boot, N, U, market, span, pubs, settled, fee, perMib, young,
   activeDays, dayTicks, dailyRate, newPublishers, escrowFlow, blobEver, blobsLeft, runway, TAIL, RANKS, inkOn, agg, regionOf, regions, seg, showTip, tipAt, hideTip, tipHead, tipRow };
 })();
@@ -381,8 +423,7 @@ const unit = (value, u) => `${esc(value)}<small>${esc(u)}</small>`;
 const side = (t) => (t ? `<span>${esc(t)}</span>` : "");
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
-// WIDE: from this grid width the tiles' titles leave room for the whole note.
-const WIDE = 1200, AXIS = 10, FLUSH = 36, FEW = 24, FEW_NEW = 8, NEAR = 10, TICKS = 6, BAND = 28, QUIET = 8, BAR = 12, DAY = 86400, DOT = 3, FLOOR_RISE = 5, RAIL_W = 26, RAIL_GAP = 6;
+const AXIS = 10, FLUSH = 36, FEW = 24, FEW_NEW = 8, NEAR = 10, TICKS = 6, BAND = 28, QUIET = 8, BAR = 12, DAY = 86400, DOT = 3, FLOOR_RISE = 5, RAIL_W = 26, RAIL_GAP = 6;
 // The small tiles share one frame: chart from T to B, axis ends under it. The inset is the tile's own, which narrows with the page.
 const frame = (svg, hero) => {
   const L = parseFloat(getComputedStyle(q(hero ? ".main" : ".tile:not(.main)")).paddingLeft), W = svg.clientWidth, H = svg.clientHeight;
@@ -395,7 +436,7 @@ const axisEnd = (svg, x, t, anchor) => { el("text", { x, y: svg.clientHeight - A
 function dateAxis(svg, X, a, b, hero) {
   const [t0] = span(), { days } = activeDays(), live = Math.floor(Date.parse(N().fibre_live_at) / 1e3);
   if (!hero) { axisEnd(svg, a, day(days[0].day), "start"); axisEnd(svg, b, day(days.at(-1).day), "end"); return; }
-  dayTicks(TICKS).forEach((d) => {
+  dayTicks(M.phone() ? 4 : TICKS).forEach((d) => {
     const x = X(d.t), first = d === days[0] && t0 === live;
     if (x < a + FLUSH) axisEnd(svg, a, `${first ? "Launch " : ""}${day(d.day)}`, "start");
     else if (x > b - 20) axisEnd(svg, b, day(d.day), "end");
@@ -566,7 +607,7 @@ function daysTip(t) {
 }
 
 /* ---------- escrow: deposited = paid + held + withdrawn, whatever the window ---------- */
-const PARTS = [["paid", "Paid"], ["held", "Unspent"], ["withdrawn", "Withdrawn"]], SWATCH = 8, BAR_Y = 8, KEY_Y = 34;
+const PARTS = [["paid", "Paid"], ["held", "Unspent"], ["withdrawn", "Withdrawn"]], SWATCH = 8, BAR_Y = 3, KEY_Y = 27;
 
 function drawEscrow() {
   const svg = wipe(c("escrow")), F = escrowFlow(), { L, R } = frame(svg), snap = snapper(svg), W = R - L, used = PARTS.filter(([k]) => F[k]);
@@ -611,9 +652,9 @@ function draw() {
   f("data").innerHTML = unit(num, u);
   f("sub").textContent = `running total, ${WINDOW[state.win]}${m.settlements <= FEW ? "; a dot is a settlement" : ""}`;
   f("count").textContent = `${count(m.settlements, "settlement")} · ${tia(m.fees_utia)} paid`;
-  f("new").innerHTML = int(fresh.length);
-  f("rate").innerHTML = (m.settlements ? unit(tiaN(m.paid_per_mib_utia, 2), "average paid") : "–") + side(q(".grid").clientWidth < WIDE ? "a dot is a day" : "a dot is a day, log scale");
-  f("escrow").innerHTML = pct(escrowFlow().used);
+  f("new").innerHTML = int(fresh.length) + side(WINDOW[state.win]);
+  f("rate").innerHTML = (m.settlements ? unit(tiaN(m.paid_per_mib_utia, 2), "average paid") : "<small>no settlements</small>") + side("a dot is a day");
+  f("escrow").innerHTML = pct(escrowFlow().used) + side("since launch");
   f("days").innerHTML = unit(int(D.active), `of ${int(D.total)}`) + side("with a settlement");
   LIT_PUB = null;
   steps("data", [...settled()].reverse(), (r) => r.size, true);
@@ -645,10 +686,12 @@ const wipe = (n) => { n.textContent = ""; return n; };
 const label = (parent, x, y, s, anchor = "start", cls = "") => { const t = el("text", { x, y, "text-anchor": anchor, class: cls }, parent); t.textContent = s; return t; };
 
 // One small dot per size settled, in the line's own teal; the rows under the plot say how much. The curve, grid and ticks never move between windows or networks.
-const GUT = 84, TICK = 10, YT = [2, 1, .5, .25], DOT_R = 3, T = 16;
+// GUT_PHONE, AXIS_PHONE and SIZES: a phone's gutter holds the bare ticks, its axis one line, and that line names every third size.
+// KEY_BAND: the key takes the plot's upper part there, since no corner of so short a plot is clear of the curve.
+const GUT = 84, GUT_PHONE = 32, TICK = 10, YT = [2, 1, .5, .25], DOT_R = 3, T = 16, AXIS_PHONE = 24, SIZES = 3, KEY_BAND = 72;
 // BAR: the tallest share in either row, so the two rows' bars compare. LEVEL_CLEAR: a gridline this close to the level rests. UNDER: room the level's words need below it.
 // STOP: the level ends where the curve comes this near, so on the flat of the curve it never reads as a second line.
-const AXIS = 36, ROW = 46, BAR = 30, BAR_FEW = 22, BAR_TWO = 16, ROW_GAP = 6, CLEAR = 8, PAID_H = 14, LEVEL_CLEAR = 5, UNDER = 16, STOP = 4;
+const AXIS = 38, ROW = 46, BAR = 30, BAR_FEW = 22, BAR_TWO = 16, ROW_GAP = 6, CLEAR = 8, PAID_H = 14, LEVEL_CLEAR = 5, UNDER = 16, STOP = 4;
 const G = {}, DOT = "var(--acc)";
 
 /* One band per doubling, centred on its size tick, so a tick names the middle of its column and an exact 512 KiB sits inside one. */
@@ -673,18 +716,18 @@ const top = (a, z, y, h) => { const r = Math.min(3, h, (z - a) / 2); return `M${
 
 function draw() {
   const u = U(), f = u.params.price_formula, lo = f.chunk_bytes, hi = u.params.max_blob_size_bytes, m = market();
-  q('[data-f="head"]').innerHTML = `${esc(tiaN(perMib(lo), 2))}<em class="at">TIA per MiB at ${esc(bytes(lo))}</em><em>to</em>${esc(tiaN(perMib(hi), 2))}<em class="at">at ${esc(bytes(hi))}</em>`;
-  q(".key").textContent = `A blob pays a base fee plus a fee per started ${bytes(lo)}, up to ${bytes(hi)}, even if it times out.`;
+  q('[data-f="head"]').innerHTML = `<span class="pair">${esc(tiaN(perMib(lo), 2))}<em class="at">TIA per MiB at ${esc(bytes(lo))}</em></span><span class="pair"><em>to</em>${esc(tiaN(perMib(hi), 2))}<em class="at">at ${esc(bytes(hi))}</em></span>`;
+  q(".key").textContent = `A blob of up to ${bytes(hi)} pays a base fee plus a fee per started ${bytes(lo)}, even if it times out.`;
 
-  const svg = wipe(q(".plot")), W = svg.clientWidth, H = svg.clientHeight, list = bands(), n = list.length;
+  const svg = wipe(q(".plot")), W = svg.clientWidth, H = svg.clientHeight, list = bands(), n = list.length, small = M.phone(), gut = small ? GUT_PHONE : GUT, roof = small ? KEY_BAND : T;
 
-  const rows = H - 2 * ROW - ROW_GAP, base = rows - AXIS, run = W - GUT, oct = run / n;
+  const rows = small ? H : H - 2 * ROW - ROW_GAP, base = rows - (small ? AXIS_PHONE : AXIS), run = W - gut, oct = run / n;
   // The formula between chunks. It meets perMib at every whole chunk, and every settled size is one.
   const price = (s) => ((f.base_gas + (f.gas_per_chunk * s) / lo) * f.utia_per_gas) / (s / 2 ** 20);
   const sizeAt = (p) => Math.min(hi, Math.max(lo, (f.base_gas * f.utia_per_gas) / (p / 2 ** 20 - (f.gas_per_chunk * f.utia_per_gas) / lo)));
-  const yHi = price(lo), yLo = price(hi) * .66, edge = (i) => Math.round(GUT + oct * i);
-  const X = (s) => GUT + oct * (.5 + Math.log2(s / lo));
-  const Y = (p) => T + ((base - T) * Math.log(yHi / p)) / Math.log(yHi / yLo);
+  const yHi = price(lo), yLo = price(hi) * .66, edge = (i) => Math.round(gut + oct * i);
+  const X = (s) => gut + oct * (.5 + Math.log2(s / lo));
+  const Y = (p) => roof + ((base - roof) * Math.log(yHi / p)) / Math.log(yHi / yLo);
   // Every size settled, each on the curve, biggest band last so a crowded end stays readable.
   const marks = list.flatMap((b) => [...new Map(b.rows.map((r) => [r.size, 0])).keys()].map((s) => ({ b, s, n: b.rows.filter((r) => r.size === s).length, x: X(s), y: Y(price(s)), r: DOT_R })));
   const distinct = marks.length, shown = distinct > 1;
@@ -694,13 +737,13 @@ function draw() {
   for (const t of YT) {
     const p = t * 1e6, y = Math.round(Y(p)) + .5;
     if (nearLevel(y)) continue;
-    el("line", { class: "grid", x1: GUT, x2: X(sizeAt(p)), y1: y, y2: y }, svg);
-    label(svg, GUT - TICK, y + 4, t === YT[0] ? `${t} TIA per MiB` : String(t), "end");
+    el("line", { class: "grid", x1: gut, x2: X(sizeAt(p)), y1: y, y2: y }, svg);
+    label(svg, gut - TICK, y + 4, t === YT[0] && !small ? `${t} TIA per MiB` : String(t), "end");
   }
   // A column's line stops at the level, so the level's words sit on an empty ground.
   const floorOf = (y) => (avoid != null && avoid > y ? Math.round(avoid) : base);
   for (const b of list) { const x = Math.round(X(b.tick)) + .5, y = Y(price(b.tick)); el("line", { class: "grid", x1: x, x2: x, y1: y, y2: floorOf(y) }, svg); }
-  el("line", { class: "base", x1: GUT, x2: W, y1: base + .5, y2: base + .5 }, svg);
+  el("line", { class: "base", x1: gut, x2: W, y1: base + .5, y2: base + .5 }, svg);
   let line = "";
   for (let i = 0; i <= 240; i++) { const s = lo * (hi / lo) ** (i / 240); line += `${i ? "L" : "M"}${X(s).toFixed(1)} ${Y(price(s)).toFixed(1)}`; }
   el("path", { class: "curve", d: line }, svg);
@@ -715,64 +758,74 @@ function draw() {
   label(svg, X(hi), Y(price(hi)) - rOf(X(hi)) - CLEAR, tiaN(perMib(hi), 2), "middle", "mid");
 
   // What each mark is, on the empty corner above the curve's tail.
-  const key = el("g", {}, svg), kY = T + 4, kLine = label(key, 0, kY, "the line is the price, log scale", "start", "mid"), kDot = label(key, 0, kY + 16, "a dot is a size settled", "start", "mid");
-  const kX = W - Math.max(kLine.getComputedTextLength(), kDot.getComputedTextLength());
-  for (const t of [kLine, kDot]) t.setAttribute("x", kX);
-  el("line", { class: "curve", x1: kX - 22, x2: kX - 8, y1: kY - 4, y2: kY - 4 }, key);
-  el("circle", { class: "dot kd", cx: kX - 15, cy: kY + 12, r: DOT_R, fill: DOT }, key);
-
+  const key = el("g", {}, svg), kY = small ? 10 : T + 4, kLine = label(key, 0, kY, "the line is the price, log scale", "start", "mid"), kDot = label(key, 0, kY + 16, "a dot is a size settled", "start", "mid");
   // The window's rate is a level, not a point: a dashed line from the axis to the curve, so it cannot read as a settlement.
   G.paid = null;
+  let words = null;
   // One size settled means the dot already is the average: a second figure would only repeat it.
   if (m.settlements && shown) {
-    const p = m.paid_per_mib_utia, y = Math.round(Y(p)) + .5, x = X(sizeAt(yHi * (yLo / yHi) ** ((y - STOP - T) / (base - T))));
-    el("line", { class: "level", x1: GUT, x2: x, y1: y, y2: y }, svg);
-    const say = label(svg, GUT + 6, base - y < UNDER ? y - 5 : y + 13, `Average paid ${tiaN(p, 2)}, weighted by data`, "start", "mid level-say");
+    const p = m.paid_per_mib_utia, y = Math.round(Y(p)) + .5, x = X(sizeAt(yHi * (yLo / yHi) ** ((y - STOP - roof) / (base - roof))));
+    el("line", { class: "level", x1: gut, x2: x, y1: y, y2: y }, svg);
+    const say = label(svg, gut + 6, base - y < UNDER ? y - 5 : y + 13, `Average paid ${tiaN(p, 2)}, weighted by data`, "start", "mid level-say");
     // A short level leaves no room left of the curve: the words go past the first price, where the curve has already fallen away.
-    if (GUT + 6 + say.getComputedTextLength() + 6 > x) { say.setAttribute("x", +first.getAttribute("x") + first.getComputedTextLength() + 10); say.setAttribute("y", first.getAttribute("y")); }
-    G.paid = { x0: GUT, x1: x, y, box: say.getBBox() };
+    if (gut + 6 + say.getComputedTextLength() + 6 > x) { say.setAttribute("x", +first.getAttribute("x") + first.getComputedTextLength() + 10); say.setAttribute("y", first.getAttribute("y")); }
+    words = say;
+    G.paid = { x0: gut, x1: x, y };
   }
+  // On a phone the average's words stand in the key, as its third line: nowhere else on the plot is clear of the curve.
+  const third = small ? words : null, kX = small ? 22 : W - Math.max(kLine.getComputedTextLength(), kDot.getComputedTextLength());
+  for (const t of [kLine, kDot, third]) t?.setAttribute("x", kX);
+  el("line", { class: "curve", x1: kX - 22, x2: kX - 8, y1: kY - 4, y2: kY - 4 }, key);
+  el("circle", { class: "dot kd", cx: kX - 15, cy: kY + 12, r: DOT_R, fill: DOT }, key);
+  if (third) { third.setAttribute("y", kY + 32); el("line", { class: "level", x1: kX - 22, x2: kX - 8, y1: kY + 28.5, y2: kY + 28.5 }, key); }
+  if (G.paid) G.paid.box = words.getBBox();
 
   // The axis belongs to the curve, so it sits under it; the bands then hang from the same columns.
   const ty = base + 15;
-  label(svg, 0, ty, "Size", "start", "lab");
-  label(svg, 0, ty + 15, "Fee per blob", "start", "lab");
-  for (const b of list) {
+  if (small) list.filter((b) => !(b.i % SIZES)).forEach((b) => label(svg, X(b.tick), ty, bytes(b.tick), !b.i ? "start" : b.i === n - 1 ? "end" : "middle", "lab"));
+  else { label(svg, 0, ty, "Size", "start", "lab"); label(svg, 0, ty + 16, "Fee per blob", "start", "lab"); }
+  if (!small) for (const b of list) {
     const s = b.tick, end = !b.i || b.i === n - 1, x = X(s);
-    label(svg, x, ty, bytes(s), "middle");
-    label(svg, x, ty + 15, end ? tia(fee(s), 2) : tiaN(fee(s), 2), "middle", "mid");
+    label(svg, x, ty, bytes(s), "middle", "lab");
+    label(svg, x, ty + 16, end ? tia(fee(s), 2) : tiaN(fee(s), 2), "middle", "lab");
   }
 
   G.cells = new Map(list.map((b) => [b, []]));
   const most = Math.max(...list.flatMap((b) => [b.nShare, b.dShare]), 1e-9), used = list.filter((b) => b.n).length, tall = used <= 2 ? BAR_TWO : used <= 4 ? BAR_FEW : BAR;
-  const row = (y, name, note, share, text) => {
-    if (note) { label(svg, 0, y - 14, name, "start", "lab"); label(svg, 0, y, note, "start", "note"); } else label(svg, 0, y, name, "start", "lab");
-    el("line", { class: "base", x1: GUT, x2: W, y1: y + .5, y2: y + .5 }, svg);
+  // Both rows name a share on the same two lines, so they read as one pair. A sole largest share takes the ink; a tie has no largest.
+  const row = (y, of, share, text) => {
+    const shares = list.map(share), peak = Math.max(...shares), lead = shares.indexOf(peak) === shares.lastIndexOf(peak) ? peak : null;
+    label(svg, 0, y - 14, "Share of", "start", "lab"); label(svg, 0, y, of, "start", "lab");
+    el("line", { class: "base", x1: gut, x2: W, y1: y + .5, y2: y + .5 }, svg);
     for (const b of list) {
       const v = share(b);
       if (!v) continue;
       // The 2px gap sits between columns; the outer two meet the baseline's ends.
       const h = Math.max(2, Math.round((v / most) * tall)), a = edge(b.i) + (b.i ? 1 : 0), z = edge(b.i + 1) - (b.i < n - 1 ? 1 : 0), c = X(b.tick), g = el("g", { class: "cell fade" }, svg);
       el("path", { class: "col", d: top(a, z, y, h) }, g);
-      label(g, c, y - h - 4, text(b, v), "middle", "pct");
+      label(g, c, y - h - 4, text(b, v), "middle", v === lead ? "pct lead" : "pct");
       G.cells.get(b).push(g);
     }
   };
-  row(rows + ROW, "Settlements", "nearest size", (b) => b.nShare, (b, v) => sharePct(v));
-  row(H - 1, "Share of data", "", (b) => b.dShare, (b, v) => sharePct(v));
+  if (!small) { row(rows + ROW, "settlements", (b) => b.nShare, (b, v) => sharePct(v)); row(H - 1, "data", (b) => b.dShare, (b, v) => sharePct(v)); }
+  // The columns have no room on a phone, so their figures stand in a table, every size on its own line.
+  q(".ctab").innerHTML = !small ? "" : `<table><thead><tr><th>Size</th><th>Fee per blob</th><th><span class="dt" data-h>Share of settlements</span></th><th><span class="dt" data-h>Share of data</span></th></tr></thead><tbody>${list.map((b) => {
+    const peak = (share) => { const all = list.map(share), most = Math.max(...all); return share(b) === most && most && all.indexOf(most) === all.lastIndexOf(most) ? ' class="lead"' : ""; };
+    return `<tr data-b="${b.i}"><td>${bytes(b.tick)}</td><td>${tiaN(fee(b.tick), 2)}</td><td${peak((x) => x.nShare)}>${b.n ? sharePct(b.nShare) : "0%"}</td><td${peak((x) => x.dShare)}>${b.n ? sharePct(b.dShare) : "0%"}</td></tr>`;
+  }).join("")}</tbody></table>`;
 
   G.cross = el("line", { class: "cross", visibility: "hidden" }, svg);
   G.cursor = el("circle", { class: "cursor", r: 4, visibility: "hidden" }, svg);
-  Object.assign(G, { list, marks, oct, rows, base, X, Y, lo, hi, n, edge, end: H });
+  Object.assign(G, { list, marks, oct, rows, base, X, Y, lo, hi, n, edge, gut, end: H });
   const spoken = list.filter((b) => b.n).map((b) => `around ${bytes(b.tick)}: ${sharePct(b.nShare)} of settlements, ${sharePct(b.dShare)} of data`).join("; ");
   svg.setAttribute("aria-label", `TIA per MiB falls from ${tiaN(perMib(lo), 2)} to ${tiaN(perMib(hi), 2)} TIA as blobs grow. ${spoken}`);
 }
 
 function tipBand(b) {
-  if (!b.n) return tipHead(`Around ${bytes(b.tick)}`) + tipRow("No settlements") + tipRow("Fee", tia(fee(b.tick), 2));
-  const one = b.min === b.max;
+  if (!b.n) return tipHead(`Around ${bytes(b.tick)}`) + tipRow("No settlements") + tipRow("Fee", tia(fee(b.tick), 2)) + tipRow("TIA per MiB", tiaN(perMib(b.tick), 2));
+  const one = b.min === b.max, [cheap, dear] = [tiaN(perMib(b.max), 2), tiaN(perMib(b.min), 2)];
   return tipHead(one ? size(b.min) : `Around ${bytes(b.tick)}`, DOT) + (one ? "" : tipRow("Sizes", sizeRange(b.min, b.max))) + tipRow("Settlements", int(b.n))
-    + tipRow("Share of settlements", sharePct(b.nShare)) + tipRow("Share of data", sharePct(b.dShare)) + tipRow("Fee", tiaRange(fee(b.min), fee(b.max)));
+    + tipRow("Share of settlements", sharePct(b.nShare)) + tipRow("Share of data", sharePct(b.dShare)) + tipRow("Fee", tiaRange(fee(b.min), fee(b.max))) + tipRow("TIA per MiB", cheap === dear ? cheap : `${cheap}–${dear}`);
 }
 
 // One settled size: its own count and fee, inside the band it lights.
@@ -796,8 +849,10 @@ function light(b) {
   G.hover.setAttribute("visibility", "visible");
 }
 
+const SHARES = () => tipHead("Share rows") + tipRow("Each settlement counts at the nearest size on the axis");
+
 function hook() {
-  const svg = q(".plot");
+  const svg = q(".plot"), tab = q(".ctab");
   const curveTip = (s) => tipHead(`${size(s)} blob`) + tipRow("Fee", tia(fee(s), 2)) + tipRow("TIA per MiB", tiaN(perMib(s), 2)) + (s === G.hi ? tipRow("Largest blob allowed") : "");
   const paidTip = () => { const m = market(); return tipHead("Average paid") + tipRow("TIA per MiB", tiaN(m.paid_per_mib_utia, 2)) + tipRow("Fees paid", tia(m.fees_utia)) + tipRow("Data", size(m.bytes)); };
   const leave = () => { rest(); hideTip(); };
@@ -808,20 +863,28 @@ function hook() {
     let best = null, gap = 9;
     for (const k of G.marks) { const d = Math.hypot(k.x - x, k.y - y) - k.r; if (d < gap) { gap = d; best = k; } }
     if (!best && onPaid(x, y)) { rest(); return showTip(paidTip(), e.clientX, e.clientY); }
-    const low = y >= G.rows - 2;
-    if (!best && (x < GUT - 4 || y > G.end + 2)) return leave();
+    const low = y >= G.rows - 2 && !M.phone();
+    if (low && x < G.gut - 4 && y <= G.end + 2) { rest(); return showTip(SHARES(), e.clientX, e.clientY, r.top + G.rows); }
+    if (!best && (x < G.gut - 4 || y > G.end + 2)) return leave();
     if (best || low) {
-      const b = best ? best.b : G.list[Math.max(0, Math.min(G.n - 1, Math.floor((x - GUT) / G.oct)))];
+      const b = best ? best.b : G.list[Math.max(0, Math.min(G.n - 1, Math.floor((x - G.gut) / G.oct)))];
       light(b);
       return showTip(best ? tipDot(best) : tipBand(b), e.clientX, e.clientY, low ? r.top + G.rows : undefined);
     }
     rest();
-    const s = Math.min(G.hi, Math.max(G.lo, Math.round(2 ** ((x - GUT) / G.oct - .5)) * G.lo)), cx = G.X(s), cy = G.Y(perMib(s));
+    const s = Math.min(G.hi, Math.max(G.lo, Math.round(2 ** ((x - G.gut) / G.oct - .5)) * G.lo)), cx = G.X(s), cy = G.Y(perMib(s));
     for (const [k, v] of [["x1", cx], ["x2", cx], ["y1", cy], ["y2", G.base], ["visibility", "visible"]]) G.cross.setAttribute(k, v);
     for (const [k, v] of [["cx", cx], ["cy", cy], ["visibility", "visible"]]) G.cursor.setAttribute(k, v);
     showTip(curveTip(s), e.clientX, e.clientY, r.top + G.base);
   });
   svg.addEventListener("mouseleave", leave);
+  tab.addEventListener("mousemove", (e) => {
+    if (e.target.closest("[data-h]")) return showTip(SHARES(), e.clientX, e.clientY);
+    const b = G.list[e.target.closest("tr[data-b]")?.dataset.b];
+    if (!b) return leave();
+    light(b); showTip(tipBand(b), e.clientX, e.clientY);
+  });
+  tab.addEventListener("mouseleave", leave);
 
   // The arrow keys walk the bands and show what a hover shows.
   svg.addEventListener("keydown", (e) => {
@@ -831,7 +894,7 @@ function hook() {
     G.at = Math.max(0, Math.min(last, (G.at ?? (d > 0 ? -1 : last + 1)) + d));
     const b = G.list[G.at], r = svg.getBoundingClientRect();
     light(b);
-    showTip(tipBand(b), r.left + GUT + G.oct * (b.i + .5), r.top + 8);
+    showTip(tipBand(b), r.left + G.gut + G.oct * (b.i + .5), r.top + 8);
   });
   svg.addEventListener("blur", () => { G.at = null; leave(); });
 }
@@ -858,10 +921,20 @@ const WINDOW = { "7d": "last 7 days", "30d": "last 30 days", all: "since launch"
 const S = { metric: "bytes", sort: "bytes", dir: -1, open: false, slices: [], seg: null };
 const COLS = [
   ["name", "Publisher", "w"], ["settlements", "Settlements", "a"], ["bytes", "Data · share", "d"],
-  ["paid_per_mib_utia", "TIA per MiB", "n"], ["avg_blob_bytes", "Avg blob", "n"],
-  ["days", "Active days", "n"], ["left", "Escrow left,<br>in blobs", "n"], ["since", "First<br>settlement", "n"],
+  ["paid_per_mib_utia", "TIA per MiB", "n"], ["avg_blob_bytes", "Avg blob", "n"], ["left", "Blobs left in escrow", "n"],
 ];
-let R = [], C = null, T = null;
+// A dotted head has its definition on hover, as Hosting's heads do.
+const HEAD = {
+  activity: () => tipHead("Activity") + tipRow("Strokes mark the hours with settlements") + (M.narrow() ? "" : tipRow(`${M.touch() ? "Tap" : "Click"} to sort by first settlement, newest first`)),
+  settlements: () => tipHead("Settlements") + tipRow("Blobs paid for on chain; a blob paid for twice counts twice"),
+  bytes: () => tipHead("Data · share") + tipRow("Data settled by this account and its share of all data"),
+  paid_per_mib_utia: () => tipHead("TIA per MiB") + tipRow("Fees paid divided by data"),
+  avg_blob_bytes: () => tipHead("Avg blob") + tipRow("Data divided by settlements"),
+  left: () => tipHead("Blobs left in escrow") + tipRow("What the balance pays for at the account's average blob since launch. 0 means too little for one such blob"),
+};
+// What the narrow list's sort offers, in the columns' words.
+const SORTS = [["bytes", "Data · share"], ["name", "Publisher"], ["settlements", "Settlements"], ["since", "First settlement"], ["paid_per_mib_utia", "TIA per MiB"], ["avg_blob_bytes", "Avg blob"], ["left", "Blobs left in escrow"]];
+let R = [], C = null, T = null, IN = INSET, SL = SLOT;
 
 const keyOf = (p) => (p.colour === TAIL ? "tail" : p.address);
 const shareOf = (x) => (S.metric === "fees" ? x.fees_share : x.bytes_share);
@@ -898,7 +971,7 @@ function drawBar() {
 }
 
 // The switch shares the labels' row, so they stop short of it.
-const labelRoom = () => $("#publishers .pb-top").clientWidth - $("#publishers .pb-of").offsetWidth - 16;
+const labelRoom = () => $("#publishers .pb-top").clientWidth - (M.phone() ? 0 : $("#publishers .pb-of").offsetWidth + 16);
 // Labels read their slice's real place: gaps and minimum widths move a slice off its share.
 function placeLabels() {
   const nodes = $$("#publishers .pb-bar i"), room = labelRoom(); let said = false;
@@ -907,7 +980,7 @@ function placeLabels() {
     $(".u", e).textContent = said ? "" : ofWhat();
     e.classList.remove("hid");
     e.style.left = nodes[i].offsetLeft + "px";
-    const fits = e.offsetWidth + 14 <= w && nodes[i].offsetLeft + e.offsetWidth <= room;
+    const fits = (M.phone() ? !said : e.offsetWidth + 14 <= w) && nodes[i].offsetLeft + e.offsetWidth <= room;
     e.classList.toggle("hid", !fits);
     said ||= fits;
   });
@@ -947,9 +1020,9 @@ function fold(list) {
     last_settlement_at: list.map((p) => p.last_settlement_at).sort().at(-1), first_settlement_at: list.map((p) => p.first_settlement_at).sort()[0],
   };
 }
-const others = (rows) => ({ ...fold(rows.flatMap((p) => p.list || [p])), others: true, display: count(rows.length, "other"), colour: TAIL });
+const others = (rows) => ({ ...fold(rows.flatMap((p) => p.list || [p])), others: true, display: `${int(rows.length)} more`, colour: TAIL });
 
-const SORT = { name: (p) => p.display.toLowerCase(), days: (p) => activeDays(p).active, left: (p) => blobsLeft(p) ?? -1, since: (p) => Date.parse(p.first_settlement_at) };
+const SORT = { name: (p) => p.display.toLowerCase(), left: (p) => blobsLeft(p) ?? -1, since: (p) => Date.parse(p.first_settlement_at) };
 const sortVal = (p) => (SORT[S.sort] ? SORT[S.sort](p) : p[S.sort]);
 const ordered = (list) => [...list].sort((a, b) => {
   const x = sortVal(a), y = sortVal(b);
@@ -965,22 +1038,23 @@ function rows() {
 function head() {
   $("#publishers .pb-t").dataset.sort = S.sort;
   $("#publishers thead tr").innerHTML = COLS.map(([k, t, cls]) => {
-    const sort = S.sort === k ? ` aria-sort="${S.dir < 0 ? "descending" : "ascending"}"` : "";
-    const b = `<button type="button" data-k="${k}">${t}</button>`;
-    return `<th class="${cls}"${sort} scope="col">${cls === "a" ? `<div class="pb-h"><span>Activity</span><div class="pb-ticks"></div>${b}</div>` : b}</th>`;
+    // The trace's cell holds two sorts: settlements by its figure, first settlement by the word Activity, since the trace shows where each account starts.
+    const first = cls === "a" && S.sort === "since", sort = S.sort === k || first ? ` aria-sort="${S.dir < 0 ? "descending" : "ascending"}"` : "";
+    const b = `<button type="button" data-k="${k}">${HEAD[k] ? `<span class="dt">${t}</span>` : t}</button>`;
+    return `<th class="${cls}${first ? " by-first" : ""}"${sort} scope="col">${cls === "a" ? `<div class="pb-h"><button type="button" class="pb-first" data-k="since"><span class="dt" data-k="activity">Activity</span></button><div class="pb-ticks"></div>${b}</div>` : b}</th>`;
   }).join("");
+  $("#publishers .sorter").innerHTML = M.sorter(SORTS, S.sort, S.dir);
 }
 
 // Accounts that share a name say which of them this is.
 const named = (p) => (p.name ? U().publishers.all.filter((a) => a.name === p.name) : []);
-const nth = (p) => { const same = named(p); return same.length > 1 ? `${same.findIndex((a) => a.address === p.address) + 1} of ${same.length} accounts` : ""; };
+const nth = (p) => { const same = named(p); return same.length > 1 ? `account ${same.findIndex((a) => a.address === p.address) + 1} of ${same.length}` : ""; };
 const nameFor = (p) => (nth(p) ? `${p.display}, ${nth(p)}` : p.display);
 // A shared name is one row each, so the tooltip gives the sum of those active in this window.
 function nameTotal(p) {
   const same = p.name ? pubs().filter((a) => a.name === p.name) : [];
   return same.length > 1 ? tipRow(`All ${same.length} active as ${p.name}`, `${size(sum(same, (a) => a.bytes))} · ${sharePct(sum(same, (a) => a.bytes_share))}`) : "";
 }
-const sinceDay = (p) => { const d = dayOf(Date.parse(p.first_settlement_at) / 1e3); return day(d, d.slice(0, 4) !== U().read_at.slice(0, 4)); };
 function rowHtml(p, i) {
   const left = blobsLeft(p), [num, unit] = size(p.bytes).split(" "), [avg, avgUnit] = size(p.avg_blob_bytes).split(" ");
   const name = p.others
@@ -988,13 +1062,11 @@ function rowHtml(p, i) {
     : `<div class="pb-who"><em>${p.rank ?? ""}</em><b><span>${esc(p.display)}</span></b>${nth(p) ? `<small>${nth(p)}</small>` : p.name ? `<code>${esc(p.short)}</code>` : ""}</div>`;
   return `<tr data-i="${i}" class="${p.others ? "o" : ""}">
     <td class="w">${name}</td>
-    <td class="a"><canvas role="img" aria-label="${esc(count(p.settlements, "settlement"))}"></canvas><span class="pb-n">${int(p.settlements)}</span></td>
-    <td class="d"><div class="pb-d"><b>${num}</b><u>${unit}</u><em>${sharePct(p.bytes_share)}</em></div></td>
-    <td data-c="mib">${tiaN(p.paid_per_mib_utia, 2)}</td>
-    <td data-c="avg"><div class="pb-d"><b>${avg}</b><u>${avgUnit}</u></div></td>
-    <td data-c="days">${p.others ? "–" : int(activeDays(p).active)}</td>
-    <td data-c="left"${left === 0 && !p.others ? ' class="z"' : ""}>${p.others || left == null ? "–" : int(left)}</td>
-    <td data-c="since">${p.others ? "–" : sinceDay(p)}</td>
+    <td class="a"><canvas role="img" aria-label="${esc(count(p.settlements, "settlement"))}"></canvas><span class="pb-n" data-l="Settlements">${int(p.settlements)}</span></td>
+    <td class="d" data-l="Data · share"><div class="pb-d"><b>${num}</b><u>${unit}</u><em>${sharePct(p.bytes_share)}</em></div></td>
+    <td data-c="mib" data-l="TIA per MiB">${tiaN(p.paid_per_mib_utia, 2)}</td>
+    <td data-c="avg" data-l="Avg blob"><div class="pb-d"><b>${avg}</b><u>${avgUnit}</u></div></td>
+    <td data-c="left"${p.others ? "" : ' data-l="Blobs left in escrow"'}${(left === 0 || left == null) && !p.others ? ' class="z"' : ""}>${p.others ? "" : left == null ? "not known" : int(left)}</td>
   </tr>`;
 }
 
@@ -1011,8 +1083,8 @@ function drawTable() {
 
 /* ---------- activity: a seismogram. Time on one axis, one lattice of strokes for all rows, height the data settled in an hour ---------- */
 function axis(W) {
-  const [t0, t1] = span(), dp = devicePixelRatio || 1, pitch = Math.max(2, Math.round(PITCH * dp)), start = Math.round(INSET * dp), w = W - INSET - SLOT, last = Math.floor((w * dp) / pitch) - 1;
-  return { dp, W, w, t0, t1, pitch, start, last, stroke: pitch - Math.max(1, Math.round(GAP * dp)), x(t) { return INSET + ((t - t0) / (t1 - t0)) * this.w; }, time(px) { return t0 + ((px - INSET) / this.w) * (t1 - t0); },
+  const [t0, t1] = span(), dp = devicePixelRatio || 1, pitch = Math.max(2, Math.round(PITCH * dp)), start = Math.round(IN * dp), w = W - IN - SL, last = Math.floor((w * dp) / pitch) - 1;
+  return { dp, W, w, t0, t1, pitch, start, last, stroke: pitch - Math.max(1, Math.round(GAP * dp)), x(t) { return IN + ((t - t0) / (t1 - t0)) * this.w; }, time(px) { return t0 + ((px - IN) / this.w) * (t1 - t0); },
     cell(t) { return Math.max(0, Math.min(last, Math.floor((this.x(t) * dp - start) / pitch))); }, px(c) { return start + c * pitch; } };
 }
 
@@ -1075,13 +1147,16 @@ function track(g, W, dated) {
 }
 
 function paint() {
+  // A narrow row gives the trace the row's whole width: the count has gone to the figures under it.
+  [IN, SL] = M.narrow() ? [0, 0] : [INSET, SLOT];
   const W = $("#publishers th.a").clientWidth;
   C = axis(W);
   R.forEach(lay);
   const list = tickDays(), dated = list.map((d) => Math.round(dayX(d) * C.dp));
   $$("#publishers tbody td.a canvas").forEach((cv) => {
     const p = R[+cv.closest("tr").dataset.i], g = cv.getContext("2d"), mid = track(g, W, dated);
-    g.fillStyle = token(p.colour);
+    // One teal: a rank's step on these strokes read as a rating.
+    g.fillStyle = token("--acc");
     for (const m of p.marks) g.fillRect(m.px, mid - m.h / 2, m.w, m.h);
   });
   $("#publishers .pb-x").style.height = $("#publishers tbody").getBoundingClientRect().height - 8 + "px";
@@ -1092,16 +1167,20 @@ function paint() {
 // A key, not a row: the same strokes at true height, in a neutral ink, free of the time axis.
 function ruler(W) {
   const box = $("#publishers .pb-rule"), wide = W >= RULE_WIDE, stops = [T.lo, ...(wide ? [T.top / 16] : []), T.top / 4, T.top];
-  box.innerHTML = stops.map((b, i) => `<span><i style="height:${evenPx(tall(b)) / C.dp}px"></i>${esc(bytes(b))}${i === stops.length - 1 && T.clipped ? " or more" : ""}</span>`).join("");
+  // The dotted line of empty time, in track()'s own ink and step.
+  const empty = `<span><u style="--d:${Math.max(1, Math.round(C.dp)) / C.dp}px;--s:${(DOT_EVERY * C.pitch) / C.dp}px;--h:${evenPx(1) / C.dp}px"></u>none</span>`;
+  box.innerHTML = empty + stops.map((b, i) => `<span><i style="height:${evenPx(tall(b)) / C.dp}px"></i>${esc(bytes(b))}${i === stops.length - 1 && T.clipped ? " or more" : ""}</span>`).join("");
 }
 
-// A date starts where its day does, so it never sits off its rule; the last one ends with the plot when it would run past it, and stays out only if that touches the date before. One that would touch the column's name stays out too.
+// A date is centred on its day's rule; the last one ends with the plot when it would run past it. One that would touch the column's name starts on its rule instead, or stays out, and so does one that would touch the date before.
 function ticks(list) {
-  const box = $("#publishers .pb-ticks"), name = $("#publishers .pb-h > span").offsetWidth + 8;
+  const box = $("#publishers .pb-ticks"), name = $("#publishers .pb-first").offsetWidth + 8;
   box.innerHTML = list.map((d) => `<span>${esc(day(d.day))}</span>`).join("");
+  let end = name;
   $$("span", box).forEach((e, k) => {
-    const x = dayX(list[k]) - INSET, at = Math.min(x, C.w - e.offsetWidth), prev = k && dayX(list[k - 1]) - INSET + e.offsetWidth;
-    e.style.left = at + "px"; e.hidden = at < name || (at < x && k > 0 && at < prev + 8);
+    const x = dayX(list[k]) - IN, w = e.offsetWidth, mid = Math.min(x - w / 2, C.w - w), at = mid < name ? x : mid;
+    e.style.left = at + "px"; e.hidden = at < end;
+    if (!e.hidden) end = at + w + 8;
   });
 }
 
@@ -1112,16 +1191,15 @@ const inSlice = (p, k) => (p.others ? p.list.some((q) => keyOf(q) === k) : keyOf
 
 function cellTip(p, c) {
   const h = tipHead(p.display, p.colour), D = activeDays(p), days = runway(p);
-  if (c === "w") return h + (p.list ? tipRow("Accounts", int(p.list.length)) : "") + tipRow("Settlements", int(p.settlements)) + (p.list ? "" : tipRow("Namespaces", int(p.namespaces_total))) + tipRow("Fees paid", tia(p.fees_utia)) + (p.timeouts ? tipRow("Timeouts", int(p.timeouts)) : "") + (nth(p) ? tipRow(p.short) + tipRow(`One of ${named(p).length} accounts named ${p.name}`) + nameTotal(p) : "");
+  if (c === "w") return h + (p.list ? tipRow("Accounts", int(p.list.length)) : "") + tipRow("Settlements", int(p.settlements)) + (p.list ? "" : tipRow("Namespaces", int(p.namespaces_total))) + tipRow("Fees paid", tia(p.fees_utia)) + (p.timeouts ? tipRow("Timeouts", int(p.timeouts)) : "") + (p.others ? "" : tipRow("First settlement", stamp(p.first_settlement_at)) + tipRow("Active", `${int(D.active)} of ${count(D.total, "day")}`)) + (nth(p) ? tipRow(p.short) + tipRow(`One of ${named(p).length} accounts named ${p.name}`) + nameTotal(p) : "");
   if (c === "d") return h + tipRow("Share of data", sharePct(p.bytes_share)) + tipRow("Fees paid", `${tia(p.fees_utia)} · ${sharePct(p.fees_share)}`) + tipRow("Largest blob", size(p.largest_blob_bytes));
   if (c === "mib") return h + tipRow("Fees paid", tia(p.fees_utia)) + tipRow("Data", size(p.bytes));
   if (c === "avg") return h + tipRow("Largest blob", size(p.largest_blob_bytes)) + tipRow("Settlements", int(p.settlements));
-  if (p.others && (c === "days" || c === "left" || c === "since")) return "";
-  if (c === "days") return h + tipRow("Active", `${int(D.active)} of ${count(D.total, "day")}`);
+  if (c === "n") return h + tipRow("Settlements", int(p.settlements));
+  if (p.others && c === "left") return "";
   // A pace needs a few active days behind it, and a balance that can pay for a blob at all.
   if (c === "left") return h + tipRow("Balance", tia(p.escrow_available_utia)) + tipRow("Average blob since launch", size(blobEver(p) ?? 0))
     + (blobsLeft(p) === 0 ? tipRow("Not enough for one blob") : days == null || D.active < 3 ? "" : tipRow(days < 1 ? "Under a day at this pace" : `About ${count(Math.floor(days), "day")} at this pace`));
-  if (c === "since") return h + tipRow("First settlement", stamp(p.first_settlement_at));
   return "";
 }
 
@@ -1142,9 +1220,9 @@ function pileTip(p, hits, peak) {
 }
 
 function hoverActivity(e, p, cell) {
-  const wrap = $("#publishers .pb-wrap"), b = cell.getBoundingClientRect(), o = wrap.getBoundingClientRect();
-  const x = Math.max(INSET, e.clientX - b.left), m = markAt(p, x), line = $("#publishers .pb-x"), ring = $("#publishers .pb-ring");
-  if (x > INSET + C.w + REACH) {
+  const wrap = $("#publishers .pb-wrap"), b = $("canvas", cell).getBoundingClientRect(), o = wrap.getBoundingClientRect();
+  const x = Math.max(IN, e.clientX - b.left), m = markAt(p, x), line = $("#publishers .pb-x"), ring = $("#publishers .pb-ring");
+  if (x > IN + C.w + REACH) {
     line.style.display = ring.style.display = "none";
     showTip(tipHead(p.display, p.colour) + tipRow("Last settlement", stamp(p.last_settlement_at)), e.clientX, e.clientY);
     return;
@@ -1160,6 +1238,10 @@ function hoverActivity(e, p, cell) {
   const d = dayOf(C.time(x)), on = p.dots.filter((q) => dayOf(q.t) === d);
   showTip(tipHead(day(d), p.colour) + (on.length ? tipRow("Settlements", int(on.length)) + tipRow("Data", size(sum(on, (q) => q.size))) : tipRow("No settlements")), e.clientX, e.clientY);
 }
+
+// The heads a narrow page has no room for: a figure's own tap says what the head would.
+const CELL_HEAD = { n: "settlements", d: "bytes", mib: "paid_per_mib_utia", avg: "avg_blob_bytes", left: "left" };
+const meaning = (c) => (M.narrow() && CELL_HEAD[c] ? HEAD[CELL_HEAD[c]]().replace(/^<h4>[^]*?<\/h4>/, "") : "");
 
 function clearHover() {
   $("#publishers .pb-x").style.display = "none";
@@ -1187,8 +1269,12 @@ function wire() {
     $$("tr.on", body).forEach((tr) => tr.classList.remove("on"));
   });
 
-  $("#publishers thead").addEventListener("click", (e) => {
-    const b = e.target.closest("button"); if (!b) return;
+  const heads = $("#publishers thead");
+  heads.addEventListener("mousemove", (e) => { const t = HEAD[e.target.closest("[data-k]")?.dataset.k]; if (t) showTip(t(), e.clientX, e.clientY); else hideTip(); });
+  heads.addEventListener("mouseleave", hideTip);
+  heads.addEventListener("click", (e) => {
+    // A narrow page sorts from its list, so the one head it keeps only says what it means.
+    const b = e.target.closest("button"); if (!b || M.narrow()) return;
     const k = b.dataset.k;
     if (k === S.sort) S.dir = -S.dir; else { S.sort = k; S.dir = k === "name" ? 1 : -1; }
     head(); drawTable();
@@ -1197,12 +1283,12 @@ function wire() {
   body.addEventListener("mousemove", (e) => {
     const tr = e.target.closest("tr[data-i]"), td = e.target.closest("td");
     if (!tr || !td) return;
-    const p = R[+tr.dataset.i];
+    const p = R[+tr.dataset.i], tally = e.target.closest(".pb-n");
     if (row !== p) { row = p; light(rowKeys(p), { key: p.others ? "" : keyOf(p), name: p.display, colour: p.colour, bytes_share: p.bytes_share, fees_share: p.fees_share }); }
-    if (td.classList.contains("a")) { hoverActivity(e, p, td); return; }
+    if (td.classList.contains("a") && !tally) { hoverActivity(e, p, td); return; }
     $("#publishers .pb-x").style.display = "none";
     $("#publishers .pb-ring").style.display = "none";
-    const html = cellTip(p, td.dataset.c || td.classList[0]);
+    const c = tally ? "n" : td.dataset.c || td.classList[0], html = cellTip(p, c) + meaning(c);
     if (html) showTip(html, e.clientX, e.clientY); else hideTip();
   });
   body.addEventListener("mouseleave", () => { row = null; light(null); clearHover(); });
@@ -1210,6 +1296,10 @@ function wire() {
     if (!e.target.closest("tr.o")) return;
     S.open = !S.open; row = null; light(null); clearHover(); drawTable();
   });
+
+  const box = $("#publishers .sorter"), sort = () => { head(); drawTable(); };
+  box.addEventListener("change", (e) => { S.sort = e.target.value; S.dir = S.sort === "name" ? 1 : -1; sort(); });
+  box.addEventListener("click", (e) => { if (e.target.closest(".dir")) { S.dir = -S.dir; sort(); } });
 
   on("resize", () => { drawBar(); paint(); });
   // Which labels fit depends on the real font.
@@ -1220,22 +1310,21 @@ area("publishers", (why) => {
   if (why === "boot") wire();
   if (why === "net") { Object.assign(S, { metric: "bytes", sort: "bytes", dir: -1, open: false }); S.seg.sync(); }
   const m = market();
-  $("#publishers .sec-h p").textContent = `${int(pubs().length)} active of ${count(m.escrow_accounts, "account")}, ${WINDOW[M.state.win]}`;
+  $("#publishers .sec-h p").textContent = `${int(pubs().length)} of ${count(m.escrow_accounts, "escrow account")} settled blobs, ${WINDOW[M.state.win]}`;
   head();
   drawBar();
   drawTable();
-  $("#publishers .pb-notes").innerHTML = `<p>A stroke is an hour of settlements; a dotted line is none. A few close together stand apart, so each one shows.</p><p>A publisher is one account, and accounts can share a name. Escrow left is what the balance pays for at the account's average blob since launch.</p>`;
 });
 } catch (e) { console.error("publishers failed:", e); }
 
 /* ---------- hosting ---------- */
 try {
-const { $, $$, el, esc, sum, calm, token, pct, readyPct, sharePct, int, count, day, N, U, TAIL, RANKS, inkOn, agg, regions, regionOf, seg, showTip, tipAt, hideTip, tipHead, tipRow, area, on, state, lit, pin, MAX_PINS } = M;
+const { $, $$, el, esc, sum, calm, keptFor, token, pct, readyPct, sharePct, int, count, day, N, U, TAIL, RANKS, inkOn, agg, regions, regionOf, seg, showTip, tipAt, hideTip, tipHead, tipRow, area, on, state, lit, pin, MAX_PINS } = M;
 
-const root = $("#hosting"), box = $(".tb", root), list = $(".tb-list", root), vs = $(".tb-vs", root), clear = $(".clear", root), line = $(".sec-h p", root), notes = $(".notes", root);
-// SORTED_TOP: rows before the others. SUB_NAMES: validators a row names when they fit. TIP_NAMES: validators a tooltip lists.
-const SORTED_TOP = 8, SUB_NAMES = 3, TIP_NAMES = 10, SHORT_WINDOW = .6, PIPS_MAX = 7, TAU = Math.PI * 2, DEG = Math.PI / 180;
-// Our pass mark for checks answered. It is a choice, not a protocol rule, and the card says so.
+const root = $("#hosting"), box = $(".tb", root), list = $(".tb-list", root), vs = $(".tb-vs", root), line = $(".sec-h p", root);
+// SORTED_TOP: rows before the others. SUB_NAMES: validators a row names when they fit..
+const SORTED_TOP = 8, SUB_NAMES = 3, VS_NAMES = 8, SHORT_WINDOW = .6, TAU = Math.PI * 2, DEG = Math.PI / 180;
+// Our pass mark for checks answered. It is a choice, not a protocol rule, and the column's tip says so.
 const MARK = .99;
 // Under this share ready, with hosts that do not report, a row has no reading worth printing.
 const READY_MIN = .001;
@@ -1254,7 +1343,8 @@ const noun1 = () => (prov() ? "provider" : S.by === "country" ? "country" : "cit
 const PICK = ["var(--p1)", "var(--p3)", "var(--p5)"];
 const pickTone = (k) => { const p = picks(); return p.length > 1 && p.includes(k) ? PICK[p.indexOf(k)] : null; };
 const tint = (g) => pickTone(g.key) || V.step.get(g.key) || TAIL;
-const rowTone = (g) => (picks().length > 1 && !picks().includes(g.key) ? TAIL : tint(g));
+// One teal at rest: a step down the ramp read as a rating. The ring's steps and the picks keep their tones.
+const rowTone = (g) => (picks().length > 1 ? (picks().includes(g.key) ? tint(g) : TAIL) : "var(--acc)");
 const geoOf = (g) => (prov() ? g.countries : g.companies);
 const short = (name) => SHORT[name] || name;
 const nameOf = (g) => short(g.name);
@@ -1263,25 +1353,29 @@ const weight = (g) => (S.weigh === "vp" ? g.vp : g.hosts);
 const shareOf = (g) => g.share || (g.vp > 0 ? 1e-9 : 0);
 const finePct = (x) => (x < 1e-4 ? "<0.01%" : pct(x, 2));
 const servedScope = () => (M.young(state.net) ? "Since launch" : "Last 30 days");
-const under = (g) => g.reachability != null && g.reachability < MARK;
 // A host's own rate; one host under the mark can sit inside a healthy group.
 const rateOf = (v) => (v.reach?.den ? v.reach.num / v.reach.den : null);
 const lowHost = (v) => rateOf(v) != null && rateOf(v) < MARK;
 // Shards count once served or not served; the rest are still pending.
 const settled = (g) => g.served + g.not_served;
 const srate = (g) => (settled(g) ? g.served / settled(g) : null);
-const srateText = (g) => { const r = srate(g); return r == null ? "–" : r === 1 ? "100%" : r >= .99995 ? ">99.99%" : pct(r, 2); };
+// Two decimals always, and never 100 unless it is 100.
+const rate2 = (r) => (r === 1 ? "100.00%" : r >= .99995 ? ">99.99%" : pct(r, 2));
+const srateText = (g) => { const r = srate(g); return r == null ? "no shards yet" : rate2(r); };
+const reachText = (g) => (g.reachability == null ? "no checks yet" : rate2(g.reachability));
 // What reports ready is a floor while any host stays silent.
 const silent = (g) => g.not_reported_hosts > 0;
 const readyKnown = (g) => !silent(g) || g.ready_share >= READY_MIN;
 
 // A null never leads a column, in either direction.
 const SORT = {
-  vp: (g) => g.vp, hosts: (g) => g.hosts, geo: (g) => geoOf(g).length, reach: (g) => g.reachability, miss: (g) => g.failed_checks,
-  ready: (g) => g.ready_hosts, unrep: (g) => g.not_reported_hosts, vpready: (g) => (readyKnown(g) ? g.ready_share : null), served: (g) => g.not_served,
+  vp: (g) => g.vp, hosts: (g) => g.hosts, reach: (g) => g.reachability, served: srate,
+  ready: (g) => g.ready_hosts, vpready: (g) => (readyKnown(g) ? g.ready_share : null),
 };
 // These open on the worst figure, where the reader is looking for trouble.
-const WORST_LOW = new Set(["reach", "ready", "vpready"]);
+const WORST_LOW = new Set(["reach", "served", "ready", "vpready"]);
+// The ready column follows the weighing, so a count never stands alone under voting power.
+const readyKey = (w = S.weigh) => (w === "vp" ? "vpready" : "ready");
 const ordered = (rows) => [...rows].sort((a, b) => { const x = SORT[S.sort](a), y = SORT[S.sort](b); return (x == null) - (y == null) || S.dir * (x - y) || b.vp - a.vp; });
 const midOf = (a) => [...a].sort((x, y) => x - y)[a.length >> 1];
 
@@ -1310,10 +1404,10 @@ function model() {
   const resting = S.sort === S.weigh && S.dir < 0, top = ordered(src).slice(0, SORTED_TOP), shown = new Set(top.map((g) => g.key));
   const tail = src.filter((g) => !shown.has(g.key));
   const all = { ...agg(src, "__all", `All ${src.length} ${noun()}`), sum: true, lows: [], rep: sum(src, (g) => g.rep) };
-  const rest = { ...agg(tail, "__rest", `${tail.length} ${tail.length === 1 ? "other" : "others"}`), sum: true, lows: [], rep: sum(tail, (g) => g.rep) };
+  const rest = { ...agg(tail, "__rest", `${tail.length} more`), sum: true, lows: tail.flatMap((g) => g.lows).sort((a, b) => rateOf(a) - rateOf(b)), rep: sum(tail, (g) => g.rep) };
   // The scale is the weighing's, so a bar keeps its length through every sort. The others are a figure, or their bar would halve every other.
   const scale = weight(ranked[0]);
-  V = { src, ranked, named, unnamed, top, tail, all, rest, scale, resting, tailKeys: new Set(tail.map((g) => g.key)), step: new Map(named.map((g, i) => [g.key, `var(--p${i + 1})`])), rank: new Map(named.map((g, i) => [g.key, i + 1])), mem, byKey: new Map(), slices: new Map(),
+  V = { src, ranked, named, unnamed, top, tail, all, rest, scale, resting, tailKeys: new Set(tail.map((g) => g.key)), step: new Map(named.map((g, i) => [g.key, `var(--p${i + 1})`])), mem, byKey: new Map(),
     midChecks: midOf(hosted.map((v) => v.reach?.den ?? 0)) };
   [...src, all, rest].forEach((g) => V.byKey.set(g.key, g));
   src.forEach((g) => { g.win = windowOf(g); });
@@ -1364,21 +1458,17 @@ function mostly(g) {
 }
 function say() {
   const n = N(), t = n.totals, hosts = S.weigh === "hosts", lead = V.ranked.filter((g) => weight(g) === weight(V.ranked[0])), names = and(lead.map((g) => `<b>${esc(nameOf(g))}</b>`));
-  const stop = toStop(V.src, t.voting_power), many = stop.n === 1 ? noun1() : `${stop.n}<span class="sp"> ${noun()}</span>`;
-  const why = hosts ? `${third(toThird(V.src, weight, t.hosts), noun1(), noun(), "Fibre hosts")}.` : stop.n ? `Without the top ${many}, ${sharePct(stop.left)} is left, under the two thirds a blob needs.` : "";
+  const stop = toStop(V.src, t.voting_power), many = stop.n === 1 ? noun1() : `${stop.n} ${noun()}`;
+  const why = hosts ? `${third(toThird(V.src, weight, t.hosts), noun1(), noun(), "Fibre hosts")}.` : stop.n ? `Minus the top ${many}, <b>${sharePct(stop.left)}</b> of it is left.` : "";
+  const need = !hosts && stop.n ? "A blob needs two thirds of voting power to settle." : "";
   const who = (where) => (hosts ? `${names} ${lead.length > 1 ? "have" : "has"} the most Fibre hosts, <b>${lead[0].hosts}</b> of ${t.hosts}${lead.length > 1 ? " each" : ""}.` : `${names} ${lead.length > 1 ? "host" : "hosts"} the most voting power, <b>${sharePct(shareOf(lead[0]))}</b>${lead.length > 1 ? " each" : where}.`);
-  sayWho.innerHTML = `<span class="lead">${who(mostly(lead[0]))}</span><small>${why}</small>`;
+  sayWho.innerHTML = `<span class="lead">${who(mostly(lead[0]))}</span><small>${why}</small><small>${need}</small>`;
   // One line: the place goes first, the row under the name still says it.
   const whoLine = $(".lead", sayWho);
   if (whoLine.scrollWidth > whoLine.clientWidth) whoLine.innerHTML = who("");
   const reg = regions().sort((a, b) => (hosts ? b.hosts - a.hosts : b.share - a.share))[0];
   sayWhere.innerHTML = (hosts ? `<b>${esc(reg.name)}</b> has the most Fibre hosts, <b>${reg.hosts}</b> of ${t.hosts}.` : reg.share >= .5 ? `Most voting power runs in <b>${esc(reg.name)}</b>, <b>${sharePct(reg.share)}</b>.` : `<b>${esc(reg.name)}</b> hosts the most voting power, <b>${sharePct(reg.share)}</b>.`)
     + `<small>${int(t.cities)} cities · ${int(t.countries)} countries</small>`;
-
-  // Only stated while the data bears it out, on this network, at this read.
-  const quiet = n.validators.filter((v) => v.has_host && v.readiness === "not_reported"), working = quiet.length && quiet.every((v) => v.signing?.signed > 0 && v.reach?.num > 0);
-  notes.innerHTML = `<p>A check only tests the connection, and a miss alone does not stop a blob. A shard is a piece of a blob, read back from a host that endorsed it. Bold marks a figure under 99%.</p>`
-    + `<p>Ready means the host says it can take uploads now. ≥ means some hosts do not report${working ? "; they still sign and serve" : ""}.${V.src.some((g) => !readyKnown(g)) ? " – means next to nothing is ready and the rest does not report." : ""}</p>`;
 }
 
 /* ---------- ring: one arc per validator on a track ---------- */
@@ -1416,7 +1506,8 @@ function buildRing() {
     p.addEventListener("mouseenter", () => setHot(arcFocus(a.s)));
     p.addEventListener("mousemove", (e) => tipArc(a.s, e));
     p.addEventListener("mouseleave", () => { hideTip(); setHot(null); });
-    p.addEventListener("click", () => togglePick(a.s.tail ? a.s.sub : a.s.g));
+    // On touch a tap here reads: the pick is the row's circle.
+    p.addEventListener("click", () => { if (!M.touch()) togglePick(a.s.tail ? a.s.sub : a.s.g); });
   });
 }
 // Outside the ring, on the pointer's side: the head names what the centre names, the rows the validator under the pointer. The ring's left has no room, so there the box goes above or below.
@@ -1506,52 +1597,69 @@ function placeNames() {
   namesBox.textContent = ""; ldrs.textContent = "";
   const b = whoBox.getBoundingClientRect(), r = ringSvg.getBoundingClientRect();
   if (!b.width || !seq.length) return;
+  // A phone has no room for the leaders: the key stands beside the ring, its swatches name the slices.
+  const tight = M.phone();
   const k = r.width / (2 * C), cx = r.left - b.left + C * k, cy = r.top - b.top + C * k, out = (R1 + 3) * k;
-  const rest = seq.filter((s) => s.tail), n = V.named.length, rows = n + (rest.length ? 1 : 0) + 1, pitch = b.height > 240 ? 32 : 23, lx = b.width - namesBox.clientWidth, ex = lx - RUN;
+  const rest = seq.filter((s) => s.tail), n = V.named.length, rows = n + (rest.length ? 1 : 0), pitch = b.height > 240 ? 32 : 23, lx = b.width - namesBox.clientWidth, ex = lx - RUN;
   const parts = V.named.map((g) => { const on = seq.filter((s) => s.g === g.key); return [arcs.get(on[0].id).b0, arcs.get(on.at(-1).id).b1]; });
   // The block of rows centres on the ring, so nothing hangs off its foot.
   const ys = Array.from({ length: rows }, (_, i) => cy + (i - (rows - 1) / 2) * pitch);
-  const turn = bestTurn(parts, ys, cy, out), lane = cx + out + LANE;
+  const turn = tight ? 0 : bestTurn(parts, ys, cy, out), lane = cx + out + LANE;
   seq.forEach((s) => { const a = arcs.get(s.id); a.a0 = a.b0 + turn; a.a1 = a.b1 + turn; });
   kick();
   const items = V.named.map((g, i) => ({ g, y: ys[i], c: `var(--p${i + 1})`, name: nameOf(g), val: weighText(g), a: anchorFor(parts[i][0] + turn, parts[i][1] + turn, ys[i], cy, out) }));
-  let at = n;
-  if (rest.length) { const f = restFocus(); items.push({ rest: true, y: ys[at++], c: "var(--hosting-tail)", name: f.name, val: S.weigh === "vp" ? sharePct(f.share) : f.hosts }); }
-  items.push({ total: true, y: ys[at], name: `All ${V.src.length} ${noun()}`, val: S.weigh === "vp" ? sharePct(shareOf(V.all)) : V.all.hosts });
+  if (rest.length) { const f = restFocus(); items.push({ rest: true, y: ys[n], c: "var(--hosting-tail)", name: f.name, val: S.weigh === "vp" ? sharePct(f.share) : f.hosts }); }
   S.pitch = pitch;
   items.forEach((it) => {
     const row = document.createElement("div");
-    row.className = "nl" + (it.rest ? " oth" : it.total ? " all" : ""); row.style.top = it.y.toFixed(1) + "px";
-    row.innerHTML = `${it.c ? `<i style="background:${it.c}"></i>` : ""}<span>${esc(it.name)}</span><b>${it.val}</b>`;
+    row.className = "nl" + (it.rest ? " oth" : ""); row.style.top = tight ? "" : it.y.toFixed(1) + "px";
+    // The key names the five; their figures stand in the rows below. Only the rest, which no row shows, keeps one.
+    row.innerHTML = `<i style="background:${it.c}"></i><span>${esc(it.name)}</span>${it.rest ? `<b>${it.val}</b>` : ""}`;
     namesBox.append(row); it.row = row; it.dot = $("i", row);
-    if (it.a != null) {
+    if (it.a != null && !tight) {
       const x = cx + out * Math.sin(it.a), y = cy - out * Math.cos(it.a), flat = Math.abs(y - it.y) < SNAP;
       it.anchor = { x, y: flat ? it.y : y, ex, lx: lx - 5, ly: it.y };
       it.line = el("path", { d: `M${x.toFixed(1)} ${(flat ? it.y : y).toFixed(1)}${flat ? "" : `L${lane.toFixed(1)} ${y.toFixed(1)}L${ex.toFixed(1)} ${it.y.toFixed(1)}`}L${(lx - 5).toFixed(1)} ${it.y.toFixed(1)}` }, ldrs);
     }
-    if (it.total) return;
     const focus = () => (it.rest ? restFocus() : groupFocus(it.g, "ring"));
     row.addEventListener("mouseenter", () => setHot(focus()));
     row.addEventListener("mouseleave", () => setHot(null));
-    if (!it.rest) row.addEventListener("click", () => togglePick(it.g.key));
+    if (!it.rest) row.addEventListener("click", () => { if (!M.touch()) togglePick(it.g.key); });
   });
   names = items;
   alignRail();
 }
-// The region rail keeps the names' rhythm, and its sum sits on their sum's line.
+// The region rail keeps the names' rhythm, and the two lists end on one line.
 function alignRail() {
-  const sum = $(".nl.all", namesBox), rows = regBox.children.length;
-  if (!sum || !rows) return;
-  const c = sum.getBoundingClientRect(), m = mp.getBoundingClientRect(), y = c.top + c.height / 2 - m.top;
+  const end = namesBox.lastElementChild, rows = regBox.children.length;
+  // A narrow page has the regions under the map, in their own rows.
+  if (M.narrow()) { side.style.top = ""; side.style.setProperty("--pitch", "40px"); return; }
+  if (!end || !rows) return;
+  const c = end.getBoundingClientRect(), m = mp.getBoundingClientRect(), y = c.top + c.height / 2 - m.top;
   side.style.setProperty("--pitch", S.pitch + "px");
   side.style.top = y - (rows + .5) * S.pitch + "px";
 }
 let names = [];
 function paintNames(only) {
   names.forEach((it) => {
-    const on = !only || it.total || (it.rest ? seq.some((s) => s.tail && only.has(s.v)) : seq.some((s) => s.g === it.g.key && only.has(s.v)));
+    const on = !only || (it.rest ? seq.some((s) => s.tail && only.has(s.v)) : seq.some((s) => s.g === it.g.key && only.has(s.v)));
     it.row.classList.toggle("off", !on); it.line?.classList.toggle("off", !on);
     if (it.dot && it.g) it.dot.style.background = tint(it.g);
+  });
+  pickedKey();
+}
+// A pick past the five takes the rest's row and those under it: left lit, the rest would read as picked whole.
+function pickedKey() {
+  $$(".nl.px", namesBox).forEach((n) => n.remove());
+  const rest = names.find((it) => it.rest), out = picks().map((k) => V.byKey.get(k)).filter((g) => g && !V.named.includes(g));
+  if (!rest) return;
+  rest.row.hidden = !!out.length;
+  out.forEach((g, i) => {
+    const row = document.createElement("div");
+    row.className = "nl px"; row.style.top = M.phone() ? "" : (rest.y + i * S.pitch).toFixed(1) + "px";
+    row.innerHTML = `<i style="background:${tint(g)}"></i><span>${esc(nameOf(g))}</span><b>${weighText(g)}</b>`;
+    row.addEventListener("click", () => { if (!M.touch()) togglePick(g.key); });
+    namesBox.append(row);
   });
 }
 function paintRing(only) {
@@ -1577,63 +1685,81 @@ function paintCentre(f) {
 
 /* ---------- table marks ---------- */
 const CHECK = `<svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.6 6.3 5 8.7l4.4-5"/></svg>`;
+// The map's own mark, so the key above the table already says what it means.
+const LOWM = `<i class="lowm" role="img" aria-label="A host under 99% of checks"></i>`;
+const lowMark = (g) => (g.lows?.length || (g.reachability != null && g.reachability < MARK) ? LOWM : "");
 const CHEV = `<svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>`;
 const CROSS = `<svg viewBox="0 0 10 10" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M2 2l6 6M8 2l-6 6"/></svg>`;
 
 const bar = (f) => `<span class="lb" data-t="list" style="--f:${f.toFixed(4)}"></span>`;
-const shortOf = (g) => !!g.win && g.win.n === g.win.of;
 const missedText = (g) => `${int(g.failed_checks)} of ${int(g.checks)} missed`;
-// Under a name: the validators on it, a host under the mark first with its rate, then by voting power. A short history says so.
+// Under a name: the validators on it, by voting power.
 function subOf(g, k = SUB_NAMES) {
-  const low = g.hosts > 1 ? g.lows : [], all = [...low, ...[...members(g)].filter((v) => !low.includes(v)).sort((a, b) => b.share - a.share)], more = all.length - Math.min(k, all.length);
-  const names = all.slice(0, k).map((v) => esc(v.moniker) + (low.includes(v) ? ` <b>${pct(rateOf(v), 2)}</b>` : "")).join(", ");
-  return names + (more ? `<span class="mr"> and ${more} more</span>` : "") + (shortOf(g) ? `<span class="sp">, checked since ${g.win.on}</span>` : "");
+  const all = [...members(g)].sort((a, b) => b.share - a.share), more = all.length - Math.min(k, all.length);
+  const names = all.slice(0, k).map((v) => esc(v.moniker)).join(", ");
+  return names + (more ? `<span class="mr"> and <span class="dt">${more} more</span></span>` : "");
 }
-// Past seven hosts single pips stop being countable at one size: a split bar says the same.
-const pips = (g) => (g.hosts > PIPS_MAX ? `<span class="spl"><i style="flex:1 1 0"></i></span>` : `<span class="mk pips">${"<u></u>".repeat(g.hosts)}</span>`);
+// Compare answers which validators run on it, as far as a column holds; the row's tip lists all.
+function vsNames(g, k = VS_NAMES) {
+  const all = [...members(g)].sort((a, b) => b.share - a.share), more = all.length - k;
+  return all.slice(0, k).map((v) => esc(v.moniker)).join(", ") + (more > 0 ? ` and ${more} more` : "");
+}
 
 /* ---------- rows ---------- */
 const shardText = (g) => `${int(g.not_served)} of ${int(settled(g))}`;
-// A share ready is printed as a floor while any host stays silent. With next to nothing ready it says nothing: 0.0% would read as a failure.
-const readyText = (g) => (!readyKnown(g) ? "–" : silent(g) ? `≥${readyPct(Math.min(g.ready_share, .999))}` : readyPct(g.ready_share));
+// A narrow row has no heads over it, so each figure carries its own name: the table's, period included.
+const periodNote = () => (M.young(state.net) ? scope() : "30d");
+const labelOf = () => { const vp = S.weigh === "vp"; return { own: vp ? "Voting power" : "Fibre hosts", other: vp ? "Fibre hosts" : "Voting power", reach: `Checks answered, ${periodNote()}`, served: `Blob shards served, ${periodNote()}`, ready: vp ? "Its power ready now" : "Hosts ready now" }; };
+// A share ready is a floor while any host stays silent, and says so in words. With next to nothing ready it gives no figure: 0.0% would read as a failure.
+const unheard = (g) => silent(g) && !g.ready_hosts && !g.not_ready_hosts;
+const readyParts = (g) => (!silent(g) ? ["", readyPct(g.ready_share)] : readyKnown(g) ? ["at least ", readyPct(Math.min(g.ready_share, .999))] : unheard(g) ? ["", "not reported"] : ["under ", "0.1%"]);
+const readyText = (g) => readyParts(g).join("");
+const readyCell = (g) => { const [floor, v] = readyParts(g); return floor ? `<span class="fl">${floor}</span>${v}` : v; };
 const weighText = (g) => (S.weigh === "vp" ? sharePct(shareOf(g)) : g.hosts);
 const otherText = (g) => (S.weigh === "vp" ? g.hosts : sharePct(shareOf(g)));
+const unrepShare = (g) => (g.rep < g.vp ? 1 - g.rep / g.vp : 0);
+// More of the row is silent than ready: the floor says little, so it must not read as a poor score.
+const thinFloor = (g) => silent(g) && g.vp - g.rep > g.ready_share * g.vp;
+// The whole's share of silence stands under its floor: alone, the floor reads as an outage.
+const unrepLine = (g) => (g.key !== "__all" || !silent(g) ? "" : `<small class="nr">${S.weigh === "vp" ? `${readyPct(unrepShare(g))} not reported` : `${g.not_reported_hosts} not reported`}</small>`);
 function cells(g) {
-  const s = (k) => (S.sort === k ? " srt" : ""), o = S.weigh === "vp" ? "hosts" : "vp", r = g.reachability;
-  return `<span class="k-n${s(o)}" data-t="${o}">${otherText(g)}</span>
-    <span class="k-g${s("geo")}" data-t="geo">${geoOf(g).length}</span>
-    <span class="k-r${s("reach")}${!g.sum && under(g) ? " lo" : ""}" data-t="reach"><b>${r == null ? "–" : pct(r, 2)}</b></span>
-    <span class="k-m${s("miss")}" data-t="reach">${int(g.failed_checks)}</span>
-    <span class="k-s${s("served")}${g.not_served ? "" : " nil"}" data-t="served"><b>${shardText(g)}</b></span>
-    <span class="k-u${s("ready")}" data-t="ready">${g.ready_hosts} of ${g.hosts}</span>
-    <span class="k-o${s("unrep")}" data-t="ready">${g.not_reported_hosts}</span>
-    <span class="k-v${s("vpready")}${readyKnown(g) ? "" : " nil"}" data-t="ready">${readyText(g)}</span>`;
+  const s = (k) => (S.sort === k ? " srt" : ""), vp = S.weigh === "vp", o = vp ? "hosts" : "vp", L = labelOf();
+  return `<span class="k-n${s(o)}" data-t="${o}" data-l="${L.other}">${otherText(g)}</span>
+    <span class="k-r${s("reach")}${g.reachability == null ? " nil" : g.reachability === 1 ? " full" : ""}" data-t="reach" data-l="${L.reach}">${lowMark(g)}${reachText(g)}</span>
+    <span class="k-s${s("served")}${settled(g) ? (srate(g) === 1 ? " full" : "") : " nil"}" data-t="served" data-l="${L.served}">${srateText(g)}</span>
+    <span class="k-v${s(readyKey())}${vp && (unheard(g) || thinFloor(g)) ? " nil" : ""}" data-t="ready" data-l="${L.ready}">${vp ? readyCell(g) : `${g.ready_hosts} of ${g.hosts}`}${unrepLine(g)}</span>`;
 }
 function row(g, kind) {
   const pickable = kind === "lead" || kind === "tail", plain = kind === "sum" || kind === "rest", vb = plain ? "" : bar(weight(g) / V.scale);
   const mark = kind === "rest" ? `<button type="button" class="ex" aria-expanded="${S.open}" aria-label="${S.open ? "Hide" : "Show"} ${esc(g.name)}">${CHEV}</button>` : pickable ? `<button type="button" class="pk" data-t="name" aria-pressed="false" aria-label="Pick ${esc(g.name)}">${CHECK}</button>` : "";
   const code = S.by === "city" && pickable ? `<code>${esc(g.cc)}</code>` : "";
-  const rank = V.resting && kind === "lead" ? V.top.indexOf(g) + 1 : "", sub = kind === "sum" || kind === "rest" ? "" : subOf(g);
+  const rank = !V.resting ? "" : kind === "lead" ? V.top.indexOf(g) + 1 : kind === "tail" ? SORTED_TOP + ordered(V.tail).indexOf(g) + 1 : "", sub = kind === "sum" || kind === "rest" ? "" : subOf(g);
   return `<div class="tr rw ${kind}${kind === "rest" && S.open ? " opened" : ""}" data-k="${esc(g.key)}"${pickable ? " data-p" : ""} style="--c:${kind === "sum" ? "var(--ink2)" : kind === "rest" ? "var(--ink3)" : rowTone(g)}">
     <span class="k-a">${mark}${kind === "sum" ? "" : `<em>${rank}</em>`}<span class="nm"${pickable ? ' data-t="list"' : ""}>${esc(nameOf(g))}</span>${code}${sub ? `<small class="sub"${pickable ? ' data-t="list"' : ""}>${sub}</small>` : ""}</span>
-    <span class="vb${plain ? " plain" : ""}">${vb}<b class="vv${S.sort === S.weigh ? " srt" : ""}" data-t="${S.weigh}">${weighText(g)}</b></span>
+    <span class="vb"><b class="vv${S.sort === S.weigh ? " srt" : ""}" data-t="${S.weigh}" data-l="${labelOf().own}">${weighText(g)}</b>${kind === "sum" ? HINT() : vb}</span>
     ${cells(g)}</div>`;
 }
-const firstHead = () => (picks().length === 1 ? "Pick one more" : prov() ? "Provider" : S.by === "country" ? "Country" : "City");
+// The road into Compare, and to what the figures mean, ending where the bars do. The sum row sticks with the head, so it stays in reach.
+const HINT = () => `<span class="hint"><span class="next" hidden><button type="button" class="clear">Clear picks</button></span><span class="ask">${M.touch() ? "Tap a circle" : "Click rows"} to compare<span class="up">, up to ${MAX_PINS}</span></span><span class="ask2">${M.touch() ? "Tap" : "Hover"} <span class="up">${M.touch() && M.narrow() ? "a figure" : "a heading or figure"} </span>for what it means</span><span class="ask3" hidden>Pick one more</span></span>`;
+// A narrow list is long and Compare stands under it, so the picks ride along at the foot of the screen.
+const TRAY = `<div class="tray"><span class="tray-n"></span><button type="button" class="go">Compare</button><button type="button" class="clear">Clear picks</button></div>`;
+const firstHead = () => (prov() ? "Provider" : S.by === "country" ? "Country" : "City");
 function head() {
-  const th = (k, name, cls = "") =>
-    `<button type="button" class="h${cls}${S.sort === k ? " on" : ""}${S.sort === k && S.dir > 0 ? " asc" : ""}" data-s="${k}" aria-pressed="${S.sort === k}" aria-label="Sort by ${name}"><span class="h1"><span${HEAD[k] ? ' class="dt"' : ""}>${name}</span></span></button>`;
-  const vp = S.weigh === "vp", grp = (name, cls) => `<span class="grp ${cls}">${name}</span>`;
-  return `<div class="tr th"><span class="k-a"><span class="fh">${firstHead()}</span></span>${th(S.weigh, vp ? "Voting power" : "Fibre hosts", " wt")}${vp ? th("hosts", "Fibre hosts") : th("vp", "Voting power")}${th("geo", prov() ? "Countries" : "Providers")}${grp(`Checks, ${scope()}`, "g-c")}${th("reach", "Answered")}${th("miss", "Missed")}${grp(`Shards, ${scope()}`, "g-s")}${th("served", "Not served")}${grp("Readiness now", "g-r")}${th("ready", "Hosts ready")}${th("unrep", "Not reported")}${th("vpready", "Voting power ready")}</div>`;
+  const th = (k, name, cls = "", tail = "") =>
+    `<button type="button" class="h${cls}${S.sort === k ? " on" : ""}${S.sort === k && S.dir > 0 ? " asc" : ""}" data-s="${k}" aria-pressed="${S.sort === k}" aria-label="Sort by ${name}"><span class="h1"><span${HEAD[k] ? ' class="dt"' : ""}>${name}</span>${tail}</span></button>`;
+  const vp = S.weigh === "vp", per = M.young(state.net) ? `<span class="per"><br>${scope()}</span>` : `<span class="per">, 30d</span>`;
+  const L = labelOf(), sorts = [[S.weigh, L.own], [vp ? "hosts" : "vp", L.other], ["reach", L.reach], ["served", L.served], [readyKey(), L.ready]];
+  return `<div class="tr th"><span class="k-a"><span class="fh">${firstHead()}</span></span>${th(S.weigh, vp ? "Voting power" : "Fibre hosts", " wt")}${vp ? th("hosts", "Fibre hosts") : th("vp", "Voting power")}${th("reach", "Checks answered", "", per)}${th("served", "Blob shards served", "", per)}${th(readyKey(), vp ? "Its power ready now" : "Hosts ready now")}</div><div class="sorter">${M.sorter(sorts, S.sort, S.dir)}</div>`;
 }
 function render() {
   model();
   const was = new Map($$(".tr.rw", list).map((r) => [r.dataset.k, r.getBoundingClientRect().top]));
   box.dataset.by = S.by;
+  box.classList.toggle("young", M.young(state.net));
   say();
   list.innerHTML = `<div class="top">${head()}${row(V.all, "sum")}</div>`
     + ordered(V.top).map((g) => row(g, "lead")).join("")
-    + (V.tail.length ? row(V.rest, "rest") + `<div class="tailbox${S.open ? " open" : ""}"><div>${ordered(V.tail).map((g) => row(g, "tail")).join("")}</div></div>` : "");
+    + (V.tail.length ? row(V.rest, "rest") + `<div class="tailbox${S.open ? " open" : ""}"><div>${ordered(V.tail).map((g) => row(g, "tail")).join("")}</div></div>` : "") + TRAY;
   // The way back from an open tail stops under the head, whose height differs by width.
   list.style.setProperty("--top-h", $(".top", list).offsetHeight + "px");
   if (!calm) $$(".tr.rw", list).forEach((r) => {
@@ -1665,7 +1791,15 @@ function syncRest() {
 function syncPicks() {
   const p = picks(), open = p.length > 1, was = box.classList.contains("vs");
   $$(".tr[data-p]", list).forEach((r) => { const on = p.includes(r.dataset.k), tone = rowTone(V.byKey.get(r.dataset.k)); r.classList.toggle("on", on); r.style.setProperty("--c", tone); r.style.setProperty("--on", inkOn(tone)); $(".pk", r).setAttribute("aria-pressed", on); });
-  clear.hidden = !(state.pinned.length || S.picks.length);
+  const any = !!(state.pinned.length || S.picks.length);
+  $(".hint .next", list).hidden = !any || open;
+  $(".hint .ask", list).hidden = any;
+  $(".hint .ask2", list).hidden = any;
+  $(".hint .ask3", list).hidden = !any || open;
+  const tray = $(".tray", list);
+  tray.classList.toggle("on", any);
+  $(".tray-n", tray).textContent = open ? `${p.length} picked` : "Pick one more";
+  $(".go", tray).hidden = !open;
   $(".th .fh", list).textContent = firstHead();
   syncRest();
   box.classList.toggle("vs", open);
@@ -1686,26 +1820,26 @@ function paintRows() {
 }
 
 /* ---------- head to head ---------- */
-const VS_ROW = 66, VS_ROW_MAX = 104;
-const METRIC = () => [["vp", "Voting power"], ["hosts", "Fibre hosts"], ["geo", ""], ["reach", "Checks answered"], ["ready", "Hosts ready"], ["served", "Shards not served"]];
+const VS_ROW = 62, VS_ROW_MAX = 104, VS_NAMES_PHONE = 3;
+// The table's own heads, period included, so one figure never has two names.
+const METRIC = () => { const per = M.young(state.net) ? scope() : "30d"; return [["vp", "Voting power"], ["hosts", "Fibre hosts"], ["geo", ""], ["reach", `Checks answered, ${per}`], ["served", `Blob shards served, ${per}`], ["ready", "Hosts ready now"]]; };
 const label = (m) => m[1] || (prov() ? "Countries" : "Providers");
-// Value, whether it leads (null on rate rows, where brightening one would read as a verdict), and its mark.
+// Value and its mark.
 function vsCell(k, g, ps) {
-  const top = (f) => Math.max(...ps.map(f));
-  if (k === "vp") return [sharePct(shareOf(g)), shareOf(g) === top(shareOf), bar(shareOf(g) / top(shareOf))];
-  if (k === "hosts") return [g.hosts, g.hosts === top((p) => p.hosts), pips(g)];
-  if (k === "geo") return [geoOf(g).length, geoOf(g).length === top((p) => geoOf(p).length), prov() ? `<span class="chips">${g.countries.map((x) => `<code>${x}</code>`).join("")}</span>` : `<span class="mk dots">${g.companies.map(() => `<u class="c"></u>`).join("")}</span>`];
-  if (k === "reach") return [g.reachability == null ? "–" : pct(g.reachability, 2), null, g.reachability == null ? "" : `<small>${missedText(g)}</small>`];
-  if (k === "ready") return [`${g.ready_hosts} of ${g.hosts}`, null, `<small>${readyKnown(g) ? `${readyText(g)} of its voting power` : "Voting power not reported"}</small>`];
-  return [shardText(g), null, ""];
+  if (k === "vp") return [sharePct(shareOf(g)), bar(shareOf(g) / Math.max(...ps.map(shareOf)))];
+  if (k === "hosts") return [g.hosts, `<small class="vn" data-t="list">${vsNames(g)}</small>`];
+  if (k === "geo") return [geoOf(g).length, prov() ? `<span class="chips">${g.countries.map((x) => `<code>${x}</code>`).join("")}</span>` : `<span class="mk dots">${g.companies.map(() => `<u class="c"></u>`).join("")}</span>`];
+  if (k === "reach") return [lowMark(g) + reachText(g), g.reachability == null ? "" : `<small>${missedText(g)}</small>`];
+  if (k === "served") return [srateText(g), settled(g) ? `<small>${shardText(g)} not served</small>` : ""];
+  return [`${g.ready_hosts} of ${g.hosts}`, `<small>${unheard(g) ? "Voting power not reported" : `${readyText(g)} of its voting power`}</small>`];
 }
 function renderVs(keys) {
   if (keys.length < 2) { vs.innerHTML = ""; return; }
   const ps = keys.map((k) => V.byKey.get(k)).filter(Boolean), metric = METRIC();
-  const labels = `<div class="vs-l"><div class="vs-hd"></div>${metric.map((m) => `<div class="vs-m ${m[0]}"><span>${label(m)}</span>${m[2] ? `<em>${m[2]}</em>` : ""}</div>`).join("")}</div>`;
+  const labels = `<div class="vs-l"><div class="vs-hd"><button type="button" class="clear">Clear picks</button></div>${metric.map((m) => `<div class="vs-m ${m[0]}"><span>${label(m)}</span></div>`).join("")}</div>`;
   const cols = ps.map((g) => `<div class="vs-col" data-k="${esc(g.key)}" style="--c:${tint(g)}">
-      <div class="vs-hd"><u></u><b>${esc(nameOf(g))}</b><button type="button" class="vs-x" data-x aria-label="Remove ${esc(g.name)}">${CROSS}</button></div>
-      ${metric.map(([k]) => { const [v, lead, mark] = vsCell(k, g, ps); return `<div class="vs-m ${k}" data-t="${k}"><b class="${lead === null ? "nt" : lead ? "ld" : ""}">${v}</b>${mark}</div>`; }).join("")}
+      <div class="vs-hd"><u></u><b data-t="list">${esc(nameOf(g))}</b><button type="button" class="vs-x" data-x aria-label="Remove ${esc(g.name)}">${CROSS}</button></div>
+      ${metric.map(([k]) => { const [v, mark] = vsCell(k, g, ps); return `<div class="vs-m ${k}" data-t="${k}"><b>${v}</b>${mark}</div>`; }).join("")}
     </div>`).join("");
   vs.innerHTML = `<div class="vs-g" style="--n:${ps.length}">${labels}${cols}</div>`;
 }
@@ -1720,45 +1854,65 @@ function fitVs() {
     e.classList.toggle("tight", e.scrollWidth > e.clientWidth);
   });
   if (!box.classList.contains("vs")) return;
-  const head = $(".vs-hd", vs)?.offsetHeight ?? 0, rows = METRIC().length;
-  vs.style.setProperty("--vs-row", (S.open ? VS_ROW : Math.max(VS_ROW, Math.min(VS_ROW_MAX, (list.offsetHeight - head) / rows))) + "px");
+  const names = (k) => $$(".vn", vs).forEach((e) => { e.innerHTML = vsNames(V.byKey.get(e.closest(".vs-col").dataset.k), k); });
+  const rows = METRIC().map(([k]) => $$(`.vs-m.${k}`, vs)), head = $(".vs-hd", vs)?.offsetHeight ?? 0;
+  // On a phone every figure has a line of its own, so there is nothing to line up.
+  if (M.phone()) { names(VS_NAMES_PHONE); rows.flat().forEach((e) => { e.style.height = ""; }); return; }
+  // Each row is as tall as its tallest cell, the names most of all; what is left of the list's height goes evenly to all.
+  const tall = () => { rows.flat().forEach((e) => { e.style.height = "auto"; }); return rows.map((a) => Math.max(VS_ROW, ...a.map((e) => Math.ceil(e.offsetHeight)))); };
+  names(VS_NAMES);
+  let need = tall();
+  // Beside the list, a long list of names gives way to "and N more", so the panel still ends on the list's last line. The row's hover has them all.
+  const beside = !S.open && !M.narrow();
+  for (let k = VS_NAMES - 1; k > 0 && beside && head + sum(need, (x) => x) > list.offsetHeight; k--) { names(k); need = tall(); }
+  const add = beside ? Math.max(0, Math.min(VS_ROW_MAX - VS_ROW, (list.offsetHeight - head - sum(need, (x) => x)) / rows.length)) : 0;
+  rows.forEach((a, i) => a.forEach((e) => { e.style.height = need[i] + add + "px"; }));
 }
 
 /* ---------- table tooltips ---------- */
 const ccName = (cc) => (N().countries.find((c) => c.cc === cc) || {}).name || cc;
 const hd = (g) => tipHead(nameOf(g), g.sum ? null : tint(g));
 const worst = (g) => (g.key === "__all" ? V.src : V.tail).filter((x) => x.failed_checks).sort((a, b) => b.failed_checks - a.failed_checks).slice(0, 3);
-const hostList = (g) => { const hosts = [...members(g)].sort((a, b) => b.share - a.share), top = hosts.slice(0, TIP_NAMES); return top.map((v) => tipRow(v.moniker, finePct(v.share))).join("") + (hosts.length > TIP_NAMES ? tipRow(`+${hosts.length - TIP_NAMES} more`) : ""); };
+// Every validator on the row; a long list takes two columns, as the map's tooltip does.
+const hostList = (g) => { const hosts = [...members(g)].sort((a, b) => b.share - a.share), html = hosts.map((v) => tipRow(v.moniker, finePct(v.share))).join(""); return hosts.length > 6 ? `<div class="cols">${html}</div>` : html; };
 const scope = () => servedScope().toLowerCase();
+const geoNames = (g, n) => { const a = geoOf(g).map((x) => short(prov() ? ccName(x) : x)); return a.slice(0, n).join(", ") + (a.length > n ? ` and ${a.length - n} more` : ""); };
+const belowMark = (g) => (g.lows?.length ? tipRow(`Under ${pct(MARK, 0)} of checks`) + g.lows.slice(0, 3).map((v) => tipRow(v.moniker, pct(rateOf(v), 2))).join("") + (g.lows.length > 3 ? tipRow(`+${g.lows.length - 3} more`) : "") : "");
 const TIP = {
-  name: (g) => hd(g) + (g.country && short(g.country) !== nameOf(g) ? tipRow(short(g.country)) : "") + tipRow(picks().includes(g.key) ? "Picked, click to remove" : `Pick to compare, up to ${MAX_PINS}`),
-  list: (g) => hd(g) + hostList(g),
+  name: (g) => hd(g) + (g.country && short(g.country) !== nameOf(g) ? tipRow(short(g.country)) : "") + tipRow(picks().includes(g.key) ? `Picked, ${M.touch() ? "tap" : "click"} to remove` : `Pick to compare, up to ${MAX_PINS}`),
+  list: (g) => hd(g) + hostList(g) + tipRow(prov() ? "Countries" : "Providers", String(geoOf(g).length)) + tipRow(geoNames(g, 5)),
   vp: (g) => hd(g) + tipRow("Voting power", int(g.vp)) + tipRow("Share", finePct(shareOf(g))),
   hosts: (g) => hd(g) + tipRow("Fibre hosts", String(g.hosts)) + tipRow("Of all Fibre hosts", pct(g.host_share)),
-  geo: (g) => hd(g) + (g.sum ? tipRow(prov() ? "Countries" : "Providers", String(geoOf(g).length)) : geoOf(g).slice(0, 8).map((x) => tipRow(short(prov() ? ccName(x) : x))).join("") + (geoOf(g).length > 8 ? tipRow(`+${geoOf(g).length - 8} more`) : "")),
-  reach: (g) => hd(g) + tipRow(`Answered, ${scope()}`, pct(g.reachability, 2))
+  geo: (g) => hd(g) + geoOf(g).slice(0, 8).map((x) => tipRow(short(prov() ? ccName(x) : x))).join("") + (geoOf(g).length > 8 ? tipRow(`+${geoOf(g).length - 8} more`) : ""),
+  reach: (g) => hd(g) + tipRow(`Checks answered, ${scope()}`, reachText(g))
     + (g.win ? tipRow("Checked since", g.win.n < g.win.of ? `${g.win.on}, ${g.win.n} of ${g.win.of} hosts` : g.win.on) : "")
     + tipRow("Checks", `${int(g.checks - g.failed_checks)} of ${int(g.checks)}`) + tipRow("Missed", int(g.failed_checks))
     + (g.key !== "__all" && V.all.failed_checks ? tipRow("Of all missed", pct(g.failed_checks / V.all.failed_checks)) : "")
+    + belowMark(g)
     + (g.sum && worst(g).length ? tipRow("Most missed") + worst(g).map((x) => tipRow(nameOf(x), int(x.failed_checks))).join("") : ""),
-  ready: (g) => hd(g) + tipRow("Hosts ready", `${g.ready_hosts} of ${g.hosts}`) + (g.not_ready_hosts ? tipRow("Not ready", String(g.not_ready_hosts)) : "") + (g.not_reported_hosts ? tipRow("Not reported", String(g.not_reported_hosts)) : "")
-    + tipRow(g.key === "__all" ? "Of hosted voting power, ready" : "Of its voting power, ready", readyKnown(g) ? readyPct(g.ready_share) : "under 0.1%") + (g.rep < g.vp ? tipRow("Not reported", readyPct(1 - g.rep / g.vp)) : "") + (g.key === "__all" ? tipRow("Of all voting power, ready", pct(N().totals.ready_vp_share)) : ""),
-  served: (g) => { const open = g.shards - settled(g); return hd(g) + tipRow(`Not served, ${scope()}`, shardText(g)) + tipRow("Shards served", srateText(g)) + (open > 0 ? tipRow("Pending or not counted", int(open)) : ""); },
+  ready: (g) => hd(g) + tipRow("Hosts ready", `${g.ready_hosts} of ${g.hosts}`) + (g.not_ready_hosts ? tipRow("Not ready", String(g.not_ready_hosts)) : "") + (g.not_reported_hosts ? tipRow("Hosts not reported", String(g.not_reported_hosts)) : "")
+    + (unheard(g) ? "" : tipRow(g.key === "__all" ? "Hosted voting power ready" : "Of its voting power, ready", readyText(g))) + (g.rep < g.vp ? tipRow("Voting power not reported", readyPct(1 - g.rep / g.vp)) : "") + (g.key === "__all" ? tipRow("All voting power ready", pct(N().totals.ready_vp_share)) : "")
+    + (silent(g) && !unheard(g) ? tipRow("The share may be higher") : "") + (silent(g) ? tipRow("Not reported is not the same as down") : ""),
+  served: (g) => { const open = g.shards - settled(g); return hd(g) + tipRow(`Blob shards served, ${scope()}`, srateText(g)) + (settled(g) ? tipRow("Shards", `${int(g.served)} of ${int(settled(g))}`) + tipRow("Not served", int(g.not_served)) : "") + (open > 0 ? tipRow("Pending or not counted", int(open)) : ""); },
 };
 const HEAD = {
-  reach: () => tipHead("Checks answered") + tipRow("A connection to each host every five minutes, no data asked for") + tipRow("Period", scope()) + tipRow("Tensile's mark, not a protocol rule", pct(MARK, 0)),
-  miss: () => tipHead("Checks missed") + tipRow("Checks the host did not answer") + tipRow("Period", scope()),
-  ready: () => tipHead("Hosts ready") + tipRow("Hosts that report their app node, signer, registration and store all pass"),
-  unrep: () => tipHead("Not reported") + tipRow("Hosts that do not report readiness. It is not a failure."),
-  vpready: () => tipHead("Voting power ready") + tipRow("Share of this row's voting power on hosts that report ready") + tipRow("≥ means some hosts do not report, so the share may be higher") + tipRow("– means next to nothing is ready and the rest does not report"),
-  served: () => tipHead("Shards not served") + tipRow("A shard is a piece of a blob, read back from a host that endorsed it. Not served means that host did not return it.") + tipRow("Period", scope()),
+  vp: () => tipHead("Voting power") + tipRow("Share of all voting power, bonded TIA"),
+  hosts: () => tipHead("Fibre hosts") + tipRow(`A server a validator runs for Fibre.${keptFor() ? ` It keeps a blob's shards for ${keptFor()}.` : ""}`),
+  reach: () => tipHead("Checks answered") + tipRow("A connection to each host, no data asked for. A miss alone does not stop a blob") + tipRow("Period", scope()) + tipRow(`A ring marks a host under ${pct(MARK, 0)}, here and on the map. That mark is Tensile's, not a protocol rule`),
+  served: () => tipHead("Blob shards served") + tipRow("A shard is a piece of a blob, read back from a host that endorsed it") + tipRow("Period", scope()),
+  vpready: () => tipHead("Its power ready now") + tipRow("Share of this row's own voting power on hosts that say they can take uploads now") + tipRow("At least means some hosts do not report, so the share may be higher. Not reported is not the same as down"),
+  ready: () => tipHead("Hosts ready now") + tipRow("Hosts that say they can take uploads now") + tipRow("Hosts that do not report are not counted as failing"),
 };
+// A narrow row has no heads: its figures say what the head would.
+const meaning = (t) => { const k = t === "ready" ? readyKey() : t; return M.narrow() && HEAD[k] ? HEAD[k]().replace(/^<h4>[^]*?<\/h4>/, "") : ""; };
 function tipMove(e, keyAt) {
   const c = e.target.closest("[data-t]");
   if (!c) return hideTip();
   const k = keyAt(c), g = k && V.byKey.get(k);
   if (!g) return;
-  if (c.dataset.t !== "name") return showTip(TIP[c.dataset.t](g, c), e.clientX, e.clientY);
+  // Beside its column, so the box never hides the figures it is there to compare.
+  if (c.dataset.t === "ready" && c.closest(".tb-list") && !M.narrow()) { const b = c.getBoundingClientRect(); return tipAt(TIP.ready(g), (box) => [b.right - 104 - box.width, b.top + b.height / 2 - box.height / 2]); }
+  if (c.dataset.t !== "name") return showTip(TIP[c.dataset.t](g, c) + meaning(c.dataset.t), e.clientX, e.clientY);
   // The pick hint stands clear of the name it is about.
   const b = c.closest(".k-a").getBoundingClientRect();
   showTip(TIP.name(g, c), b.right - 14, b.top - 14);
@@ -1782,7 +1936,19 @@ function toggleRest(r) {
   syncRest();
   fitVs();
 }
+// The list has its final height only once the tail has finished moving, and Compare's rows are fitted to that height.
+list.addEventListener("transitionend", (e) => {
+  if (e.propertyName === "grid-template-rows" && e.target.classList.contains("tailbox")) fitVs();
+});
+list.addEventListener("change", (e) => {
+  const k = e.target.closest(".sorter select")?.value;
+  if (!k) return;
+  S.sort = k; S.dir = WORST_LOW.has(k) ? 1 : -1;
+  render(); if (S.hot) paint();
+});
 list.addEventListener("click", (e) => {
+  if (e.target.closest(".dir")) { S.dir *= -1; render(); if (S.hot) paint(); return; }
+  if (e.target.closest(".go")) return vs.scrollIntoView({ behavior: calm ? "auto" : "smooth" });
   const h = e.target.closest("[data-s]");
   if (h) {
     const k = h.dataset.s;
@@ -1794,7 +1960,8 @@ list.addEventListener("click", (e) => {
   const r = e.target.closest(".tr");
   if (!r) return;
   if (r.classList.contains("rest")) return toggleRest(r);
-  if (r.hasAttribute("data-p")) togglePick(r.dataset.k);
+  // On touch a tap on a row reads it; the circle picks.
+  if (r.hasAttribute("data-p") && (!M.touch() || e.target.closest(".pk"))) togglePick(r.dataset.k);
 });
 list.addEventListener("mouseover", (e) => { const r = e.target.closest(".tr.rw:not(.sum)"); rowHover(r ? r.dataset.k : null); });
 list.addEventListener("mousemove", (e) => {
@@ -1809,7 +1976,7 @@ vs.addEventListener("click", (e) => { const x = e.target.closest("[data-x]"); if
 vs.addEventListener("mouseover", (e) => rowHover(e.target.closest(".vs-col")?.dataset.k ?? null));
 vs.addEventListener("mousemove", (e) => tipMove(e, (c) => c.closest(".vs-col")?.dataset.k));
 vs.addEventListener("mouseleave", () => { rowHover(null); hideTip(); });
-clear.addEventListener("click", clearPicks);
+root.addEventListener("click", (e) => { if (e.target.closest(".clear")) clearPicks(); });
 /* ---------- map ---------- */
 // World units: all the land. The band has a sentence above it now, so a crop would read as a cut across the card.
 // EDGE: land stops this far from the card's text edge. RAIL_GAP: what the westmost mark keeps from the rail, past RAIL_R, the room its disc and ring take.
@@ -1835,10 +2002,10 @@ function buildGeo() {
   geo = { cities };
 }
 function frameCam() {
-  P.w = mp.clientWidth; P.h = mp.clientHeight;
-  // The land hangs from the right edge, at the scale that keeps every mark off the rail: the rail then has the Pacific in any weighing.
+  P.w = canvas.clientWidth; P.h = canvas.clientHeight;
+  // The land hangs from the right edge, at the scale that keeps every mark off the rail: the rail then has the Pacific in any weighing. A narrow page has it under the map.
   const bh = LANDS.y1 - LANDS.y0, west = Math.min(...geo.cities.filter((g) => g.vs.length).map((g) => g.wx));
-  const s = Math.min(P.h / bh, (P.w - EDGE - side.offsetWidth - RAIL_GAP - RAIL_R) / (LANDS.x1 - west));
+  const s = Math.min(P.h / bh, (P.w - EDGE - (M.narrow() ? 0 : side.offsetWidth + RAIL_GAP) - RAIL_R) / (LANDS.x1 - west));
   P.cam = { s, x: LANDS.x1 - (P.w - EDGE) / s, y: LANDS.y0 - (P.h - bh * s) / 2 / s };
 }
 const at = (wx, wy) => ({ x: (wx - P.cam.x) * P.cam.s, y: (wy - P.cam.y) * P.cam.s });
@@ -1861,7 +2028,7 @@ function marksOf(list) {
   }
   return ms.sort((a, b) => b.share - a.share).map((m) => {
     m.cities.sort((a, b) => b.share - a.share);
-    const head = m.cities[0].g, more = m.cities.length - 1, named = more ? `${head.c.name} +${more}` : head.c.name;
+    const head = m.cities[0].g, more = m.cities.length - 1, named = more ? `${head.c.name} and ${more} more` : head.c.name;
     return { ...m, ...at(head.wx, head.wy), head, vp: sum(m.vs, shareOf), low: m.vs.some(lowHost), name: named };
   });
 }
@@ -1888,8 +2055,10 @@ function drawBase() {
 
 /* ---------- labels: marks never move, a label finds room around its mark ---------- */
 function reserved() {
+  if (M.narrow()) return [];
+  // The rail's whole column, top to bottom: a label above it would read as its heading.
   const m = mp.getBoundingClientRect(), b = side.getBoundingClientRect();
-  return [{ x0: b.left - m.left, x1: b.right - m.left + RAIL_CLEAR, y0: b.top - m.top, y1: b.bottom - m.top }];
+  return [{ x0: b.left - m.left, x1: b.right - m.left + RAIL_CLEAR, y0: 0, y1: m.height }];
 }
 const ANGLES = [0, 180, -90, 90, -45, 45, -135, 135, 60, 120, -60, -120, 30, 150, -30, -150, 75, 105, -75, -105, 15, 165, -15, -165], GAPS = [5, 14, 24, 36, 50, 66], NO_LINE = 6, LINE_CLEAR = 24;
 // The big cities take the top, so the crowd around them keeps its sides.
@@ -1941,7 +2110,7 @@ function spotsFor({ d, w }, around, boxes, inland = false, clear = 2) {
   for (let k = 0; k < ATL_ROWS; k++) {
     // A nearly level leader is drawn level.
     const row = ATL_TOP + k * ATL_Y, y = Math.abs(row - d.y) < ATL_Y ? d.y : row, x0 = right - w, box = { x0, x1: right, y0: y - LABEL_H / 2, y1: y + LABEL_H / 2 }, dx = right + 2 - d.x, dy = y - d.y, len = Math.hypot(dx, dy);
-    if (dx >= 0 || x0 < 8 || len <= edge(d) + 2) continue;
+    if (dx >= 0 || x0 < 8 || box.y1 > P.h - 6 || len <= edge(d) + 2) continue;
     if (boxes.some((b) => boxesMeet(box, b)) || hitMark(box)) continue;
     const line = { x1: d.x + (edge(d) + 1) * dx / len, y1: d.y + (edge(d) + 1) * dy / len, x2: right + 2, y2: y };
     if (boxes.some((b) => lineOnBox(line, b)) || lineOnMark(line)) continue;
@@ -2062,24 +2231,27 @@ function drawIso(f) {
   // A big group keeps the rest-state rule; a small one names every place it has.
   placeLabels(marks.filter((m) => marks.length <= 14 || m.share >= LABEL_MIN).slice(0, 8), L.isoLabs, P.isoBoxes, marks);
 }
-// Fixed rows in the biggest-first order, so a focus changes the figures and nothing moves. One track means the whole, so a short bar reads as short, and the last row sums them.
+// Fixed rows in the biggest-first order, so a focus changes the figures and nothing moves. One track means the whole, so a short bar reads as short.
 function drawRegions(only) {
   const part = new Map(regions(only ? (v) => only.has(v) : undefined).map((r) => [r.name, r])), hosts = S.weigh === "hosts", total = N().totals.hosts;
-  const all = regions().sort((a, b) => (hosts ? b.hosts - a.hosts : 0) || b.share - a.share), shown = [...part.values()];
+  const all = regions().sort((a, b) => (hosts ? b.hosts - a.hosts : 0) || b.share - a.share);
   regBox.innerHTML = all.map((r) => {
-    const p = part.get(r.name), v = p ? (hosts ? p.hosts : sharePct(p.share)) : "–", f = p ? (hosts ? p.hosts / total : p.share) : 0;
+    const p = part.get(r.name), v = p ? (hosts ? p.hosts : sharePct(p.share)) : "none", f = p ? (hosts ? p.hosts / total : p.share) : 0;
     return `<div data-r="${esc(r.name)}"${p ? "" : ' class="no"'}><span>${esc(r.name)}</span><b>${v}</b><u style="--f:${f.toFixed(4)}"></u></div>`;
-  }).join("") + `<div class="sum"><span>All regions</span><b>${hosts ? sum(shown, (r) => r.hosts) : sharePct(sum(shown, (r) => r.share))}</b></div>`;
+  }).join("");
 }
+const regTitle = (f) => (f ? `${f.name}, by region` : `${S.weigh === "vp" ? "Voting power" : "Fibre hosts"} by region`);
 function paintMap(f) {
   const only = f && new Set(f.vs), sig = only ? [...only].map((v) => v.valoper).sort().join() + (f.colour || "") : "";
   if (sig === S.sig) return;
   S.sig = sig; S.city = null;
+  // The figures change scope, so the list's title says so.
+  regHead.textContent = regTitle(f);
   drawIso(f); drawRegions(only); heat();
 }
 function renderKey() {
-  const vp = S.weigh === "vp", name = vp ? "Voting power" : "Fibre hosts", total = N().totals.hosts;
-  regHead.textContent = `${name} by region`;
+  const vp = S.weigh === "vp", total = N().totals.hosts;
+  regHead.textContent = regTitle(null);
   keyBox.textContent = "";
   const steps = vp ? [[.03, "≤3%"], [.06, "6%"], [.12, "12%"]] : [[1 / total, "1"], [4 / total, "4"], [9 / total, "9"]];
   steps.forEach(([s, label]) => {
@@ -2087,7 +2259,7 @@ function renderKey() {
     el("circle", { r }, ks); keyBox.insertAdjacentHTML("beforeend", `<span>${label}</span>`);
   });
   keyBox.insertAdjacentHTML("beforeend", `<span class="of">${vp ? "of voting power" : "Fibre hosts"}</span>`);
-  if (N().validators.some((v) => v.has_host && lowHost(v))) keyBox.insertAdjacentHTML("beforeend", `<div class="mlow"><i></i><span>a place with a host under 99%<span class="sp"> of checks</span></span></div>`);
+  if (N().validators.some((v) => v.has_host && lowHost(v))) keyBox.insertAdjacentHTML("beforeend", `<div class="mlow"><i></i><span>a place with a host under 99% of checks</span></div>`);
 }
 function draw() {
   svg.setAttribute("aria-label", `World map of Fibre hosts, sized by ${S.weigh === "vp" ? "voting power" : "number of hosts"}`);
@@ -2114,7 +2286,7 @@ function regroup() {
   if (!calm) [$(".ringbox", root), list].forEach((b) => b.animate([{ opacity: .25 }, { opacity: 1 }], { duration: 200, easing: "ease-out" }));
 }
 const segBy = seg("#hs-by", [["provider", "Provider"], ["country", "Country"], ["city", "City"]], () => S.by, (v) => { S.by = v; S.picks = []; if (state.pinned.length) M.set("pinned", []); regroup(); draw(); });
-const segWeigh = seg("#hs-weigh", [["vp", "Voting power"], ["hosts", "Fibre hosts"]], () => S.weigh, (v) => { if (S.sort === S.weigh) { S.sort = v; S.dir = -1; } S.weigh = v; regroup(); draw(); });
+const segWeigh = seg("#hs-weigh", [["vp", "Voting power"], ["hosts", "Fibre hosts"]], () => S.weigh, (v) => { if (S.sort === S.weigh) { S.sort = v; S.dir = -1; } else if (S.sort === readyKey()) S.sort = readyKey(v); S.weigh = v; regroup(); draw(); });
 
 on("pinned", () => { if (V) { syncPicks(); paint(); } });
 on("resize", () => { if (root.clientWidth === S.width) return; S.width = root.clientWidth; render(); placeNames(); draw(); paint(); });

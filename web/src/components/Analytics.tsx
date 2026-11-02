@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Mount = (shadow: ShadowRoot, file: unknown) => () => void;
 declare global { interface Window { TensileAnalytics?: Mount } }
@@ -21,14 +21,6 @@ function script(src: string) {
   return p;
 }
 
-/** The page has no layout for a window narrower than this yet. */
-const WIDE = "(min-width: 980px)";
-const onWidth = (on: () => void) => {
-  const q = window.matchMedia(WIDE);
-  q.addEventListener("change", on);
-  return () => q.removeEventListener("change", on);
-};
-
 const note = (text: string) => <div className="page-head"><div><h1>Analytics</h1><p className="sub">{text}</p></div></div>;
 
 /**
@@ -37,7 +29,6 @@ const note = (text: string) => <div className="page-head"><div><h1>Analytics</h1
  * keeps its class names and the site's apart. It reads the theme from the document, so the site's toggle works here.
  */
 export default function Analytics() {
-  const wide = useSyncExternalStore(onWidth, () => window.matchMedia(WIDE).matches, () => true);
   const host = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -61,8 +52,7 @@ export default function Analytics() {
       if (!gone) stop = window.TensileAnalytics?.(shadow, file);
     })().catch(() => { if (!gone) setFailed(true); });
     return () => { gone = true; stop?.(); };
-  }, [wide]);
-  if (!wide) return note("Analytics needs a wider screen for now.");
+  }, []);
   if (failed) return note("Analytics could not be loaded. Try again in a few minutes.");
   return <div ref={host} style={{ minHeight: "100vh" }} />;
 }

@@ -8,7 +8,7 @@
   /* one type ladder: page title, section head, the page's largest figure, the ring's, figure, smaller figure, decimals or unit, label, note, tick */
   --fs-page: 30px;
   --fs-sec: 20px;
-  --fs-hero: 56px;
+  --fs-hero: 44px;
   --fs-ring: 44px;
   --fs-fig: 28px;
   --fs-fig2: 22px;
@@ -19,9 +19,9 @@
   --fs-tick: 11px;
 
   /* one surface: card radius, inner radius, row radius, card gutter, gap between cards */
-  --r: 18px;
+  --r: 12px;
   --r2: 12px;
-  --r3: 9px;
+  --r3: 6px;
   --pad: 24px;
   --g: 12px;
 
@@ -86,7 +86,6 @@
   --t-brand: #2fb2c0;
   --t-on: #12808c;
   --t-on-ink: #fff;
-  --t-net: #7b2bf9;
 }
 
 :host([data-theme="light"]) {
@@ -141,30 +140,45 @@
   --t-brand: #006a74;
   --t-on: #006a74;
   --t-on-ink: #fff;
-  --t-net: #7b2bf9;
 }
 
-/* The narrow page's tables need the room, so every card's gutter narrows with them. */
-:host { --pad: 16px; }
+/* The narrow page's tables need the room, so every card's gutter narrows with them. --stick: the pinned bar's height, which every sticky part stands under. */
+:host { --pad: 16px; --stick: 44px; }
 
 /* page */
 * { box-sizing: border-box; }
 :host { display: block; color: var(--ink); font: 400 var(--fs-row)/1.35 var(--f); -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
-h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; letter-spacing: -.01em; }
+h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec); font-weight: 600; line-height: 36px; letter-spacing: -.01em; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-.page { padding: 36px 0 0; }
+.page { padding: 20px 0 0; }
+/* a jump leaves the section's head clear of the pinned bar */
+.sec { scroll-margin-top: calc(var(--stick) + 12px); }
 .ctl { flex: none; display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .ctl-l { font-size: var(--fs-note); color: var(--ink2); white-space: nowrap; }
 
 /* every card on the page */
 .card { border: 1px solid var(--line); border-radius: var(--r); background: var(--card); }
 
-/* the row under the header: the page's title and what Fibre is */
-.bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 34px; margin-bottom: var(--g); }
-.bar h1 { margin: 0; font-size: var(--fs-page); font-weight: 600; line-height: 34px; letter-spacing: -.028em; }
-.bar + .sec { margin-top: 0; }
+/* the row under the header pins on scroll: the page's title, its parts with the current one marked, and the period. One height at rest and pinned, so nothing jumps. */
+.bar { position: sticky; top: 0; z-index: 10; display: flex; align-items: baseline; gap: 12px; height: var(--stick); background: var(--bg); box-shadow: 0 1px 0 transparent; transition: box-shadow .14s; }
+.bar.stuck { box-shadow: 0 1px 0 var(--line); }
+.bar h1 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-page); font-weight: 600; line-height: 36px; letter-spacing: -.028em; cursor: default; transition: font-size .14s; }
+.bar.stuck h1 { font-size: 18px; letter-spacing: -.012em; cursor: pointer; }
+.bar .ctl { position: relative; align-self: baseline; }
+.bar .ctl-l .dt { text-decoration: underline dotted var(--rule4); text-decoration-thickness: 1px; text-underline-offset: 4px; cursor: help; }
+.bar .hold { display: none; position: absolute; top: 0; right: 0; bottom: 0; align-items: center; font-size: var(--fs-note); color: var(--ink2); white-space: nowrap; }
+.bar.hs .ctl > :not(.hold) { visibility: hidden; }
+.bar.hs .hold { display: flex; }
+.jump { margin-left: 8px; }
+.jump i { background: var(--wash4); opacity: 0; }
+.bar .seg { height: 36px; }
+.jump button { padding: 0 12px; color: var(--ink2); }
+.jump button:hover, .jump button.on { color: var(--ink); }
+/* what Fibre is, once, under the title */
+.lede { margin: 0 0 12px; font-size: var(--fs-lab); line-height: 18px; color: var(--ink2); }
+.lede + .sec { margin-top: 0; }
 
 /* segmented control, built by seg() */
 .seg { position: relative; display: inline-flex; height: 34px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; }
@@ -178,7 +192,7 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #seg-win button.on, #seg-win button.on:hover { color: var(--t-on-ink); }
 
 /* section head */
-.sec { margin-top: 44px; }
+.sec { margin-top: 40px; }
 .sec-h { display: flex; align-items: baseline; gap: 12px; height: 36px; margin-bottom: var(--g); }
 .sec-h p { margin: 0; font-size: var(--fs-lab); color: var(--ink2); white-space: nowrap; }
 
@@ -193,10 +207,10 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #tip.on { opacity: 1; }
 #tip h4 { margin: 0 0 4px; font-size: var(--fs-note); font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 7px; }
 #tip h4 i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
-#tip div { display: flex; justify-content: space-between; gap: 18px; white-space: nowrap; }
-#tip div.w { white-space: normal; }
-#tip div b { font-weight: 500; color: var(--ink); }
-#tip div.cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; white-space: normal; }
+/* a long label wraps inside the box; the figure stays whole on its right */
+#tip div { display: flex; justify-content: space-between; gap: 18px; }
+#tip div b { flex: none; font-weight: 500; color: var(--ink); white-space: nowrap; }
+#tip div.cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
 #tip:has(.cols) { max-width: 420px; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -205,11 +219,12 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 
 /* top */
 /* whole-pixel tracks, so tile edges and the text inside them land on the pixel grid */
-#top .grid { display: grid; grid-template-columns: minmax(0, 1fr) 264px 264px; grid-template-rows: repeat(2, 154px); gap: var(--g); }
+#top .grid { display: grid; grid-template-columns: minmax(0, 1fr) 264px 264px; grid-template-rows: repeat(2, 144px); gap: var(--g); }
 #top .tile { position: relative; overflow: hidden; padding: 18px var(--pad) 0; cursor: default; }
 #top .main { grid-row: span 2; }
 #top h3 { margin: 0; font-size: var(--fs-lab); font-weight: 500; line-height: 16px; color: var(--ink2); }
-#top h3 span { margin-left: 7px; font-size: var(--fs-note); font-weight: 400; color: var(--ink2); }
+/* a tile's note sits at the title line's far end, on every tile */
+#top h3 span { position: absolute; top: 18px; right: var(--pad); font-size: var(--fs-note); font-weight: 400; color: var(--ink2); }
 
 #top .hero { display: flex; align-items: baseline; gap: 14px; margin: 8px 0 0; line-height: 1; }
 #top .hero b { font-size: var(--fs-hero); font-weight: 600; letter-spacing: -.035em; font-variant-numeric: proportional-nums; }
@@ -223,8 +238,8 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #top .grid { grid-template-columns: minmax(0, 1fr) 216px 216px; }
 
 #top .plot { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; display: block; overflow: visible; }
-#top .main .plot { height: 212px; }
-#top .tile:not(.main) .plot { height: 84px; }
+#top .main .plot { height: 206px; }
+#top .tile:not(.main) .plot { height: 74px; }
 
 #top .base { stroke: var(--rule1); }
 #top .rule { stroke: var(--rule1); }
@@ -253,12 +268,13 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 
 /* cost */
 #cost.sec { margin-top: var(--g); }
-#cost .card { position: relative; display: flex; flex-direction: column; height: 380px; padding: 18px var(--pad) var(--pad); }
+#cost .card { position: relative; display: flex; flex-direction: column; height: 360px; padding: 18px var(--pad) var(--pad); }
 #cost h3 { margin: 0; font-size: var(--fs-lab); font-weight: 500; line-height: 16px; color: var(--ink2); }
 
 #cost .fig { display: flex; align-items: baseline; margin: 5px 0 0; font-size: var(--fs-fig); font-weight: 600; line-height: 32px; letter-spacing: -.025em; font-variant-numeric: proportional-nums; }
 #cost .fig em { margin: 0 .3em 0 .24em; font-style: normal; font-size: var(--fs-row); font-weight: 400; letter-spacing: 0; color: var(--ink2); }
 #cost .fig em.at { margin-left: 5px; }
+#cost .pair { display: contents; }
 /* one line on the title's row: how to read the chart, and the rule behind the curve */
 #cost .key { position: absolute; top: 18px; right: var(--pad); margin: 0; font-size: var(--fs-note); line-height: 16px; color: var(--ink2); white-space: nowrap; }
 
@@ -267,7 +283,6 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #cost text { font-size: var(--fs-tick); fill: var(--ink3); }
 #cost text.mid { fill: var(--ink2); }
 #cost text.lab { font-size: var(--fs-note); fill: var(--ink2); }
-#cost text.note { fill: var(--ink3); }
 #cost .grid { stroke: var(--rule1); }
 #cost .base { stroke: var(--rule2); }
 #cost .curve { fill: none; stroke: var(--acc); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
@@ -280,6 +295,7 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #cost .fade { transition: opacity .12s; }
 #cost .col { fill: var(--acc); }
 #cost .pct { fill: var(--ink2); }
+#cost .pct.lead { fill: var(--ink); }
 
 #cost .band { fill: var(--wash2); }
 #cost .cross { stroke: var(--rule3); }
@@ -288,6 +304,7 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 
 /* publishers */
 /* share of data or fees, labelled on the bar */
+#publishers { --th: 30px; }
 #publishers .pb-share { padding: 18px var(--pad); }
 #publishers .pb-top { position: relative; height: 34px; }
 #publishers .pb-of { position: absolute; right: 0; bottom: 0; z-index: 1; }
@@ -299,29 +316,27 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #publishers .pb-lab i { width: 8px; height: 8px; margin-left: 3px; border-radius: 50%; background: var(--c); transform: translateY(-1px); }
 #publishers .pb-lab.hid { display: none; }
 #publishers .pb-labels.lit .pb-lab:not(.flo) { opacity: 0; }
-#publishers .pb-bar { position: relative; display: flex; gap: 2px; height: 10px; margin-top: 8px; border-radius: 3px; overflow: hidden; }
+#publishers .pb-bar { position: relative; display: flex; gap: 2px; height: 8px; margin-top: 8px; border-radius: 3px; overflow: hidden; }
 #publishers .pb-bar:empty { background: var(--wash3); }
 #publishers .pb-bar i { flex: 0 1 0; min-width: 4px; background: var(--c); transition: opacity .12s; }
 #publishers .pb-bar.lit i:not(.on) { opacity: .28; }
 
 /* table: rows sit inset in the card, as Hosting's do */
-#publishers .pb-wrap { position: relative; padding: 0 12px 6px; border-top: 1px solid var(--line); }
-#publishers .pb-wrap::before { content: ""; position: absolute; left: 0; right: 0; top: 44px; height: 1px; background: var(--line); }
+#publishers .pb-wrap { position: relative; padding: 0 8px 6px; border-top: 1px solid var(--line); }
+#publishers .pb-wrap::before { content: ""; position: absolute; left: 0; right: 0; top: var(--th); height: 1px; background: var(--line); }
 #publishers .pb-t { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
 #publishers tbody::before { content: ""; display: block; height: 7px; }
-#publishers .c-who { width: 188px; }
-#publishers .c-data { width: 168px; }
-#publishers .c-mib { width: 96px; }
-#publishers .c-avg { width: 112px; }
-#publishers .c-days { width: 88px; }
-#publishers .c-left { width: 84px; }
-#publishers .c-since { width: 84px; }
+#publishers .c-who { width: 150px; }
+#publishers .c-data { width: 158px; }
+#publishers .c-mib { width: 80px; }
+#publishers .c-avg { width: 92px; }
+#publishers .c-left { width: 128px; }
 
-#publishers th { position: relative; height: 44px; padding: 0 10px 6px; font-size: var(--fs-note); font-weight: 400; line-height: 14px; color: var(--ink2); text-align: left; white-space: nowrap; vertical-align: bottom; }
+#publishers th { position: relative; height: var(--th); padding: 0 8px 8px; font-size: var(--fs-note); font-weight: 400; line-height: 14px; color: var(--ink2); text-align: left; white-space: nowrap; vertical-align: bottom; }
 #publishers th.n, #publishers th.d { text-align: right; }
-#publishers th:first-child { padding-left: 34px; }
-#publishers td:first-child { padding-left: 12px; }
-#publishers th:last-child, #publishers td:last-child { padding-right: 12px; }
+#publishers th:first-child { padding-left: 30px; }
+#publishers td:first-child { padding-left: 8px; }
+#publishers th:last-child, #publishers td:last-child { padding-right: 8px; }
 #publishers th button { position: relative; line-height: 14px; text-align: inherit; color: inherit; transition: color .12s; }
 #publishers th button:hover { color: var(--ink); }
 #publishers th[aria-sort] button { color: var(--ink); }
@@ -334,10 +349,13 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #publishers th.a { padding-left: 18px; padding-right: 0; }
 #publishers .pb-h { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; line-height: 14px; }
 #publishers .pb-h button::after { left: auto; right: calc(100% + 4px); }
-#publishers .pb-h > span { grid-area: 1 / 1; justify-self: start; }
-#publishers .pb-h > button { grid-area: 1 / 2; }
+#publishers .pb-h > .pb-first { grid-area: 1 / 1; justify-self: start; z-index: 1; }
+#publishers .pb-h > button:not(.pb-first) { grid-area: 1 / 2; }
+/* the cell holds two sorts: only the one in force shows */
+#publishers th.a:not(.by-first) .pb-first, #publishers th.by-first > .pb-h > button:not(.pb-first) { color: var(--ink2); }
+#publishers th.a:not(.by-first) .pb-first::after, #publishers th.by-first > .pb-h > button:not(.pb-first)::after { opacity: 0; }
 /* the dates share the column name's line, as every head sits on one line, each over the line that marks its day */
-#publishers .pb-ticks { grid-area: 1 / 1; position: relative; height: 14px; font-size: var(--fs-tick); color: var(--ink2); }
+#publishers .pb-ticks { grid-area: 1 / 1; position: relative; height: 14px; font-size: var(--fs-tick); color: var(--ink3); }
 #publishers .pb-ticks span { position: absolute; top: 0; line-height: 14px; white-space: nowrap; }
 
 #publishers tbody tr { transition: opacity .12s; }
@@ -346,12 +364,11 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #publishers tbody td:last-child { border-radius: 0 var(--r3) var(--r3) 0; }
 #publishers tbody.lit tr:not(.on) { opacity: .34; }
 /* every figure sits on the row's centre line, the line the trace runs along */
-#publishers tbody td { height: 40px; padding: 0 10px; font-size: var(--fs-lab); line-height: 18px; text-align: right; white-space: nowrap; color: var(--ink2); vertical-align: middle; transition: background .12s; }
+#publishers tbody td { height: 40px; padding: 0 8px; font-size: var(--fs-lab); line-height: 18px; text-align: right; white-space: nowrap; color: var(--ink2); vertical-align: middle; transition: background .12s; }
 #publishers tbody td[data-c="left"].z { color: var(--ink3); }
 
 /* sort shows in the column's figures */
-#publishers [data-sort="bytes"] td.d .pb-d b, #publishers [data-sort="paid_per_mib_utia"] [data-c="mib"], #publishers [data-sort="avg_blob_bytes"] [data-c="avg"] .pb-d b,
-#publishers [data-sort="days"] [data-c="days"], #publishers [data-sort="left"] [data-c="left"], #publishers [data-sort="since"] [data-c="since"] { color: var(--ink); }
+#publishers [data-sort="bytes"] td.d .pb-d b, #publishers [data-sort="paid_per_mib_utia"] [data-c="mib"], #publishers [data-sort="avg_blob_bytes"] [data-c="avg"] .pb-d b, #publishers [data-sort="left"] [data-c="left"] { color: var(--ink); }
 
 /* publisher: rank, name; the same slots as Hosting's rows */
 #publishers tbody td.w { text-align: left; }
@@ -373,19 +390,19 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 /* activity */
 #publishers tbody td.a { position: relative; padding: 0; vertical-align: top; }
 #publishers td.a canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-#publishers .pb-x { position: absolute; top: 45px; left: 0; width: 1px; background: var(--rule3); display: none; pointer-events: none; }
+#publishers .pb-x { position: absolute; top: calc(var(--th) + 1px); left: 0; width: 1px; background: var(--rule3); display: none; pointer-events: none; }
 #publishers .pb-ring { position: absolute; left: 0; top: 0; border: 1px solid var(--ink); border-radius: 3px; display: none; pointer-events: none; }
 #publishers .pb-n { position: absolute; right: 0; top: 50%; transform: translateY(-50%); font-size: var(--fs-lab); line-height: 18px; color: var(--ink2); pointer-events: none; }
 #publishers [data-sort="settlements"] .pb-n { color: var(--ink); }
 /* the height scale: a key under the table, real heights in a neutral mark, clear of the last row */
 #publishers .pb-key td { height: 54px; padding: 6px 0 0; font-size: var(--fs-note); color: var(--ink2); vertical-align: middle; white-space: nowrap; }
-#publishers .pb-key td:first-child { padding-left: 34px; }
+#publishers .pb-key td:first-child { padding-left: 30px; }
 #publishers .pb-key td.a { position: relative; }
 #publishers .pb-rule { position: absolute; inset: 6px 0 0 18px; display: flex; align-items: center; gap: 16px; pointer-events: none; }
 #publishers .pb-rule span { display: flex; align-items: center; gap: 6px; font-size: var(--fs-tick); line-height: 16px; color: var(--ink2); white-space: nowrap; }
 #publishers .pb-rule i { flex: none; width: 2px; background: var(--mark); }
-#publishers .pb-notes { padding: 8px 12px 12px 34px; font-size: var(--fs-note); line-height: 18px; color: var(--ink2); }
-#publishers .pb-notes p { margin: 0; text-wrap: pretty; }
+/* the sample of empty time: four dots of the trace's own centre line */
+#publishers .pb-rule u { flex: none; width: calc(var(--s) * 3 + var(--d)); height: var(--h); background: repeating-linear-gradient(90deg, var(--rule4) 0 var(--d), transparent var(--d) var(--s)); }
 
 /* the folded tail */
 #publishers tr.o td { background: var(--wash2); cursor: pointer; }
@@ -397,21 +414,6 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 
 #publishers tbody td.pb-none { height: 88px; text-align: center; vertical-align: middle; color: var(--ink3); }
 
-#publishers th, #publishers tbody td { padding-inline: 8px; }
-#publishers th:first-child { padding-left: 30px; }
-#publishers td:first-child { padding-left: 8px; }
-#publishers th:last-child, #publishers td:last-child { padding-right: 8px; }
-#publishers .pb-wrap { padding: 0 8px 6px; }
-#publishers .c-who { width: 150px; }
-#publishers .c-data { width: 158px; }
-#publishers .c-mib { width: 80px; }
-#publishers .c-avg { width: 92px; }
-#publishers .c-days { width: 80px; }
-#publishers .c-left { width: 74px; }
-#publishers .c-since { width: 76px; }
-#publishers .pb-key td:first-child { padding-left: 30px; }
-#publishers .pb-notes { padding: 8px 8px 12px 30px; }
-
 /* hosting */
 :host {
   /* on the ring the tail sits below the last step and above the track, so the ring only ever descends */
@@ -421,11 +423,7 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 :host([data-theme="light"]) {
   --hosting-dim: color-mix(in srgb, var(--tail) 26%, var(--card));
 }
-/* name, bar, hosts, geography, then the three spanned groups: checks 2, shards 1, readiness 3 */
-#hosting { --cols: 236px minmax(0, 1fr) 62px 66px 72px 62px 116px 66px 72px 108px; --gap: 16px; --th: 52px; }
-#hosting .tb[data-by="city"] { --cols: 236px minmax(0, 1fr) 62px 66px 72px 62px 116px 66px 72px 108px; }
 #hosting .seg + .ctl-l { margin-left: 10px; }
-#hosting .sec-h p { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 #hosting .hs { padding: 0 0 10px; }
 
 /* every part of the card opens on its question and answers it in words */
@@ -434,19 +432,14 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #hosting .say p b { font-weight: 600; color: var(--ink); }
 #hosting .say p small { display: block; font-size: var(--fs-lab); line-height: 20px; letter-spacing: 0; color: var(--ink2); text-wrap: pretty; }
 #hosting .say .lead { display: block; overflow: hidden; white-space: nowrap; }
-/* a caption on the sentence's quiet second line, so it never narrows the first */
-#hosting .say-r { display: flex; justify-content: flex-end; align-items: center; gap: 12px; font-size: var(--fs-lab); line-height: 20px; color: var(--ink2); white-space: nowrap; }
 #hosting .clear { height: 20px; padding: 0 9px; border: 1px solid var(--rule4); border-radius: 999px; font-size: var(--fs-note); font-weight: 500; color: var(--ink); transition: background .12s; }
 #hosting .clear:hover { background: var(--wash2); }
 #hosting .clear[hidden] { display: none; }
-/* what the table cannot say in a column: from the names' edge to the table's */
-#hosting .notes { padding: 12px 24px 8px 46px; font-size: var(--fs-note); line-height: 18px; color: var(--ink2); }
-#hosting .notes p { margin: 0; text-wrap: pretty; }
 
 /* upper band: who beside where */
 #hosting .band { display: grid; grid-template-columns: 488px minmax(0, 1fr); column-gap: 52px; padding: 18px var(--pad) 8px; }
 #hosting .who, #hosting .where { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; row-gap: 12px; min-width: 0; }
-#hosting .whobox { position: relative; height: 288px; }
+#hosting .whobox { position: relative; height: 224px; }
 /* the ring's visible edge sits on the text's left edge */
 #hosting .ringbox { position: absolute; left: -4px; top: 12px; width: 264px; height: 264px; }
 #hosting .ring { display: block; width: 100%; height: 100%; overflow: visible; }
@@ -460,11 +453,10 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #hosting .nl i { flex: none; width: 8px; height: 8px; border-radius: 2px; }
 #hosting .nl span { flex: 1; min-width: 0; font-weight: 500; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #hosting .nl b { flex: none; font-weight: 500; color: var(--ink); }
-#hosting .nl.oth, #hosting .nl.all { cursor: default; }
-#hosting .nl.oth span, #hosting .nl.oth b, #hosting .nl.all span { font-weight: 400; color: var(--ink2); }
-/* the sum under its parts: no swatch, the name lines up with theirs */
-#hosting .nl.all { padding-left: 16px; }
-#hosting .nl.all::before { content: ""; position: absolute; left: 0; right: 0; top: -5px; height: 1px; background: var(--line); }
+#hosting .nl.oth { cursor: default; }
+#hosting :is(.nl.oth, .nl.px) span { flex: none; max-width: 130px; }
+#hosting .nl[hidden] { display: none; }
+#hosting .nl.oth span, #hosting .nl.oth b { font-weight: 400; color: var(--ink2); }
 #hosting .nl.off { opacity: .35; }
 /* one stack in both states: the two outer rows match, so the figure holds the ring's centre */
 #hosting .centre { position: absolute; inset: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr); justify-items: center; row-gap: 6px; pointer-events: none; text-align: center; }
@@ -498,9 +490,9 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #hosting .lab.t3 { font-size: var(--fs-tick); fill: var(--ink3); }
 #hosting .lab.t3 .v { font-weight: 500; fill: var(--ink2); }
 #hosting .ldr { stroke: var(--rule4); stroke-width: 1; pointer-events: none; }
-/* the map's own rail: a titled list on the left edge, in the names' rhythm, its sum on their sum's line */
+/* the map's own rail: a titled list on the left edge, in the names' rhythm, ending on their last line */
 #hosting .mside { position: absolute; left: 0; top: 0; z-index: 2; width: 140px; font-size: var(--fs-note); line-height: 16px; color: var(--ink2); pointer-events: none; }
-#hosting .mhd { display: flex; align-items: center; height: var(--pitch, 32px); color: var(--ink2); }
+#hosting .mhd { display: flex; align-items: center; height: var(--pitch, 32px); color: var(--ink2); white-space: nowrap; }
 /* name and figure on the row's line, a short solid bar under them: its full length is all voting power */
 #hosting .mreg { background: var(--card); }
 #hosting .mreg > div { position: relative; display: flex; justify-content: space-between; align-items: center; height: var(--pitch, 32px); padding: 0 6px; margin: 0 -6px; border-radius: 5px; cursor: default; pointer-events: auto; transition: background .12s, color .12s; }
@@ -511,38 +503,32 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #hosting .mreg > div.no > u::before { visibility: hidden; }
 #hosting .mreg > div[data-r]:not(.no):hover, #hosting .mreg > div.on { background: var(--wash2); color: var(--ink); }
 #hosting .mreg.hot > div[data-r]:not(.on) { opacity: .5; }
-#hosting .mreg > div.sum { pointer-events: none; }
 /* the key to the marks sits on the map's own head, opposite its caption */
-#hosting .mkey { position: absolute; right: 0; bottom: 0; display: flex; align-items: center; gap: 4px; height: 20px; font-size: var(--fs-note); line-height: 20px; color: var(--ink2); white-space: nowrap; pointer-events: none; }
+#hosting .mkey { position: absolute; right: 0; bottom: -1.5px; display: flex; align-items: center; gap: 4px; height: 20px; font-size: var(--fs-note); line-height: 20px; color: var(--ink2); white-space: nowrap; pointer-events: none; }
 #hosting .mkey svg { display: block; overflow: visible; }
 #hosting .mkey circle { fill: var(--acc); }
 #hosting .mkey span + svg { margin-left: 4px; }
 #hosting .mlow { display: flex; align-items: center; gap: 6px; margin-left: 16px; }
-#hosting .mlow i { flex: none; position: relative; width: 11px; height: 11px; border-radius: 50%; box-shadow: inset 0 0 0 1.25px var(--ink); }
-#hosting .mlow i::before { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--acc); }
+/* one mark in the key, the table and Compare */
+#hosting :is(.mlow i, .lowm) { flex: none; display: inline-block; position: relative; width: 11px; height: 11px; border-radius: 50%; box-shadow: inset 0 0 0 1.25px var(--ink); }
+#hosting :is(.mlow i, .lowm)::before { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--acc); }
+#hosting .lowm { margin-right: 6px; vertical-align: -1px; }
 
 /* lower band: one table, or a shorter table beside the head to head */
-#hosting .how { padding: 18px var(--pad) 12px; border-top: 1px solid var(--line); }
-#hosting .tb { display: grid; grid-template-columns: minmax(0, 1fr); padding: 0 12px; }
+#hosting .tb { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); padding: 0 12px; border-top: 1px solid var(--line); }
 #hosting .tb-vs { display: none; }
 #hosting .tb-list { min-width: 0; }
 #hosting .tr { display: grid; grid-template-columns: var(--cols); column-gap: var(--gap); align-items: center; padding: 0 12px; }
-#hosting .tb-list > .top { position: sticky; top: 0; z-index: 4; background: var(--card); }
-/* two tiers: a group's name over a line that spans its columns, labels on the head's foot */
-#hosting .th { grid-template-rows: 22px minmax(0, 1fr); align-items: end; height: var(--th); margin: 0 -12px; padding: 0 24px; border-bottom: 1px solid var(--line); font-size: var(--fs-note); color: var(--ink2); }
-#hosting .th > * { grid-row: 2; }
+#hosting .tb-list > .top { position: sticky; top: var(--stick); z-index: 4; background: var(--card); }
+/* every label on the head's foot; each head says its own period */
+#hosting .th { align-items: end; height: var(--th); margin: 0 -12px; padding: 0 24px; border-bottom: 1px solid var(--line); font-size: var(--fs-note); color: var(--ink2); }
 #hosting .th .k-a { display: flex; align-items: baseline; gap: 8px; padding: 0 0 8px 22px; line-height: 14px; white-space: nowrap; }
-#hosting .th > .grp { grid-row: 1; align-self: stretch; display: flex; align-items: center; justify-content: flex-end; white-space: nowrap; border-bottom: 1px solid var(--line2); color: var(--ink2); }
-#hosting .g-c { grid-column: 5 / span 2; }
-#hosting .g-s { grid-column: 7; }
-#hosting .g-r { grid-column: 8 / span 3; }
-#hosting .tb.vs .th { grid-template-rows: minmax(0, 1fr); }
-#hosting .tb.vs .th > * { grid-row: 1; }
-#hosting .tb.vs .grp { display: none; }
-#hosting .h { display: flex; align-items: flex-end; justify-content: flex-end; min-width: 0; padding-bottom: 8px; font-weight: 400; line-height: 14px; white-space: nowrap; transition: color .12s; }
+#hosting .h { display: flex; align-items: flex-end; justify-content: flex-end; min-width: 0; padding-bottom: 8px; font-weight: 400; line-height: 14px; text-align: right; white-space: nowrap; transition: color .12s; }
 #hosting .h1 { position: relative; display: block; }
 /* a dotted line where a definition waits */
-#hosting .dt { text-decoration: underline dotted var(--rule4); text-decoration-thickness: 1px; text-underline-offset: 4px; }
+:is(#hosting, #publishers) .dt { text-decoration: underline dotted var(--rule4); text-decoration-thickness: 1px; text-underline-offset: 4px; cursor: help; }
+/* a row in Hosting is there to click, so only Publishers' cells, which do nothing else, take the help cursor */
+#publishers tbody tr:not(.o) td:not(.a):not(.w) { cursor: help; }
 
 /* the caret hangs outside the label, so labels line up with their values */
 #hosting .h1::after { content: ""; position: absolute; bottom: 4px; right: calc(100% + 4px); border: 3.5px solid transparent; opacity: 0; }
@@ -550,18 +536,23 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #hosting .h.on { color: var(--ink); }
 #hosting .h.on .h1::after { border-top-color: currentColor; border-bottom-width: 0; opacity: 1; }
 #hosting .h.on.asc .h1::after { border-top-width: 0; border-top-color: transparent; border-bottom-width: 3.5px; border-bottom-color: currentColor; }
-#hosting .h.wt { justify-content: flex-start; }
-#hosting .h.wt .h1::after { right: auto; left: calc(100% + 4px); }
+/* flush right on the figures like every other head; the rest of the label overhangs the empty head to the left */
+#hosting .h.wt { justify-self: start; width: var(--slot); }
 
 /* every figure on the row's centre line, the name and its place around it, as Publishers' rows */
 #hosting .rw { --rowbg: transparent; position: relative; align-items: center; height: 40px; line-height: 18px; border-radius: var(--r3); background: var(--rowbg); cursor: pointer; transition: background .12s; }
 #hosting .rw:hover, #hosting .rw.lit { --rowbg: var(--wash2); }
 #hosting .tb.wide .rw.lit:not(:hover):not(.rest) { --rowbg: transparent; }
-#hosting .rw.sum, #hosting .rw.sum:hover { --rowbg: var(--wash2); margin-top: 7px; cursor: default; }
-#hosting .rw.rest { --rowbg: var(--wash2); }
+#hosting .rw.sum, #hosting .rw.sum:hover { --rowbg: var(--wash2); margin-top: 7px; margin-bottom: 3px; cursor: default; }
+/* the figures on the first line, what qualifies them on the second */
+#hosting .rw.sum { align-items: start; padding-block: 4px; }
+#hosting .sum .vb { align-items: start; }
+#hosting .sum small.nr { display: block; font-size: var(--fs-tick); font-weight: 400; line-height: 14px; color: var(--ink3); }
+#hosting .tb.vs .rw.sum { align-items: center; padding-block: 0; }
+#hosting .rw.rest { --rowbg: var(--wash2); margin-top: 3px; }
 #hosting .rw.rest:hover, #hosting .rw.rest.lit { --rowbg: var(--wash3); }
 /* the way back stays in reach while the tail is open */
-#hosting .rest.opened { position: sticky; top: var(--top-h, 99px); z-index: 3; background: linear-gradient(var(--rowbg), var(--rowbg)), var(--card); }
+#hosting .rest.opened { position: sticky; top: calc(var(--stick) + var(--top-h, 99px)); z-index: 3; background: linear-gradient(var(--rowbg), var(--rowbg)), var(--card); }
 
 /* rank, name. A row's hover swaps the rank for the pick, so nothing round sits in the table at rest: on the map a hollow ring means under the mark. */
 #hosting .k-a { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; column-gap: 8px; align-items: baseline; min-width: 0; }
@@ -569,8 +560,7 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #hosting .k-a > .nm { grid-column: 2; grid-row: 1; }
 #hosting .k-a > code { grid-column: 3; grid-row: 1; }
 #hosting .k-a > .sub { grid-column: 2 / -1; grid-row: 2; min-width: 0; font-size: var(--fs-tick); line-height: 14px; color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#hosting .sub b { font-weight: 600; color: var(--ink); }
-#hosting .sub.tight :is(.mr, .sp) { display: none; }
+#hosting .sub.tight .mr { display: none; }
 #hosting .k-a em { font-style: normal; font-size: var(--fs-tick); text-align: right; color: var(--ink2); pointer-events: none; transition: opacity .12s; }
 #hosting .rw:hover .k-a em, #hosting .rw.on .k-a em { opacity: 0; }
 #hosting .nm { min-width: 0; font-size: var(--fs-row); font-weight: 500; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -579,7 +569,7 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #hosting .nm small { margin-left: 6px; font-size: var(--fs-tick); font-weight: 400; color: var(--ink3); }
 #hosting .sum .k-a { display: block; padding-left: 22px; }
 
-/* at rest one quiet ring: the bar carries the rank's colour, the row's hover offers the pick */
+/* hidden at rest: the bar carries the rank's colour, the row's hover offers the pick */
 #hosting .pk, #hosting .ex { display: grid; place-items: center; align-self: center; width: 14px; height: 14px; }
 #hosting .pk { position: relative; color: transparent; opacity: 0; transition: color .12s, opacity .14s; }
 #hosting .pk::before { content: ""; position: absolute; inset: 3px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--ink2); transition: inset .12s, background .12s; }
@@ -594,22 +584,33 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #hosting .rw:hover .ex { color: var(--ink); }
 #hosting .rest.opened .ex { transform: rotate(180deg); }
 
-/* the weighing: a solid bar on one zero line, sitting on the row's baseline at the figures' height */
-#hosting .vb { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 52px; column-gap: 8px; align-items: center; min-width: 0; }
-#hosting .lb { position: relative; display: block; height: 10px; width: calc(100% * var(--f)); min-width: 2px; border-radius: 0 2px 2px 0; background: var(--c); transition: opacity .14s; }
-#hosting .vv { grid-column: 2; font-size: var(--fs-lab); font-weight: 400; color: var(--ink2); text-align: right; white-space: nowrap; }
+/* the weighing: the figure under its label, then a solid bar from one zero line */
+#hosting .vb { position: relative; display: grid; grid-template-columns: var(--slot) minmax(0, 1fr); column-gap: 8px; align-items: center; min-width: 0; }
+#hosting .lb { position: relative; display: block; height: 8px; width: calc(100% * var(--f)); min-width: 2px; border-radius: 0 2px 2px 0; background: var(--c); transition: opacity .14s; }
+#hosting .vv { justify-self: end; font-size: var(--fs-lab); font-weight: 400; color: var(--ink2); text-align: right; white-space: nowrap; }
+/* the hint stands where the sum has no bar, beside the rows it talks about, and ends where the bars do */
+#hosting .hint { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; text-align: right; white-space: nowrap; }
+#hosting .ask, #hosting .next { font-size: var(--fs-note); line-height: 18px; color: var(--ink2); }
+#hosting .next { display: flex; align-items: center; gap: 8px; }
+#hosting .ask2 { font-size: var(--fs-tick); line-height: 14px; color: var(--ink3); }
+#hosting .ask3 { font-size: var(--fs-tick); line-height: 14px; color: var(--ink2); }
+#hosting :is(.ask, .ask2, .ask3, .next)[hidden] { display: none; }
+#hosting .tb.vs .ask2 { display: none; }
 #hosting .tb.focus .rw:not(.lit):not(.on):not(.sum) .lb { opacity: .45; }
 
 /* columns */
-#hosting :is(.k-n, .k-g, .k-r, .k-m, .k-u, .k-o, .k-v, .k-s) { min-width: 0; font-size: var(--fs-lab); text-align: right; color: var(--ink2); white-space: nowrap; }
-#hosting .k-r > b { font-weight: 400; color: var(--ink2); }
-#hosting .k-r.lo > b { font-weight: 600; color: var(--ink); }
-#hosting .k-s b { font-weight: 400; color: var(--ink2); }
-#hosting .k-s.nil b, #hosting .k-v.nil { color: var(--ink3); }
-#hosting .sum :is(.vv, .k-n, .k-g, .k-r > b, .k-m, .k-u, .k-o, .k-v, .k-s b) { color: var(--ink); font-weight: 500; }
+#hosting :is(.k-n, .k-r, .k-v, .k-s) { min-width: 0; font-size: var(--fs-lab); text-align: right; color: var(--ink2); white-space: nowrap; }
+/* digits of one width, so points and percent signs stand in line down a column */
+#hosting :is(.vv, .k-n, .k-r, .k-v, .k-s), #publishers :is(.pb-n, .pb-d b, .pb-d em, [data-c="mib"], [data-c="left"]) { font-family: "IBM Plex Sans", var(--f); font-variant-numeric: tabular-nums; }
+#hosting :is(.k-r, .k-s, .k-v).nil { color: var(--ink3); }
+/* a floor in words: quiet, so the digits still read down their column */
+#hosting .fl { font-weight: 400; color: var(--ink3); }
+#hosting .sum :is(.vv, .k-n, .k-r, .k-v, .k-s) { color: var(--ink); font-weight: 500; }
 
 /* sort shows in the column's figures */
-#hosting .vv.srt, #hosting .k-n.srt, #hosting .k-g.srt, #hosting .k-m.srt, #hosting .k-u.srt, #hosting .k-o.srt, #hosting .k-v.srt, #hosting .srt > b { color: var(--ink); }
+#hosting :is(.vv, .k-n, .k-r, .k-s, .k-v).srt { color: var(--ink); }
+/* a whole column at 100.00% recedes as one block, so any shortfall stands out */
+#hosting .rw:not(.sum) :is(.k-r, .k-s).full { color: var(--ink3); }
 
 /* expansion */
 #hosting .tailbox { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .26s cubic-bezier(.3,.7,.2,1); }
@@ -619,13 +620,21 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 
 /* head to head: same height as the rows it replaces */
 #hosting .tb.vs { grid-template-columns: 420px minmax(0, 1fr); column-gap: 16px; }
+/* one rule from the list across the gutter and the panel to the card's edge */
+#hosting .tb.vs .tb-vs::before { content: ""; position: absolute; left: -8px; right: -8px; top: calc(var(--th) - 1px); height: 1px; background: var(--line); }
+#hosting .tb.vs .vs-m:nth-child(2) { border-top-color: transparent; }
+#hosting .tb.young.vs { --th: 30px; }
 #hosting .tb.vs .tr { grid-template-columns: var(--vs1, 178px) minmax(0, 1fr); column-gap: 14px; }
 #hosting .tb[data-by="city"] { --vs1: 178px; }
-#hosting .tb.vs :is(.k-n, .k-g, .k-r, .k-m, .k-u, .k-o, .k-v, .k-s, .sub .sp) { display: none; }
+#hosting .tb.vs :is(.k-n, .k-r, .k-v, .k-s) { display: none; }
 #hosting .tb.vs .th .h:not(.wt) { display: none; }
-#hosting .tb.vs .th .h.on:not(.wt) { display: flex; position: absolute; right: 24px; top: 0; }
-#hosting .tb.vs .th { position: relative; }
-#hosting .tb.vs .tb-vs { display: block; min-width: 0; position: sticky; top: 12px; align-self: start; }
+/* a sort still in force names the order, in the first head's place: the list has no room for the column */
+#hosting .tb.vs .th .h.on:not(.wt) { display: flex; grid-column: 1; grid-row: 1; justify-self: start; padding-left: 22px; }
+#hosting .tb.vs .th .h.on:not(.wt) .h1::after { right: auto; left: calc(100% + 4px); }
+#hosting .tb.vs .th:has(.h.on:not(.wt)) .fh { visibility: hidden; }
+#hosting .tb.vs .per { display: none; }
+#hosting .tb.vs .th .k-a { grid-column: 1; grid-row: 1; }
+#hosting .tb.vs .tb-vs { display: block; min-width: 0; position: sticky; top: calc(var(--stick) + 12px); align-self: start; }
 #hosting .vs-g { display: grid; grid-template-columns: 116px repeat(var(--n), minmax(0, 1fr)); gap: 0 8px; }
 #hosting .vs-col { min-width: 0; padding: 0 14px; border-radius: var(--r2); transition: background .12s; }
 #hosting .vs-col:hover, #hosting .vs-col.hot { background: var(--wash2); }
@@ -636,22 +645,15 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 #hosting .vs-x { flex: none; display: grid; place-items: center; width: 24px; height: 24px; margin: 0 -6px 0 auto; border-radius: var(--r3); color: var(--ink3); transition: color .12s, background .12s; }
 #hosting .vs-x:hover { color: var(--ink); background: var(--wash3); }
 /* a label reads on its figure's line, wherever the mark under the figure ends */
-#hosting .vs-m { display: flex; flex-direction: column; justify-content: flex-start; gap: 5px; height: var(--vs-row, 66px); padding-top: 12px; border-top: 1px solid var(--line); }
-#hosting .vs-l .vs-m { flex-direction: row; align-items: baseline; gap: 4px; font-size: var(--fs-note); line-height: 24px; color: var(--ink2); white-space: nowrap; }
-#hosting .vs-l .vs-m em { font-style: normal; }
+#hosting .vs-m { display: flex; flex-direction: column; justify-content: flex-start; gap: 3px; padding: 10px 0 8px; border-top: 1px solid var(--line); }
+#hosting .vs-l .vs-m { padding-top: 14px; font-size: var(--fs-note); line-height: 16px; color: var(--ink2); }
 #hosting .vs-col .vs-m > b { font-size: var(--fs-fig2); font-weight: 500; letter-spacing: -.012em; line-height: 24px; color: var(--ink); white-space: nowrap; font-variant-numeric: proportional-nums; }
-/* the leader by weight alone: a brighter figure would read as a verdict */
-#hosting .vs-col .vs-m > b.ld { font-weight: 600; }
 
-#hosting .vs-m .pips { display: flex; flex-wrap: wrap; gap: 3px; }
-#hosting .vs-m .pips u { width: 10px; height: 10px; border-radius: 2px; }
 #hosting .vs-m .dots { display: flex; flex-wrap: wrap; gap: 3px; }
 #hosting .vs-m .dots u { width: 8px; height: 8px; }
-#hosting .vs-m .lb { width: calc(100% * var(--f)); height: 10px; }
-#hosting .spl { display: flex; gap: 2px; }
-#hosting .vs-m .spl { flex: none; width: 88px; max-width: 100%; height: 8px; }
-#hosting .spl i { display: block; min-width: 2px; border-radius: 1px; background: var(--c); }
-#hosting .vs-m small { font-size: var(--fs-note); line-height: 15px; color: var(--ink2); white-space: nowrap; }
+#hosting .vs-m .lb { width: calc(100% * var(--f)); height: 8px; }
+#hosting .vs-m small { font-size: var(--fs-note); line-height: 15px; color: var(--ink2); }
+#hosting .vs-m small.vn { font-size: var(--fs-tick); line-height: 14px; color: var(--ink3); overflow-wrap: anywhere; }
 
 #hosting .chips { display: flex; flex-wrap: nowrap; gap: 3px; overflow: hidden; }
 #hosting .chips code { padding: 1px 4px; border-radius: 3px; background: var(--wash2); font: 500 var(--fs-tick) var(--m); color: var(--ink2); }
@@ -664,46 +666,325 @@ h2 { margin: 0; font-size: var(--fs-sec); font-weight: 600; line-height: 36px; l
 @keyframes hs-fade { from { opacity: 0; } }
 @keyframes hs-pop { from { transform: scale(0); } }
 
-/* the controls take their own line, so the sentence is never cut */
-#hosting .sec-h { flex-wrap: wrap; row-gap: 8px; height: auto; }
-#hosting .sec-h p { flex: 0 0 auto; }
-#hosting .ctl { flex: 0 0 100%; margin-left: 0; }
-#hosting { --cols: 176px minmax(0, 1fr) 44px 58px 56px 48px 116px 54px 56px 72px; --gap: 10px; --th: 60px; }
-#hosting .tb[data-by="city"] { --cols: 186px minmax(0, 1fr) 44px 58px 56px 48px 116px 54px 56px 72px; }
-/* narrow heads take two lines */
-#hosting .h { white-space: normal; text-align: right; }
-#hosting .sub .sp { display: none; }
-#hosting .band { grid-template-columns: 384px minmax(0, 1fr); column-gap: 24px; padding-top: 16px; }
-#hosting .whobox { height: 240px; }
-#hosting .ringbox { left: -3px; top: 26px; width: 188px; height: 188px; }
+/* name, weighing, the other count, then three equal tracks, so right edges step evenly */
+#hosting { --cols: 196px minmax(0, 1fr) 76px 136px 136px 136px; --gap: 14px; --th: 30px; --slot: 42px; }
+/* the period steps back, so the heavy part of each head ends sooner */
+#hosting .per { color: var(--ink3); }
+/* under 30 days the period takes a line of its own, and every label stays on the foot */
+#hosting .tb.young { --th: 44px; }
+#hosting .band { grid-template-columns: 384px minmax(0, 1fr); column-gap: 24px; }
+#hosting .ringbox { left: -3px; top: 18px; width: 188px; height: 188px; }
 #hosting .names { width: 176px; }
 #hosting .nl { font-size: var(--fs-note); }
 #hosting .c-v { font-size: var(--fs-fig); }
 #hosting .c-n { max-width: 124px; }
 #hosting .centre { row-gap: 4px; }
 #hosting .say p { font-size: var(--fs-row); line-height: 19px; }
-#hosting .say p small { font-size: var(--fs-note); line-height: 17px; }
-#hosting .say-r { font-size: var(--fs-note); }
-/* with picks made the hint has done its work, and the sentence needs the room */
-#hosting .clear:not([hidden]) + span { display: none; }
+#hosting .say p small { font-size: var(--fs-note); line-height: 17px; color: var(--ink); }
+/* two lines in every view, so the ring and the map stay put when the weighing changes */
+#hosting .say-who small { min-height: 17px; }
 #hosting .mkey { font-size: var(--fs-tick); }
-#hosting .say .sp { display: none; }
 #hosting .mlow { margin-left: 10px; }
 #hosting .mreg > div > u { display: none; }
-#hosting .notes { padding-inline: 38px 16px; }
-#hosting .nl.all::before { top: 0; }
 #hosting .mside { width: 132px; }
 #hosting .tr { padding-inline: 8px; }
 #hosting .tb { padding: 0 8px; }
 #hosting .th { margin: 0 -8px; padding: 0 16px; }
-#hosting .tb.vs .th .h.on:not(.wt) { right: 16px; }
 #hosting .th .k-a { padding-left: 22px; }
-#hosting .tb.vs { grid-template-columns: 320px minmax(0, 1fr); column-gap: 8px; }
+#hosting .tb.vs { grid-template-columns: 320px minmax(0, 1fr); column-gap: 16px; }
 #hosting .tb.vs .tr { grid-template-columns: var(--vs1, 178px) minmax(0, 1fr); column-gap: 10px; }
 #hosting .vs-g { grid-template-columns: 108px repeat(var(--n), minmax(0, 1fr)); gap: 0 4px; }
 #hosting .vs-col { padding: 0 9px; }
 #hosting .vs-col .vs-m > b { font-size: var(--fs-unit); }
 
+/* the head's sentence and its controls share a line where they fit */
+#hosting .sec-h { min-height: 36px; height: auto; }
+#hosting .sec-h .ctl { margin-block: -2px; }
+#hosting .sec-h p { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* only a narrow page has these */
+.sorter, .tray, #cost .ctab { display: none; }
+[data-l]::before { display: none; }
+
+/* no hover at all: the pick cannot wait for one, so the circle stands at rest in the rank's place, and it is a finger wide */
+@media (hover: none) {
+  #hosting .pk { opacity: 1; }
+  #hosting .pk::after { content: ""; position: absolute; inset: -13px; }
+  #hosting .ex::after { content: ""; position: absolute; inset: -13px; }
+  #hosting .ex { position: relative; }
+  #hosting .k-a em { opacity: 0; }
+}
+
+/* the hint's long line clears the sum's figure from here up */
+@media (max-width: 1160px) {
+  #hosting .up { display: none; }
+}
 @media (max-width: 1100px) {
   #hosting .mkey { position: static; margin-top: 4px; }
+  #hosting .sec-h { flex-wrap: wrap; row-gap: 8px; }
+  #hosting .sec-h p { flex: 0 0 auto; }
+  #hosting .ctl { flex: 0 0 100%; margin-left: 0; }
+  /* Blob shards served is the longest head; the ready column gives up what it takes */
+  #hosting { --cols: 196px minmax(0, 1fr) 76px 128px 134px 122px; --gap: 12px; }
+  #hosting .vs-g { grid-template-columns: 100px repeat(var(--n), minmax(0, 1fr)); }
+  #hosting .vs-col { padding: 0 8px; }
+  /* three columns leave a long name two lines, inside the head's height */
+  #hosting .vs-hd { gap: 6px; }
+  #hosting .vs-hd b { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: var(--fs-lab); line-height: 14px; white-space: normal; }
+}
+
+/* ---------- narrow: under 980 px the page is one column. Nothing here reaches the wider page. ---------- */
+@media (max-width: 979px) {
+  #tip { max-width: min(280px, calc(100vw - 16px)); max-height: calc(100dvh - 16px); overflow: hidden; }
+  #tip:has(.cols) { max-width: min(420px, calc(100vw - 16px)); }
+
+  /* every switch a 44 px row, the pill drawn inside it */
+  .seg { height: 44px; padding: 0 3px; border: 0; }
+  .seg::before { content: ""; position: absolute; inset: 4px 0; border: 1px solid var(--line); border-radius: 999px; pointer-events: none; }
+  .seg i { top: 7px; bottom: 7px; }
+  .bar { align-items: center; }
+  .bar .seg { height: 44px; }
+  .sec-h { flex-wrap: wrap; height: auto; min-height: 36px; column-gap: 12px; row-gap: 0; }
+  .sec-h p { flex: 1 1 100%; white-space: normal; line-height: 18px; }
+
+  /* the sort a table's heads gave: a list, and which way it runs */
+  .sorter { display: flex; align-items: center; gap: 4px; }
+  .sorter label { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .sel { position: relative; display: block; min-width: 0; }
+  .sel::after { content: ""; position: absolute; right: 13px; top: 50%; margin-top: -2px; border: 4px solid transparent; border-top-color: var(--ink2); border-bottom-width: 0; pointer-events: none; }
+  .sel select { appearance: none; -webkit-appearance: none; display: block; max-width: 100%; height: 40px; margin: 2px 0; padding: 0 28px 0 12px; border: 1px solid var(--line); border-radius: 999px; background: none; font: 500 var(--fs-lab)/38px var(--f); color: var(--ink); cursor: pointer; }
+  .sel option { background: var(--card); color: var(--ink); }
+  .dir { flex: none; display: grid; place-items: center; width: 44px; height: 44px; color: var(--ink2); }
+  .dir svg { transition: transform .18s; }
+  .dir.asc svg { transform: rotate(180deg); }
+
+  /* a figure says what it is from its own cell */
+  [data-l]::before { content: attr(data-l); display: block; font-family: var(--f); font-size: var(--fs-tick); font-weight: 400; line-height: 14px; letter-spacing: 0; color: var(--ink3); white-space: normal; }
+
+  /* top: the big tile over two rows of two */
+  #top .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: 300px repeat(2, 144px); }
+  #top .main { grid-row: auto; grid-column: 1 / -1; }
+
+  /* cost: its sentence under the title, where it can wrap */
+  #cost .card { height: 380px; }
+  #cost .key { position: static; margin-top: 2px; white-space: normal; }
+
+  /* publishers: a row per account, the trace the width of the card */
+  #publishers .pb-wrap { padding: 0 var(--pad) 6px; }
+  #publishers .pb-wrap::before, #publishers .pb-x { display: none; }
+  #publishers :is(.pb-t, thead, tbody, tfoot, thead tr, tfoot tr) { display: block; }
+  #publishers tbody::before { display: none; }
+  #publishers colgroup { display: none; }
+  #publishers th:not(.a) { display: none; }
+  #publishers th.a { display: block; height: auto; padding: 4px 0 8px; }
+  #publishers .pb-h > button:not(.pb-first) { display: none; }
+  #publishers .pb-first { cursor: help; }
+  #publishers .pb-first::after { display: none; }
+
+  #publishers tbody tr[data-i] { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-areas: "w w d d" "c c c c" "n m v l"; gap: 8px; align-items: end; padding: 12px 0; border-top: 1px solid var(--line); }
+  #publishers tbody tr:hover td, #publishers tbody tr.on td { background: none; }
+  #publishers tbody td, #publishers tbody td:first-child, #publishers tbody td:last-child { height: auto; padding: 0; border-radius: 0; text-align: left; white-space: normal; }
+  #publishers tbody td.w { grid-area: w; align-self: start; }
+  #publishers tbody td.a { display: contents; }
+  #publishers td.a canvas { position: static; grid-area: c; height: 40px; }
+  #publishers .pb-n { position: static; grid-area: n; transform: none; pointer-events: auto; }
+  #publishers tbody td.d { grid-area: d; align-self: start; text-align: right; }
+  #publishers tbody td[data-c="mib"] { grid-area: m; }
+  #publishers tbody td[data-c="avg"] { grid-area: v; }
+  #publishers tbody td[data-c="left"] { grid-area: l; }
+  #publishers tbody td[data-c="avg"] .pb-d { justify-content: flex-start; }
+  #publishers tbody td[data-c="avg"] .pb-d u { width: auto; }
+  #publishers .pb-d em { width: auto; margin-left: 6px; }
+  #publishers .pb-d u { width: auto; }
+
+  /* the fold, a row to tap */
+  #publishers tbody tr.o { margin: 2px -8px 0; padding: 12px 8px; border: 0; border-radius: var(--r3); background: var(--wash2); cursor: pointer; }
+  #publishers tr.o td, #publishers tr.o:hover td { background: none; }
+  #publishers tbody td.pb-none { height: 88px; text-align: center; }
+
+  #publishers .pb-key td, #publishers .pb-key td:first-child { display: block; height: auto; padding: 10px 0 0; }
+  #publishers .pb-key td:last-child { display: none; }
+  #publishers .pb-rule { position: static; flex-wrap: wrap; gap: 4px 14px; min-height: 40px; margin-top: 2px; }
+
+  /* hosting: the ring and its key, then the map the width of the card, then the regions */
+  #hosting .up { display: inline; }
+  #hosting .sec-h p { flex: 1 1 100%; overflow: visible; }
+  #hosting .band { grid-template-columns: minmax(0, 1fr); row-gap: 20px; }
+  #hosting .say .lead { white-space: normal; }
+  #hosting .say-who small:empty { display: none; }
+  #hosting .whobox { max-width: 384px; }
+  #hosting .mkey { flex-wrap: wrap; height: auto; }
+  #hosting .mp { height: auto; overflow: visible; }
+  #hosting .mp canvas { position: relative; inset: auto; height: auto; aspect-ratio: 2.27; }
+  #hosting .mp > svg { inset: 0 0 auto; height: auto; aspect-ratio: 2.27; }
+  #hosting .mside { position: static; width: auto; margin-top: 8px; pointer-events: auto; }
+  #hosting .mhd { height: 20px; }
+  #hosting .mreg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 24px; background: none; }
+  #hosting .mreg > div { height: 40px; padding: 0 6px; margin: 0 -6px; }
+
+  /* the rows: name and validators; the weighing with its bar; four figures, each with its own name */
+  #hosting .tb { padding: 0 var(--pad); }
+  #hosting .tb-list > .top { position: static; }
+  #hosting .th, #hosting .tb.vs .tr.th { display: none; }
+  #hosting .sorter { padding: 6px 0; }
+  #hosting .rw, #hosting .tb.vs .tr { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-areas: "a a a a" "v v v v" "n r s k"; gap: 6px 8px; align-items: end; }
+  #hosting .rw { height: auto; padding: 8px; }
+  #hosting .tr.rw { padding-inline: 0; border-top: 1px solid var(--line); border-radius: 0; }
+  #hosting .rw:hover, #hosting .rw.lit { --rowbg: transparent; }
+  #hosting .rw.sum, #hosting .rw.sum:hover, #hosting .tb.vs .rw.sum { margin: 0 0 4px; padding: 10px 8px; border: 0; border-radius: var(--r3); align-items: end; }
+  #hosting .rw.rest, #hosting .tb.vs .rw.rest { margin-top: 2px; padding: 10px 8px; border: 0; border-radius: var(--r3); }
+  #hosting .rest.opened { top: var(--stick); }
+  #hosting .k-a { grid-area: a; grid-template-columns: 26px minmax(0, 1fr) auto; column-gap: 0; }
+  #hosting .k-a > .pk, #hosting .k-a > .ex { grid-column: 1; grid-row: 1 / span 2; align-self: center; }
+  #hosting .k-a > em { grid-column: 2; grid-row: 1; justify-self: start; text-align: left; }
+  #hosting .k-a > .nm { grid-column: 2; grid-row: 1; padding-left: 0; }
+  #hosting .tail .k-a > .nm, #hosting .lead .k-a > .nm { padding-left: 18px; }
+  #hosting .k-a > code { grid-column: 3; }
+  #hosting .k-a > .sub { grid-column: 2 / -1; }
+  #hosting .rw .k-a em, #hosting .rw:hover .k-a em, #hosting .rw.on .k-a em { opacity: 1; }
+  #hosting .sum .k-a { padding-left: 0; }
+  #hosting .rest .k-a > .nm { padding-left: 0; }
+
+  /* a pick you can see and hit: 44 px around an 18 px circle */
+  #hosting .pk, #hosting .ex { position: relative; width: 18px; height: 18px; opacity: 1; }
+  #hosting .pk::after, #hosting .ex::after { content: ""; position: absolute; inset: -13px; }
+  #hosting .pk { color: var(--ink3); }
+  #hosting .pk::before { inset: 0; }
+
+  #hosting .vb { grid-area: v; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; }
+  #hosting .sum .vb { display: contents; }
+  #hosting .sum .vv { grid-area: v; justify-self: start; }
+  #hosting .vv { display: flex; align-items: baseline; gap: 8px; justify-self: start; font-weight: 500; }
+  #hosting .vv::before { display: inline; }
+  #hosting :is(.k-n, .k-r, .k-s, .k-v), #hosting .tb.vs :is(.k-n, .k-r, .k-s, .k-v) { display: block; text-align: left; white-space: normal; }
+  #hosting .k-n { grid-area: n; }
+  #hosting .k-r { grid-area: r; }
+  #hosting .k-s { grid-area: s; }
+  #hosting .k-v { grid-area: k; }
+  #hosting .fl { display: block; font-size: var(--fs-tick); line-height: 14px; }
+  #hosting .hint { grid-column: 1 / -1; grid-row: 4; align-items: flex-start; text-align: left; white-space: normal; }
+  #hosting .tb.vs .ask2 { display: block; }
+
+  /* the picks ride along at the foot of the screen for as long as the list lasts */
+  #hosting .hint .next { display: none; }
+  #hosting .ask3 { display: none; }
+  #hosting .tray { position: sticky; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 5; visibility: hidden; display: flex; align-items: center; gap: 6px; height: 0; }
+  #hosting .tray.on { visibility: visible; height: 52px; margin-top: 10px; padding: 0 6px 0 14px; border: 1px solid var(--line2); border-radius: 999px; background: var(--tip-bg); box-shadow: var(--tip-shadow); }
+  #hosting .tray-n { flex: 1 1 auto; min-width: 0; font-size: var(--fs-lab); color: var(--ink); white-space: nowrap; }
+  #hosting .tray button { flex: none; height: 40px; padding: 0 13px; border: 0; border-radius: 999px; font-size: var(--fs-lab); font-weight: 500; }
+  #hosting .tray .go { background: var(--t-on); color: var(--t-on-ink); }
+  #hosting .tray .go[hidden] { display: none; }
+  #hosting .tray .clear { color: var(--ink2); }
+  /* the tray stands right over the panel, so the panel needs no second one */
+  #hosting .vs-l .clear { visibility: hidden; }
+
+  /* compare: under the list, across the card */
+  #hosting .tb.vs { grid-template-columns: minmax(0, 1fr); row-gap: 16px; }
+  #hosting .tb.vs .tb-vs { position: static; scroll-margin-top: calc(var(--stick) + 12px); }
+  #hosting .tb.vs .tb-vs::before { display: none; }
+  #hosting .vs-col .vs-m > b { font-size: var(--fs-row); }
+  #hosting .vs-hd { height: 44px; }
+  #hosting .clear { height: 44px; padding: 0 12px; border: 0; }
+  #hosting .vs-x { width: 44px; height: 44px; margin: 0 -13px 0 auto; }
+  #hosting .chips { flex-wrap: wrap; }
+}
+
+/* a phone: the title and the period on one line, the three parts on the next, and those stay pinned under the site's bar */
+@media (max-width: 720px) {
+  :host { --fs-page: 24px; --fs-hero: 38px; }
+  #tip { z-index: 70; }
+  .page { padding-top: 12px; }
+  .sec { margin-top: 32px; scroll-margin-top: var(--stick); }
+  .bar { top: calc(var(--hdr, 0px) - 48px); flex-wrap: wrap; column-gap: 8px; row-gap: 0; height: auto; transition: box-shadow .14s, top 220ms cubic-bezier(.2, .7, .2, 1); }
+  .bar h1 { flex: 1 1 auto; line-height: 48px; }
+  .bar.stuck h1 { font-size: var(--fs-page); letter-spacing: -.028em; cursor: default; }
+  .bar .ctl { flex: none; align-self: center; margin-left: 0; }
+  .bar .ctl-l { padding: 14px 0; }
+  .bar.hs .ctl > :not(.hold) { visibility: visible; }
+  .bar.hs .hold { display: none; }
+  .jump { order: 3; display: flex; flex: 0 0 100%; margin-left: 0; }
+  .jump button { flex: 1 1 auto; padding: 0 4px; }
+  .seg button { min-width: 44px; padding: 0 9px; }
+  .sel select { font-size: 16px; }
+  .lede { margin: 8px 0 14px; }
+
+  /* top: one tile to a line where two would clip */
+  #top .grid { grid-template-rows: auto repeat(2, 144px); }
+  #top .main { display: flex; flex-direction: column; padding-bottom: 0; }
+  #top .main h3 span { position: static; display: block; margin-top: 2px; }
+  #top .hero { flex-wrap: wrap; gap: 8px 12px; }
+  #top .main .plot { position: relative; flex: none; width: calc(100% + 2 * var(--pad)); height: 190px; margin: 8px calc(-1 * var(--pad)) 0; }
+
+  /* cost: the curve, and its columns as a table under it */
+  #cost .card { height: auto; padding-bottom: 12px; }
+  #cost .fig { flex-wrap: wrap; font-size: var(--fs-fig2); line-height: 28px; }
+  #cost .pair { display: inline-flex; align-items: baseline; white-space: nowrap; }
+  #cost .pair:last-child em:first-child { margin-left: 0; }
+  #cost .plot { flex: none; height: 240px; margin-top: 10px; }
+  #cost .ctab { display: block; margin-top: 14px; }
+  #cost table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  #cost th { padding: 0 0 8px 8px; font-size: var(--fs-tick); font-weight: 400; line-height: 14px; text-align: right; vertical-align: bottom; color: var(--ink2); }
+  #cost td { height: 40px; padding: 0 0 0 8px; border-top: 1px solid var(--line); font-size: var(--fs-lab); text-align: right; color: var(--ink2); }
+  #cost :is(th, td):first-child { padding-left: 0; text-align: left; }
+  #cost th:first-child { width: 22%; }
+  #cost td:first-child { color: var(--ink); }
+  #cost td.lead { color: var(--ink); font-weight: 500; }
+  #cost tr.lit td, #cost tbody tr:hover td { background: var(--wash2); }
+  #cost .dt { text-decoration: underline dotted var(--rule4); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+
+  /* publishers */
+  #publishers .pb-top { display: flex; flex-direction: column-reverse; height: auto; }
+  #publishers .pb-of { position: static; justify-content: space-between; margin: 0 0 6px; }
+  #publishers .pb-labels { position: relative; inset: auto; height: 34px; }
+
+  /* hosting */
+  #hosting .sec-h .ctl { flex: 1 1 100%; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 10px; align-items: center; margin-block: 4px 8px; }
+  #hosting .sec-h .ctl .seg { justify-self: start; }
+  #hosting .seg + .ctl-l { margin-left: 0; }
+  #hosting .band { padding-inline: var(--pad); }
+  #hosting .whobox { display: grid; grid-template-columns: 132px minmax(0, 1fr); column-gap: 14px; align-items: center; height: auto; max-width: none; }
+  #hosting .ringbox { position: relative; left: 0; top: 0; width: 132px; height: 132px; }
+  #hosting .ldrs { display: none; }
+  #hosting .names { position: static; width: auto; }
+  #hosting .nl { position: relative; height: auto; min-height: 22px; margin-top: 0; }
+  #hosting .nl span { white-space: normal; overflow: visible; line-height: 15px; overflow-wrap: anywhere; }
+  #hosting .c-v { font-size: var(--fs-fig2); }
+  #hosting .c-n { max-width: 92px; font-size: var(--fs-tick); line-height: 14px; }
+  #hosting .c-c { font-size: var(--fs-tick); line-height: 13px; }
+  #hosting .c-c b { font-size: var(--fs-note); }
+  #hosting .centre { row-gap: 2px; }
+  #hosting .mreg { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 20px; }
+
+  /* compare: a line per figure, the picks in columns under it, so three still fit a 320 px screen */
+  #hosting .vs-g { grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 0 8px; }
+  #hosting .vs-l, #hosting .vs-col { display: contents; }
+  #hosting .vs-l .vs-hd { display: none; }
+  #hosting .vs-col .vs-hd { order: 1; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; height: auto; gap: 0; padding-bottom: 8px; }
+  #hosting .vs-l .vs-m { grid-column: 1 / -1; padding: 10px 0 0; border-top: 1px solid var(--line); }
+  #hosting .vs-col .vs-m { min-width: 0; padding: 2px 0 10px; border-top: 0; }
+  #hosting .vs-m.vp { --o: 2; } #hosting .vs-m.hosts { --o: 4; } #hosting .vs-m.geo { --o: 6; } #hosting .vs-m.reach { --o: 8; } #hosting .vs-m.served { --o: 10; } #hosting .vs-m.ready { --o: 12; }
+  #hosting .vs-l .vs-m { order: var(--o); }
+  #hosting .vs-col .vs-m { order: calc(var(--o) + 1); }
+  #hosting .vs-col .vs-hd b { grid-column: 1 / -1; grid-row: 2; display: block; font-size: var(--fs-lab); line-height: 16px; white-space: normal; overflow-wrap: anywhere; }
+  #hosting .vs-x { justify-self: end; margin: 0 -14px 0 0; }
+}
+
+/* two tiles side by side stop fitting their notes and Escrow's key here */
+@media (max-width: 520px) {
+  #top .grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-auto-rows: 144px; }
+  #top .main { grid-column: auto; }
+}
+
+/* the smallest phones: the four small figures two by two */
+@media (max-width: 359px) {
+  :host { --fs-page: 22px; --pad: 14px; }
+  #publishers tbody tr[data-i] { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "w w" "c c" "d d" "n m" "v l"; }
+  #publishers tbody td.d { text-align: left; }
+  #publishers tbody td.d .pb-d { justify-content: flex-start; }
+  #hosting .rw, #hosting .tb.vs .tr { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "a a" "v v" "n r" "s k"; }
+  #hosting .hint { grid-row: 5; }
+  .seg button { min-width: 40px; padding: 0 7px; }
+  #hosting .tray button { padding: 0 9px; }
+  #hosting .whobox { grid-template-columns: 126px minmax(0, 1fr); column-gap: 10px; }
+  #hosting .ringbox { width: 126px; height: 126px; }
 }
