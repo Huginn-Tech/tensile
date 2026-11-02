@@ -2741,6 +2741,29 @@ button.warn:focus-visible { outline-offset: 0; }
 .vd-oc-lead .vd-ocf:not(.lead) .vd-fv { margin-top: 14px; }
 .vd-oc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; row-gap: 14px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
 
+/* the newest check: its time on the label's line, its stages under them in the frame of the state chips over them; and
+   On chain's figures in the Observed frames, the last endorsement bare beside the lead. A phone keeps them unframed, as
+   it keeps the Observed figures */
+@media (min-width: 721px) {
+  .vd-fact:has(> .vd-chk) { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 10px; align-items: baseline; align-content: start; }
+  .vd-fact { padding-bottom: 14px; }
+  .vd-fact dd.vd-chk { display: contents; }
+  .vd-chk > span:first-child { line-height: 16px; }
+  .vd-chk > em { grid-column: 1 / -1; }
+  .vd-stages { grid-column: 1 / -1; gap: 3px 4px; margin-top: 6px; }
+  .vd-stages > span { display: inline-block; height: 20px; padding: 0 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--paper); box-shadow: var(--shadow-sm); line-height: 18px; }
+  .vd-oc-lead, .vd-oc-grid { column-gap: 10px; }
+  .vd-oc-grid { row-gap: 10px; margin-top: 10px; padding-top: 0; border-top: 0; }
+  .vd-ocf { justify-content: center; min-height: 50px; padding: 4px 14px 5px; border-radius: 10px; background: var(--obs-bg); box-shadow: var(--obs-edge); }
+  .vd-ocf .vd-lbl { line-height: 15px; }
+  .vd-ocf .vd-fv { margin-top: 3px; }
+  /* the lead's row: both labels on one line, the date on the lead figure's baseline */
+  .vd-oc-lead .vd-ocf { justify-content: flex-start; min-height: 64px; padding: 7px 14px 6px; }
+  .vd-ocf.lead .vd-fv { margin-top: 4px; }
+  .vd-oc-lead .vd-ocf:not(.lead) { background: none; box-shadow: none; }
+  .vd-oc-lead .vd-ocf:not(.lead) .vd-fv { margin-top: 13px; }
+}
+
 /* between 1080 and 1199px the two columns stay side by side, On chain at 380px and the strip's squares at 17px, so the
    rate keeps room beside it */
 @media (min-width: 1080px) and (max-width: 1199px) {
