@@ -444,6 +444,24 @@ test("a shutdown cuts the open tip streams rather than waiting on them", { skip:
   }
 });
 
+test("a file the reader already holds comes back as 304 with no body, and a changed one in full", async () => {
+  const first = await fetch(base + "/", { headers: { "x-forwarded-for": "198.51.100.77" } });
+  const tag = first.headers.get("etag");
+  assert.equal(first.status, 200);
+  assert.match(tag, /^W\/"[0-9a-f]+-[0-9a-f]+"$/);
+  assert.ok((await first.text()).length > 0);
+  const asked = (value) => new Promise((ok, no) => {
+    http.get(base + "/", { headers: { "if-none-match": value, "x-forwarded-for": "198.51.100.77" }, agent: false }, (res) => {
+      let body = "";
+      res.on("data", (b) => { body += b; });
+      res.on("end", () => ok({ status: res.statusCode, etag: res.headers.etag, cache: res.headers["cache-control"], body }));
+    }).on("error", no);
+  });
+  assert.deepEqual(await asked(tag), { status: 304, etag: tag, cache: "no-cache", body: "" });
+  assert.equal((await asked('W/"0-0"')).status, 200);
+  assert.equal((await asked(`W/"0-0", ${tag}`)).status, 304);
+});
+
 test("without SITE_CONNECT_SRC the pages may ask this origin alone, as before", async () => {
   for (const p of ["/", "/api/v1/meta"]) assert.equal(await policyOf(base, p), CSP, p);
 });

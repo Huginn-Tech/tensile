@@ -340,8 +340,16 @@ function packedOf(found) {
 
 async function send(req, res, status, found, rel) {
   const ext = path.extname(found.file).toLowerCase();
-  const headers = { ...SECURITY, "content-type": TYPES[ext] || "application/octet-stream", "cache-control": cacheControl(rel), "last-modified": found.mtime.toUTCString() };
+  // Weak: a client holds one coding of the file, and any coding of the same file will do. Size and time, the same two the compressed copies are keyed by.
+  const etag = `W/"${found.size.toString(16)}-${found.mtime.getTime().toString(16)}"`;
+  const headers = { ...SECURITY, "content-type": TYPES[ext] || "application/octet-stream", "cache-control": cacheControl(rel), "last-modified": found.mtime.toUTCString(), etag };
   if (COMPRESSIBLE.has(ext)) headers.vary = "Accept-Encoding";
+  // The copy the reader holds is this one: no-cache asks every time, and this makes asking cost a round trip and no body.
+  if (status === 200 && (req.headers["if-none-match"] || "").split(/,\s*/).includes(etag)) {
+    delete headers["content-type"];
+    res.writeHead(304, headers);
+    return res.end();
+  }
   const accepts = req.headers["accept-encoding"] || "";
   const coding = !COMPRESSIBLE.has(ext) || found.size <= 1024 ? "" : /\bbr\b/.test(accepts) ? "br" : /\bgzip\b/.test(accepts) ? "gzip" : "";
   if (coding) {

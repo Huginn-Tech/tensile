@@ -46,7 +46,8 @@ export default function Analytics() {
       shadow.replaceChildren(css, page);
       const [file] = await Promise.all([
         fetch("/analytics/data.json").then((r) => { if (!r.ok) throw new Error(`${r.status}`); return r.json(); }),
-        script("/analytics/world.js").then(() => script("/analytics/app.js")),
+        script("/analytics/world.js"),
+        script("/analytics/app.js"),
         styled,
       ]);
       if (!gone) stop = window.TensileAnalytics?.(shadow, file);

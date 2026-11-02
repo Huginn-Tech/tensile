@@ -161,7 +161,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 /* every card on the page */
 .card { border: 1px solid var(--line); border-radius: var(--r); background: var(--card); }
 
-/* the row under the header pins on scroll: the page's title, its parts with the current one marked, and the period. One height at rest and pinned, so nothing jumps. */
+/* the row under the header pins on scroll: the page's title, its parts with the current one marked, and the period. The parts come with the pin. One height at rest and pinned, so nothing jumps. */
 .bar { position: sticky; top: 0; z-index: 10; display: flex; align-items: baseline; gap: 12px; height: var(--stick); background: var(--bg); box-shadow: 0 1px 0 transparent; transition: box-shadow .14s; }
 .bar.stuck { box-shadow: 0 1px 0 var(--line); }
 .bar h1 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-page); font-weight: 600; line-height: 36px; letter-spacing: -.028em; cursor: default; transition: font-size .14s; }
@@ -171,7 +171,8 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 .bar .hold { display: none; position: absolute; top: 0; right: 0; bottom: 0; align-items: center; font-size: var(--fs-note); color: var(--ink2); white-space: nowrap; }
 .bar.hs .ctl > :not(.hold) { visibility: hidden; }
 .bar.hs .hold { display: flex; }
-.jump { margin-left: 8px; }
+.jump { margin-left: 8px; opacity: 0; visibility: hidden; transition: opacity .14s, visibility 0s .14s; }
+.bar.stuck .jump { opacity: 1; visibility: visible; transition-delay: 0s; }
 .jump i { background: var(--wash4); opacity: 0; }
 .bar .seg { height: 36px; }
 .jump button { padding: 0 12px; color: var(--ink2); }
@@ -472,14 +473,12 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting .m, #hosting .lab, #hosting .ldr { transition: opacity .14s; }
 /* every disc is solid, so a bigger share never looks weaker; a ring of the card keeps a city inside a bigger disc in sight */
 #hosting .mi { stroke: var(--card); stroke-width: 1; paint-order: stroke; }
-/* a place with a host under the mark wears a thin ring, over every disc */
-#hosting .lo { fill: none; stroke: var(--ink); stroke-width: 1.25; }
 #hosting .mp svg { pointer-events: none; }
 /* what is out of focus keeps its place, not its colour */
-#hosting svg.iso :is(.base, .rings) { opacity: .22; }
+#hosting svg.iso .base { opacity: .22; }
 #hosting svg.iso .base .mi { fill: var(--ink3); }
 #hosting svg.iso .labs { opacity: 0; }
-#hosting :is(.base, .rings) .m.gone { visibility: hidden; }
+#hosting .base .m.gone { visibility: hidden; }
 #hosting svg.hot .m:not(.on) { opacity: .22; }
 #hosting svg.hot .lab:not(.on), #hosting svg.hot .ldr:not(.on) { opacity: .12; }
 #hosting .mp svg text { font-family: var(--f); pointer-events: none; }
@@ -507,11 +506,6 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting .mkey svg { display: block; overflow: visible; }
 #hosting .mkey circle { fill: var(--acc); }
 #hosting .mkey span + svg { margin-left: 4px; }
-#hosting .mlow { display: flex; align-items: center; gap: 6px; margin-left: 16px; }
-/* one mark in the key, the table and Compare */
-#hosting :is(.mlow i, .lowm) { flex: none; display: inline-block; position: relative; width: 11px; height: 11px; border-radius: 50%; box-shadow: inset 0 0 0 1.25px var(--ink); }
-#hosting :is(.mlow i, .lowm)::before { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--acc); }
-#hosting .lowm { margin-right: 6px; vertical-align: -1px; }
 
 /* lower band: one table, or a shorter table beside the head to head */
 #hosting .tb { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); padding: 0 12px; border-top: 1px solid var(--line); }
@@ -544,10 +538,8 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting .tb.wide .rw.lit:not(:hover):not(.rest) { --rowbg: transparent; }
 #hosting .rw.rest { --rowbg: var(--wash2); margin-top: 3px; }
 #hosting .rw.rest:hover, #hosting .rw.rest.lit { --rowbg: var(--wash3); }
-/* the way back stays in reach while the tail is open */
-#hosting .rest.opened { position: sticky; top: calc(var(--stick) + var(--top-h, 99px)); z-index: 3; background: linear-gradient(var(--rowbg), var(--rowbg)), var(--card); }
 
-/* rank, name. A row's hover swaps the rank for the pick, so nothing round sits in the table at rest: on the map a hollow ring means under the mark. */
+/* rank, name. A row's hover swaps the rank for the pick. */
 #hosting .k-a { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; column-gap: 8px; align-items: baseline; min-width: 0; }
 #hosting .k-a > .pk, #hosting .k-a > .ex, #hosting .k-a > em { grid-column: 1; grid-row: 1; }
 #hosting .k-a > .nm { grid-column: 2; grid-row: 1; }
@@ -646,7 +638,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 @media (prefers-reduced-motion: no-preference) {
   #hosting .iso-l > * { animation: hs-fade .16s ease-out; }
   #hosting .enter .base .mi { animation: hs-pop .34s cubic-bezier(.2, .8, .2, 1) backwards; animation-delay: calc(var(--i) * 12ms); }
-  #hosting .enter :is(.labs, .rings, .mside) { animation: hs-fade .4s ease-out .5s backwards; }
+  #hosting .enter :is(.labs, .mside) { animation: hs-fade .4s ease-out .5s backwards; }
 }
 @keyframes hs-fade { from { opacity: 0; } }
 @keyframes hs-pop { from { transform: scale(0); } }
@@ -668,8 +660,10 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting .say p small { font-size: var(--fs-note); line-height: 17px; color: var(--ink); }
 /* two lines in every view, so the ring and the map stay put when the weighing changes */
 #hosting .say-who small { min-height: 17px; }
+/* level with that second line, so the map under it stays where it is */
+#hosting .say-where { padding-top: 19px; }
+#hosting .say p.say-where small { font-size: var(--fs-row); }
 #hosting .mkey { font-size: var(--fs-tick); }
-#hosting .mlow { margin-left: 10px; }
 #hosting .mreg > div > u { display: none; }
 #hosting .mside { width: 132px; }
 #hosting .tr { padding-inline: 8px; }
@@ -794,6 +788,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #hosting .sec-h p { flex: 1 1 100%; overflow: visible; }
   #hosting .band { grid-template-columns: minmax(0, 1fr); row-gap: 20px; }
   #hosting .say .lead { white-space: normal; }
+  #hosting .say-where { padding-top: 0; }
   #hosting .say-who small:empty { display: none; }
   #hosting .whobox { max-width: 384px; }
   #hosting .mkey { flex-wrap: wrap; height: auto; }
@@ -815,7 +810,6 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #hosting .tr.rw { padding-inline: 0; border-top: 1px solid var(--line); border-radius: 0; }
   #hosting .rw:hover, #hosting .rw.lit { --rowbg: transparent; }
   #hosting .rw.rest, #hosting .tb.vs .rw.rest { margin-top: 2px; padding: 10px 8px; border: 0; border-radius: var(--r3); }
-  #hosting .rest.opened { top: var(--stick); }
   #hosting .k-a { grid-area: a; grid-template-columns: 26px minmax(0, 1fr) auto; column-gap: 0; }
   #hosting .k-a > .pk, #hosting .k-a > .ex { grid-column: 1; grid-row: 1 / span 2; align-self: center; }
   #hosting .k-a > em { grid-column: 2; grid-row: 1; justify-self: start; text-align: left; }
@@ -875,7 +869,9 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   .bar .ctl-l { padding: 14px 0; }
   .bar.hs .ctl > :not(.hold) { visibility: visible; }
   .bar.hs .hold { display: none; }
-  .jump { order: 3; display: flex; flex: 0 0 100%; margin-left: 0; }
+  /* the parts hang under the bar, so they take no room before the pin and the page does not move when they come */
+  .jump { position: absolute; top: 100%; left: 0; right: 0; display: flex; margin-left: 0; background: var(--bg); }
+  .bar.stuck .jump { box-shadow: 0 1px 0 var(--line); }
   .jump button { flex: 1 1 auto; padding: 0 4px; }
   .seg button { min-width: 44px; padding: 0 9px; }
   .sel select { font-size: 16px; }
@@ -946,6 +942,11 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 @media (max-width: 520px) {
   #top .grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-auto-rows: 144px; }
   #top .main { grid-column: auto; }
+}
+
+/* four periods beside the title leave no room for their label */
+@media (max-width: 379px) {
+  .bar .ctl-l { display: none; }
 }
 
 /* the smallest phones: Publishers' four small figures two by two */
