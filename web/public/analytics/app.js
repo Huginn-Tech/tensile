@@ -162,8 +162,9 @@ const tiaN = (u, d) => {
 const tia = (u, d) => tiaN(u, d) + " TIA";
 // Both ends in the lower end's decimals.
 const tiaRange = (a, b) => { const d = moneyD(a); return a === b ? tia(a, d) : `${tiaN(a, d)}–${tia(b, d)}`; };
-const day = (s, y) => new Date(s + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", year: y ? "numeric" : undefined, timeZone: "UTC" });
-const dayOf = (t) => new Date(t * 1e3).toISOString().slice(0, 10);
+// A chart's step: a UTC day, `2026-11-02`, or in 24h an hour, `2026-11-02T14`, which reads 14:00.
+const day = (s, y) => (s.length > 10 ? `${s.slice(11)}:00` : new Date(s + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", year: y ? "numeric" : undefined, timeZone: "UTC" }));
+const dayOf = (t) => new Date(t * 1e3).toISOString().slice(0, hourly() ? 13 : 10);
 const stamp = (s) => new Date(s).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "UTC" }) + " UTC";
 
 /* ---------- state and events ---------- */
@@ -171,6 +172,7 @@ const stamp = (s) => new Date(s).toLocaleString("en-US", { month: "short", day: 
 const young = (net) => (Date.parse(USAGE[net].read_at) - Date.parse(DATA[net].fibre_live_at)) / 864e5 < 30;
 const state = { net, theme: root.dataset.theme === "light" ? "light" : "dark", win: "all", lit: null, pinned: [] };
 let chosen = false;
+const hourly = () => state.win === "24h";
 const subs = new Map();
 const on = (ev, fn) => { if (!subs.has(ev)) subs.set(ev, new Set()); subs.get(ev).add(fn); return () => subs.get(ev).delete(fn); };
 // One failing listener must not stop the others.
@@ -223,33 +225,35 @@ const pubs = () => once("pubs", () => { const named = new Map(U().publishers.all
   .map((p, i) => { const name = named.get(p.address) || p.name; return { ...p, name, display: name || p.short, rank: i + 1, colour: i < RANKS ? `var(--u${i + 1})` : TAIL }; }); });
 const settled = () => once("settled", () => {
   const u = U(), [t0, t1] = span(), by = new Map(pubs().map((p) => [p.address, p])), out = [];
-  for (const [t, size, i, fee, share, status, ns] of u.settlements) if (t >= t0 && t <= t1) out.push({ t, size, fee, share, status, ns, pub: by.get(u.addresses[i]) });
+  // A settlement on the window's first second can fall outside the list the API made a moment later.
+  for (const [t, size, i, fee, share, status, ns] of u.settlements) { const pub = by.get(u.addresses[i]); if (pub && t >= t0 && t <= t1) out.push({ t, size, fee, share, status, ns, pub }); }
   return out;
 });
 const fee = (size) => { const f = U().params.price_formula; return (f.base_gas + f.gas_per_chunk * Math.ceil(size / f.chunk_bytes)) * f.utia_per_gas; };
 const perMib = (size) => fee(size) / (size / 2 ** 20);
 // Dates on one even step, counted back from the last day, so every time axis on the page lands on the same days.
-const dayTicks = (most = 6) => { const { days } = activeDays(), step = [1, 2, 5, 7, 14, 28, 56].find((k) => (days.length - 1) / k < most) ?? 91, out = []; for (let i = days.length - 1; i >= 0; i -= step) out.unshift(days[i]); return out; };
-const DAY = 86400;
-const LAST = { "7d": 7, "30d": 30 };
-// The last 7 or 30 UTC days, today included, or every day since launch, so 7d is 7 and the part-day a window opens on never counts as a day.
-// Launch day stays: nothing came before it. p is a pubs() row or a folded row with .list; none means everyone. t is the day's noon, held inside span().
+const dayTicks = (most = 6) => { const { days } = activeDays(), step = (hourly() ? [1, 2, 3, 4, 6, 12] : [1, 2, 5, 7, 14, 28, 56]).find((k) => (days.length - 1) / k < most) ?? 91, out = []; for (let i = days.length - 1; i >= 0; i -= step) out.unshift(days[i]); return out; };
+const DAY = 86400, HOUR = 3600;
+const LAST = { "24h": 24, "7d": 7, "30d": 30 };
+const stepS = () => (hourly() ? HOUR : DAY);
+// The last 24 hours, the last 7 or 30 UTC days, today included, or every day since launch, so 7d is 7 and the part-day a window opens on never counts as a day.
+// Launch day stays: nothing came before it. p is a pubs() row or a folded row with .list; none means everyone. t is the step's middle, held inside span(); s its first second.
 const activeDays = (p) => {
   const who = p && new Set((p.list || [p]).map((x) => x.address));
   return once(`days ${who ? [...who] : ""}`, () => {
-    const [t0, t1] = span(), by = new Map(), days = [], last = Math.floor(t1 / DAY), n = LAST[state.win];
-    const first = Math.max(Math.floor(t0 / DAY), n ? last - n + 1 : 0);
+    const [t0, t1] = span(), by = new Map(), days = [], step = stepS(), last = Math.floor(t1 / step), n = LAST[state.win];
+    const first = Math.max(Math.floor(t0 / step), n ? last - n + 1 : 0);
     for (const r of settled()) {
       if (who && !who.has(r.pub.address)) continue;
       const k = dayOf(r.t), d = by.get(k) || by.set(k, { settlements: 0, bytes: 0, fees: 0 }).get(k);
       d.settlements += 1; d.bytes += r.size; d.fees += r.fee;
     }
-    for (let i = first; i <= last; i++) { const s = i * DAY; days.push({ day: dayOf(s), i: i - first, t: Math.min(t1, Math.max(t0, s + DAY / 2)), settlements: 0, bytes: 0, fees: 0, ...by.get(dayOf(s)) }); }
+    for (let i = first; i <= last; i++) { const s = i * step; days.push({ day: dayOf(s), s, i: i - first, t: Math.min(t1, Math.max(t0, s + step / 2)), settlements: 0, bytes: 0, fees: 0, ...by.get(dayOf(s)) }); }
     return { days, active: days.filter((d) => d.settlements).length, total: days.length };
   });
 };
 // Fees ÷ data per active day, in utia per MiB. joined: the day before settled too, the only case a line may reach back.
-const dailyRate = () => once("rate", () => activeDays().days.filter((d) => d.settlements).map((d, i, a) => ({ ...d, rate: d.fees / (d.bytes / 2 ** 20), joined: i > 0 && Date.parse(d.day) - Date.parse(a[i - 1].day) === DAY * 1e3 })));
+const dailyRate = () => once("rate", () => activeDays().days.filter((d) => d.settlements).map((d, i, a) => ({ ...d, rate: d.fees / (d.bytes / 2 ** 20), joined: i > 0 && d.i - a[i - 1].i === 1 })));
 // Accounts whose first settlement ever falls in the window, oldest first: pubs() rows plus t.
 const newPublishers = () => once("new", () => {
   const [t0, t1] = span(), by = new Map(pubs().map((p) => [p.address, p]));
@@ -352,6 +356,7 @@ function chrome() {
   const how = touch() ? ["Tap a circle", "Tap a figure"] : ["Click rows", "Hover a heading or figure"];
   $("#foot").innerHTML = `<span>${esc(`Data as of ${stamp(U().read_at)}`)}</span><span class="how"><span>${how[0]} to compare, up to ${MAX_PINS}</span><span>${how[1]} for what it means</span></span>`;
   $('#seg-win [data-v="30d"]').hidden = young(state.net);
+  $('#seg-win [data-v="24h"]').hidden = !U().market["24h"];
   // In Hosting the switch would claim a period the section does not follow, so the pinned bar says what it does follow.
   $(".hold").textContent = `Hosts now, checks and shards ${young(state.net) ? "since launch" : "last 30 days"}`;
   syncSegs();
@@ -386,7 +391,7 @@ on("resize", syncSegs);
 on("win", syncSegs);
 
 function boot() {
-  seg("#seg-win", [["7d", "7d"], ["30d", "30d"], ["all", "All"]], () => state.win, (v) => { chosen = true; set("win", v); });
+  seg("#seg-win", [["24h", "24h"], ["7d", "7d"], ["30d", "30d"], ["all", "All"]], () => state.win, (v) => { chosen = true; set("win", v); });
   $(".jump").addEventListener("click", (e) => { const b = e.target.closest("[data-to]"); if (b) $("#" + b.dataset.to).scrollIntoView({ behavior: calm ? "auto" : "smooth" }); });
   // The title is the way back up once the bar has pinned.
   const h1 = $(".bar h1"), period = $(".bar .ctl-l");
@@ -405,15 +410,15 @@ function boot() {
 }
 
 return { $, $$, el, esc, sum, calm, narrow, phone, touch, keptFor, sorter, token, pct, sharePct, readyPct, int, count, bytes, size, tiaN, tia, tiaRange, day, dayOf, stamp,
-  state, on, set, lit, pin, MAX_PINS, area, boot, N, U, market, span, pubs, settled, fee, perMib, young,
+  state, hourly, stepS, on, set, lit, pin, MAX_PINS, area, boot, N, U, market, span, pubs, settled, fee, perMib, young,
   activeDays, dayTicks, dailyRate, newPublishers, escrowFlow, blobEver, blobsLeft, runway, TAIL, RANKS, inkOn, agg, regionOf, regions, seg, showTip, tipAt, hideTip, tipHead, tipRow };
 })();
 
 /* ---------- top ---------- */
 try {
-const { $, $$, el, esc, sum, state, market, U, N, settled, span, perMib, area, on, bytes, size, int, count, tia, tiaN, pct, day, dayOf, stamp, showTip, hideTip, tipHead, tipRow, activeDays, dayTicks, dailyRate, newPublishers, escrowFlow } = M;
+const { $, $$, el, esc, sum, state, hourly, stepS, market, U, N, settled, span, perMib, area, on, bytes, size, int, count, tia, tiaN, pct, day, dayOf, stamp, showTip, hideTip, tipHead, tipRow, activeDays, dayTicks, dailyRate, newPublishers, escrowFlow } = M;
 
-const WINDOW = { "7d": "last 7 days", "30d": "last 30 days", all: "since launch" };
+const WINDOW = { "24h": "last 24 hours", "7d": "last 7 days", "30d": "last 30 days", all: "since launch" };
 const q = (s) => $("#top " + s);
 const f = (name) => q(`[data-f="${name}"]`), c = (name) => q(`[data-c="${name}"]`);
 const wipe = (svg) => { svg.textContent = ""; return svg; };
@@ -429,16 +434,18 @@ const frame = (svg, hero) => {
 };
 // Tiles start on whole pixels at 1x; snapping keeps thin marks sharp at any zoom.
 const snapper = (svg) => { const ox = svg.getBoundingClientRect().left, dpr = devicePixelRatio || 1; return (x) => +(Math.round((x + ox) * dpr) / dpr - ox).toFixed(2); };
+// Hours on an axis are UTC; the last of them says so.
+const lastOf = (d) => `${day(d.day)}${hourly() ? " UTC" : ""}`;
 const axisEnd = (svg, x, t, anchor) => { el("text", { x, y: svg.clientHeight - AXIS, "text-anchor": anchor }, svg).textContent = t; };
 // A date names its day, so it sits at that day's noon, on the same days as every other time axis; near an end it stands flush. Small tiles name only their ends.
 function dateAxis(svg, X, a, b, hero) {
   const [t0] = span(), { days } = activeDays(), live = Math.floor(Date.parse(N().fibre_live_at) / 1e3);
-  if (!hero) { axisEnd(svg, a, day(days[0].day), "start"); axisEnd(svg, b, day(days.at(-1).day), "end"); return; }
+  if (!hero) { axisEnd(svg, a, day(days[0].day), "start"); axisEnd(svg, b, lastOf(days.at(-1)), "end"); return; }
   dayTicks(M.phone() ? 4 : TICKS).forEach((d) => {
-    const x = X(d.t), first = d === days[0] && t0 === live;
+    const x = X(hourly() ? Math.max(t0, d.s) : d.t), first = d === days[0] && t0 === live, name = d === days.at(-1) ? lastOf(d) : day(d.day);
     if (x < a + FLUSH) axisEnd(svg, a, `${first ? "Launch " : ""}${day(d.day)}`, "start");
-    else if (x > b - 20) axisEnd(svg, b, day(d.day), "end");
-    else axisEnd(svg, x, day(d.day), "middle");
+    else if (x > b - (hourly() ? 36 : 20)) axisEnd(svg, b, name, "end");
+    else axisEnd(svg, x, name, "middle");
   });
 }
 const range = () => { const P = U().params; return `${tiaN(perMib(P.max_blob_size_bytes), 2)}–${tiaN(perMib(P.price_formula.chunk_bytes), 2)}`; };
@@ -525,19 +532,20 @@ function light(p) {
   el("path", { d, fill: "none", stroke: "var(--ink)", "stroke-width": 2 }, ch.part);
 }
 
-// A date covers its whole day, so one date always shows one total.
-const dayEnd = (t) => (Math.floor(t / DAY) + 1) * DAY;
+// A date covers its whole day, so one date always shows one total; an hour says where it ends.
+const dayEnd = (t) => (Math.floor(t / stepS()) + 1) * stepS();
+const through = (t) => `Through ${day(dayOf(hourly() ? dayEnd(t) : t))}`;
 function newTip(t, x) {
   const ch = CH.new, near = ch.rows.reduce((b, r) => { const g = Math.abs(ch.X(r.t) - x); return g < NEAR && (!b || g < b.g) ? { r, g } : b; }, null);
   light(near ? near.r : null);
   if (near) { const p = near.r; return tipHead(p.display, p.colour) + tipRow("First settlement", stamp(p.t * 1e3)) + tipRow("Data", size(p.bytes)) + tipRow("Fees paid", tia(p.fees_utia)); }
-  return tipHead(`Through ${day(dayOf(t))}`) + tipRow("New publishers", int(newPublishers().filter((p) => p.t < dayEnd(t)).length));
+  return tipHead(through(t)) + tipRow("New publishers", int(newPublishers().filter((p) => p.t < dayEnd(t)).length));
 }
 
 function dataTip(t, x) {
   const ch = CH.data, s = nearest(ch, x);
   if (s) return tipHead(s.pub.display, s.pub.colour) + tipRow("Time", stamp(s.t * 1e3)) + tipRow("Size", size(s.size)) + tipRow("Fee", tia(s.fee));
-  const done = ch.rows.filter((r) => r.t < dayEnd(t)), h = tipHead(`Through ${day(dayOf(t))}`);
+  const done = ch.rows.filter((r) => r.t < dayEnd(t)), h = tipHead(through(t));
   if (!done.length) return h + tipRow("No settlements");
   return h + tipRow("Data", size(sum(done, (r) => r.size))) + tipRow("Fees paid", tia(sum(done, (r) => r.fee))) + tipRow("Settlements", int(done.length));
 }
@@ -548,7 +556,7 @@ function dayAxis(svg, right = 0) {
   const x = (i) => snap(g.L + (R - g.L - w) * (n > 1 ? i / (n - 1) : 0)) + w / 2;
   return { ...g, R, days, n, w, per, snap, x, tAt: (px) => days[clamp(Math.round((px - g.L) / per), 0, n - 1)].t };
 }
-const dayEnds = (svg, g) => { axisEnd(svg, g.L, day(g.days[0].day), "start"); axisEnd(svg, g.R, day(g.days.at(-1).day), "end"); };
+const dayEnds = (svg, g) => { axisEnd(svg, g.L, day(g.days[0].day), "start"); axisEnd(svg, g.R, lastOf(g.days.at(-1)), "end"); };
 
 /* ---------- paid per MiB: one dot per active day, between the protocol's two prices ---------- */
 function drawRate() {
@@ -651,9 +659,10 @@ function draw() {
   f("sub").textContent = `running total, ${WINDOW[state.win]}${m.settlements <= FEW ? "; a dot is a settlement" : ""}`;
   f("count").textContent = `${count(m.settlements, "settlement")} · ${tia(m.fees_utia)} paid`;
   f("new").innerHTML = int(fresh.length) + side(WINDOW[state.win]);
-  f("rate").innerHTML = (m.settlements ? unit(tiaN(m.paid_per_mib_utia, 2), "average paid") : "<small>no settlements</small>") + side("a dot is a day");
+  f("rate").innerHTML = m.settlements ? unit(tiaN(m.paid_per_mib_utia, 2), "average paid") : "<small>no settlements</small>";
   f("escrow").innerHTML = pct(escrowFlow().used) + side("since launch");
   f("days").innerHTML = unit(int(D.active), `of ${int(D.total)}`) + side("with a settlement");
+  q('[data-tile="days"] h3').textContent = hourly() ? "Active hours" : "Active days";
   LIT_PUB = null;
   steps("data", [...settled()].reverse(), (r) => r.size, true);
   steps("new", fresh, () => 1);
@@ -906,7 +915,7 @@ hook();
 
 /* ---------- publishers ---------- */
 try {
-const { $, $$, esc, sum, area, on, seg, token, pubs, settled, market, span, U, tia, tiaN, bytes, size, stamp, day, dayOf, count, pct, sharePct, int, showTip, hideTip, tipHead, tipRow, activeDays, dayTicks, blobEver, blobsLeft, runway, TAIL } = M;
+const { $, $$, esc, sum, area, on, seg, token, hourly, pubs, settled, market, span, U, tia, tiaN, bytes, size, stamp, day, dayOf, count, pct, sharePct, int, showTip, hideTip, tipHead, tipRow, activeDays, dayTicks, blobEver, blobsLeft, runway, TAIL } = M;
 
 const TOP = 8, HOUR = 3600, MIB = 2 ** 20;
 // Activity. Strokes stand on one lattice for every row: PITCH css px apart, GAP px between them, so a busy row stays a trace at any width and screen scale.
@@ -1129,7 +1138,7 @@ function tickDays() {
   return tries.find((l) => l[0].day === days[0].day) ?? tries[0] ?? [days.at(-1)];
 }
 // A rule stands at the day's first moment, so a mark right of it belongs to that day. Launch day starts at launch.
-const dayX = (d) => C.x(Math.max(C.t0, Date.parse(d.day) / 1e3));
+const dayX = (d) => C.x(Math.max(C.t0, d.s));
 
 function track(g, W, dated) {
   const { dp } = C, px = (v) => Math.round(v * dp), mid = px(MID), w = Math.max(1, px(1)), h = evenPx(1);
@@ -1172,7 +1181,7 @@ function ruler(W) {
 // A date is centred on its day's rule; the last one ends with the plot when it would run past it. One that would touch the column's name starts on its rule instead, or stays out, and so does one that would touch the date before.
 function ticks(list) {
   const box = $("#publishers .pb-ticks"), name = $("#publishers .pb-first").offsetWidth + 8;
-  box.innerHTML = list.map((d) => `<span>${esc(day(d.day))}</span>`).join("");
+  box.innerHTML = list.map((d, k) => `<span>${esc(day(d.day))}${hourly() && k === list.length - 1 ? " UTC" : ""}</span>`).join("");
   let end = name;
   $$("span", box).forEach((e, k) => {
     const x = dayX(list[k]) - IN, w = e.offsetWidth, mid = Math.min(x - w / 2, C.w - w), at = mid < name ? x : mid;
@@ -1188,7 +1197,7 @@ const inSlice = (p, k) => (p.others ? p.list.some((q) => keyOf(q) === k) : keyOf
 
 function cellTip(p, c) {
   const h = tipHead(p.display, p.colour), D = activeDays(p), days = runway(p);
-  if (c === "w") return h + (p.list ? tipRow("Accounts", int(p.list.length)) : "") + tipRow("Settlements", int(p.settlements)) + (p.list ? "" : tipRow("Namespaces", int(p.namespaces_total))) + tipRow("Fees paid", tia(p.fees_utia)) + (p.timeouts ? tipRow("Timeouts", int(p.timeouts)) : "") + (p.others ? "" : tipRow("First settlement", stamp(p.first_settlement_at)) + tipRow("Active", `${int(D.active)} of ${count(D.total, "day")}`)) + (nth(p) ? tipRow(p.short) + tipRow(`One of ${named(p).length} accounts named ${p.name}`) + nameTotal(p) : "");
+  if (c === "w") return h + (p.list ? tipRow("Accounts", int(p.list.length)) : "") + tipRow("Settlements", int(p.settlements)) + (p.list ? "" : tipRow("Namespaces", int(p.namespaces_total))) + tipRow("Fees paid", tia(p.fees_utia)) + (p.timeouts ? tipRow("Timeouts", int(p.timeouts)) : "") + (p.others ? "" : tipRow("First settlement", stamp(p.first_settlement_at)) + tipRow("Active", `${int(D.active)} of ${count(D.total, hourly() ? "hour" : "day")}`)) + (nth(p) ? tipRow(p.short) + tipRow(`One of ${named(p).length} accounts named ${p.name}`) + nameTotal(p) : "");
   if (c === "d") return h + tipRow("Share of data", sharePct(p.bytes_share)) + tipRow("Fees paid", `${tia(p.fees_utia)} · ${sharePct(p.fees_share)}`) + tipRow("Largest blob", size(p.largest_blob_bytes));
   if (c === "mib") return h + tipRow("Fees paid", tia(p.fees_utia)) + tipRow("Data", size(p.bytes));
   if (c === "avg") return h + tipRow("Largest blob", size(p.largest_blob_bytes)) + tipRow("Settlements", int(p.settlements));
@@ -1319,8 +1328,6 @@ const { $, $$, el, esc, sum, calm, keptFor, token, pct, readyPct, sharePct, int,
 const root = $("#hosting"), box = $(".tb", root), list = $(".tb-list", root), vs = $(".tb-vs", root), line = $(".sec-h p", root);
 // SORTED_TOP: rows before the others. SUB_NAMES: validators a row names when they fit..
 const SORTED_TOP = 8, SUB_NAMES = 3, VS_NAMES = 8, SHORT_WINDOW = .6, TAU = Math.PI * 2, DEG = Math.PI / 180;
-// Our pass mark for checks answered. It is a choice, not a protocol rule, and the column's tip says so.
-const MARK = .99;
 // Under this share ready, with hosts that do not report, a row has no reading worth printing.
 const READY_MIN = .001;
 // hot is what the pointer lights: { key, vs, name, share, hosts, colour, from }.
@@ -1348,9 +1355,6 @@ const weight = (g) => (S.weigh === "vp" ? g.vp : g.hosts);
 const shareOf = (g) => g.share || (g.vp > 0 ? 1e-9 : 0);
 const finePct = (x) => (x < 1e-4 ? "<0.01%" : pct(x, 2));
 const servedScope = () => (M.young(state.net) ? "Since launch" : "Last 30 days");
-// A host's own rate; one host under the mark can sit inside a healthy group.
-const rateOf = (v) => (v.reach?.den ? v.reach.num / v.reach.den : null);
-const lowHost = (v) => rateOf(v) != null && rateOf(v) < MARK;
 // Shards count once served or not served; the rest are still pending.
 const settled = (g) => g.served + g.not_served;
 const srate = (g) => (settled(g) ? g.served / settled(g) : null);
@@ -1390,13 +1394,13 @@ function windowOf(g) {
 function model() {
   const n = N(), key = keyFn[S.by], hosted = n.validators.filter((v) => v.has_host), mem = new Map();
   hosted.forEach((v) => { const k = key(v); (mem.get(k) || mem.set(k, []).get(k)).push(v); });
-  const src = srcOf().map((g) => { const k = keyOf(g), vs = mem.get(k) || []; return { ...g, key: k, rep: sum(vs.filter((v) => v.readiness !== "not_reported"), (v) => v.vp), lows: vs.filter(lowHost).sort((a, b) => rateOf(a) - rateOf(b)) }; });
+  const src = srcOf().map((g) => { const k = keyOf(g), vs = mem.get(k) || []; return { ...g, key: k, rep: sum(vs.filter((v) => v.readiness !== "not_reported"), (v) => v.vp) }; });
   // The weighing ranks the ring's groups. The table is one list, largest first in whatever column it is sorted by.
   const ranked = [...src].sort((a, b) => weight(b) - weight(a) || b.vp - a.vp), named = ranked.slice(0, RANKS), unnamed = ranked.slice(RANKS);
   const resting = S.sort === S.weigh && S.dir < 0, top = ordered(src).slice(0, SORTED_TOP), shown = new Set(top.map((g) => g.key));
   const tail = src.filter((g) => !shown.has(g.key));
   const all = agg(src, "__all", "All");
-  const rest = { ...agg(tail, "__rest", `${tail.length} more`), sum: true, lows: tail.flatMap((g) => g.lows).sort((a, b) => rateOf(a) - rateOf(b)), rep: sum(tail, (g) => g.rep) };
+  const rest = { ...agg(tail, "__rest", `${tail.length} more`), sum: true, rep: sum(tail, (g) => g.rep) };
   // The scale is the weighing's, so a bar keeps its length through every sort. The others are a figure, or their bar would halve every other.
   const scale = weight(ranked[0]);
   V = { src, ranked, named, unnamed, top, tail, all, rest, scale, resting, tailKeys: new Set(tail.map((g) => g.key)), step: new Map(named.map((g, i) => [g.key, `var(--p${i + 1})`])), mem, byKey: new Map(),
@@ -1457,9 +1461,7 @@ function say() {
   // One line: the place goes first, the row under the name still says it.
   const whoLine = $(".lead", sayWho);
   if (whoLine.scrollWidth > whoLine.clientWidth) whoLine.innerHTML = who("");
-  const reg = regions().sort((a, b) => (hosts ? b.hosts - a.hosts : b.share - a.share))[0];
-  sayWhere.innerHTML = (hosts ? `<b>${esc(reg.name)}</b> has the most Fibre hosts, <b>${reg.hosts}</b> of ${t.hosts}.` : reg.share >= .5 ? `Most voting power runs in <b>${esc(reg.name)}</b>, <b>${sharePct(reg.share)}</b>.` : `<b>${esc(reg.name)}</b> hosts the most voting power, <b>${sharePct(reg.share)}</b>.`)
-    + `<small>${int(t.cities)} cities · ${int(t.countries)} countries</small>`;
+  sayWhere.innerHTML = `<small>${int(t.cities)} cities · ${int(t.countries)} countries</small>`;
 }
 
 /* ---------- ring: one arc per validator on a track ---------- */
@@ -1676,9 +1678,6 @@ function paintCentre(f) {
 
 /* ---------- table marks ---------- */
 const CHECK = `<svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.6 6.3 5 8.7l4.4-5"/></svg>`;
-// The map's own mark, so the key above the table already says what it means.
-const LOWM = `<i class="lowm" role="img" aria-label="A host under 99% of checks"></i>`;
-const lowMark = (g) => (g.lows?.length || (g.reachability != null && g.reachability < MARK) ? LOWM : "");
 const CHEV = `<svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5"/></svg>`;
 const CROSS = `<svg viewBox="0 0 10 10" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M2 2l6 6M8 2l-6 6"/></svg>`;
 
@@ -1710,7 +1709,7 @@ const otherText = (g) => (S.weigh === "vp" ? g.hosts : sharePct(shareOf(g)));
 function cells(g) {
   const s = (k) => (S.sort === k ? " srt" : ""), vp = S.weigh === "vp", o = vp ? "hosts" : "vp", L = labelOf();
   return `<span class="k-n${s(o)}" data-t="${o}" data-l="${L.other}">${otherText(g)}</span>
-    <span class="k-r${s("reach")}${g.reachability == null ? " nil" : g.reachability === 1 ? " full" : ""}" data-t="reach" data-l="${L.reach}">${lowMark(g)}${reachText(g)}</span>
+    <span class="k-r${s("reach")}${g.reachability == null ? " nil" : g.reachability === 1 ? " full" : ""}" data-t="reach" data-l="${L.reach}">${reachText(g)}</span>
     <span class="k-s${s("served")}${settled(g) ? (srate(g) === 1 ? " full" : "") : " nil"}" data-t="served" data-l="${L.served}">${srateText(g)}</span>`;
 }
 function row(g, kind) {
@@ -1743,9 +1742,7 @@ function render() {
   say();
   list.innerHTML = `<div class="top">${head()}</div>`
     + ordered(V.top).map((g) => row(g, "lead")).join("")
-    + (V.tail.length ? row(V.rest, "rest") + `<div class="tailbox${S.open ? " open" : ""}"><div>${ordered(V.tail).map((g) => row(g, "tail")).join("")}</div></div>` : "") + TRAY;
-  // The way back from an open tail stops under the head, whose height differs by width.
-  list.style.setProperty("--top-h", $(".top", list).offsetHeight + "px");
+    + (V.tail.length ? `<div class="tailbox${S.open ? " open" : ""}"><div>${ordered(V.tail).map((g) => row(g, "tail")).join("")}</div></div>` + row(V.rest, "rest") : "") + TRAY;
   if (!calm) $$(".tr.rw", list).forEach((r) => {
     const y = was.get(r.dataset.k); if (y == null) return;
     const d = y - r.getBoundingClientRect().top;
@@ -1811,7 +1808,7 @@ function vsCell(k, g, ps) {
   if (k === "vp") return [sharePct(shareOf(g)), bar(shareOf(g) / Math.max(...ps.map(shareOf)))];
   if (k === "hosts") return [g.hosts, `<small class="vn" data-t="list">${vsNames(g)}</small>`];
   if (k === "geo") return [geoOf(g).length, prov() ? `<span class="chips">${g.countries.map((x) => `<code>${x}</code>`).join("")}</span>` : `<span class="mk dots">${g.companies.map(() => `<u class="c"></u>`).join("")}</span>`];
-  if (k === "reach") return [lowMark(g) + reachText(g), g.reachability == null ? "" : `<small>${missedText(g)}</small>`];
+  if (k === "reach") return [reachText(g), g.reachability == null ? "" : `<small>${missedText(g)}</small>`];
   if (k === "served") return [srateText(g), settled(g) ? `<small>${shardText(g)} not served</small>` : ""];
   return [`${g.ready_hosts} of ${g.hosts}`, `<small>${unheard(g) ? "Voting power not reported" : `${readyText(g)} of its voting power`}</small>`];
 }
@@ -1861,7 +1858,6 @@ const worst = () => V.tail.filter((x) => x.failed_checks).sort((a, b) => b.faile
 const hostList = (g) => { const hosts = [...members(g)].sort((a, b) => b.share - a.share), html = hosts.map((v) => tipRow(v.moniker, finePct(v.share))).join(""); return hosts.length > 6 ? `<div class="cols">${html}</div>` : html; };
 const scope = () => servedScope().toLowerCase();
 const geoNames = (g, n) => { const a = geoOf(g).map((x) => short(prov() ? ccName(x) : x)); return a.slice(0, n).join(", ") + (a.length > n ? ` and ${a.length - n} more` : ""); };
-const belowMark = (g) => (g.lows?.length ? tipRow(`Under ${pct(MARK, 0)} of checks`) + g.lows.slice(0, 3).map((v) => tipRow(v.moniker, pct(rateOf(v), 2))).join("") + (g.lows.length > 3 ? tipRow(`+${g.lows.length - 3} more`) : "") : "");
 const TIP = {
   name: (g) => hd(g) + (g.country && short(g.country) !== nameOf(g) ? tipRow(short(g.country)) : "") + tipRow(picks().includes(g.key) ? `Picked, ${M.touch() ? "tap" : "click"} to remove` : `Pick to compare, up to ${MAX_PINS}`),
   list: (g) => hd(g) + hostList(g) + tipRow(prov() ? "Countries" : "Providers", String(geoOf(g).length)) + tipRow(geoNames(g, 5)),
@@ -1872,7 +1868,6 @@ const TIP = {
     + (g.win ? tipRow("Checked since", g.win.n < g.win.of ? `${g.win.on}, ${g.win.n} of ${g.win.of} hosts` : g.win.on) : "")
     + tipRow("Checks", `${int(g.checks - g.failed_checks)} of ${int(g.checks)}`) + tipRow("Missed", int(g.failed_checks))
     + (V.all.failed_checks ? tipRow("Of all missed", pct(g.failed_checks / V.all.failed_checks)) : "")
-    + belowMark(g)
     + (g.sum && worst().length ? tipRow("Most missed") + worst().map((x) => tipRow(nameOf(x), int(x.failed_checks))).join("") : ""),
   ready: (g) => hd(g) + tipRow("Hosts ready", `${g.ready_hosts} of ${g.hosts}`) + (g.not_ready_hosts ? tipRow("Not ready", String(g.not_ready_hosts)) : "") + (g.not_reported_hosts ? tipRow("Hosts not reported", String(g.not_reported_hosts)) : "")
     + (unheard(g) ? "" : tipRow("Of its voting power, ready", readyText(g))) + (g.rep < g.vp ? tipRow("Voting power not reported", readyPct(1 - g.rep / g.vp)) : "")
@@ -1882,7 +1877,7 @@ const TIP = {
 const HEAD = {
   vp: () => tipHead("Voting power") + tipRow("Share of all voting power, bonded TIA"),
   hosts: () => tipHead("Fibre hosts") + tipRow(`A server a validator runs for Fibre.${keptFor() ? ` It keeps a blob's shards for ${keptFor()}.` : ""}`),
-  reach: () => tipHead("Checks answered") + tipRow("A connection to each host, no data asked for. A miss alone does not stop a blob") + tipRow("Period", scope()) + tipRow(`A ring marks a host under ${pct(MARK, 0)}, here and on the map. That mark is Tensile's, not a protocol rule`),
+  reach: () => tipHead("Checks answered") + tipRow("A connection to each host, no data asked for. A miss alone does not stop a blob") + tipRow("Period", scope()),
   served: () => tipHead("Blob shards served") + tipRow("A shard is a piece of a blob, read back from a host that endorsed it") + tipRow("Period", scope()),
   ready: () => tipHead("Hosts ready now") + tipRow("Hosts that say they can take uploads now") + tipRow("Hosts that do not report are not counted as failing"),
 };
@@ -1906,13 +1901,13 @@ function rowHover(k) {
 }
 function toggleRest(r) {
   const tb = $(".tailbox", list), y = r.getBoundingClientRect().top;
-  // Closing from deep in the tail must not drop the reader past the table.
-  const stuck = S.open && tb.getBoundingClientRect().top < y;
+  // The row ends an open tail. Closing it from down there must not drop the reader past the table, so the row keeps its place on the screen.
+  const far = S.open && tb.getBoundingClientRect().top < 0;
   S.open = !S.open;
-  if (stuck) tb.style.transition = "none";
+  if (far) tb.style.transition = "none";
   tb.classList.toggle("open", S.open);
   r.classList.toggle("opened", S.open);
-  if (stuck) { scrollBy(0, r.getBoundingClientRect().top - y); tb.style.transition = ""; }
+  if (far) { scrollBy(0, r.getBoundingClientRect().top - y); tb.style.transition = ""; }
   const ex = $(".ex", r); ex.setAttribute("aria-expanded", S.open); ex.setAttribute("aria-label", `${S.open ? "Hide" : "Show"} ${V.rest.name}`);
   syncRest();
   fitVs();
@@ -1960,7 +1955,7 @@ vs.addEventListener("mouseleave", () => { rowHover(null); hideTip(); });
 root.addEventListener("click", (e) => { if (e.target.closest(".clear")) clearPicks(); });
 /* ---------- map ---------- */
 // World units: all the land. The band has a sentence above it now, so a crop would read as a cut across the card.
-// EDGE: land stops this far from the card's text edge. RAIL_GAP: what the westmost mark keeps from the rail, past RAIL_R, the room its disc and ring take.
+// EDGE: land stops this far from the card's text edge. RAIL_GAP: what the westmost mark keeps from the rail, past RAIL_R, the room its disc takes.
 const LANDS = { x0: 14, y0: 5, x1: 4777, y1: 2100 }, EDGE = 4, RAIL_GAP = 12, RAIL_R = 8, SMALL = 640;
 // SAME: how close two cities must sit to be one point on the map. Anything further apart stays two discs, overlapping if it must.
 // HIT: how far past its edge a mark answers, HIT_MIN how near its centre at least.
@@ -2010,7 +2005,7 @@ function marksOf(list) {
   return ms.sort((a, b) => b.share - a.share).map((m) => {
     m.cities.sort((a, b) => b.share - a.share);
     const head = m.cities[0].g, more = m.cities.length - 1, named = more ? `${head.c.name} and ${more} more` : head.c.name;
-    return { ...m, ...at(head.wx, head.wy), head, vp: sum(m.vs, shareOf), low: m.vs.some(lowHost), name: named };
+    return { ...m, ...at(head.wx, head.wy), head, vp: sum(m.vs, shareOf), name: named };
   });
 }
 function drawMark(host, m, colour, i) {
@@ -2018,19 +2013,13 @@ function drawMark(host, m, colour, i) {
   top.mark = m;
   el("circle", { class: "mi", r: m.r.toFixed(2), fill: colour }, top).style.setProperty("--i", i);
 }
-// In their own layer over every disc: a ring is the one mark no neighbour may cover.
-function drawRing(host, m) {
-  const top = el("g", { class: "m", transform: `translate(${m.x.toFixed(1)} ${m.y.toFixed(1)})` }, host);
-  top.mark = m;
-  el("circle", { class: "lo", r: LOW_R }, top);
-}
 function drawBase() {
   svg.textContent = ""; svg.setAttribute("viewBox", `0 0 ${P.w} ${P.h}`);
-  P.layers = { base: el("g", { class: "base" }, svg), rings: el("g", { class: "rings" }, svg), iso: el("g", { class: "iso-l" }, svg), labs: el("g", { class: "labs" }, svg), isoLabs: el("g", { class: "iso-l" }, svg) };
+  P.layers = { base: el("g", { class: "base" }, svg), iso: el("g", { class: "iso-l" }, svg), labs: el("g", { class: "labs" }, svg), isoLabs: el("g", { class: "iso-l" }, svg) };
   P.marks = marksOf(geo.cities.map((g) => ({ g, vs: g.vs, share: sum(g.vs, vShare) })));
   P.iso = []; P.boxes = []; P.isoBoxes = []; P.over = null;
   // Biggest first, so a small city is never under a bigger neighbour.
-  P.marks.forEach((m, i) => { drawMark(P.layers.base, m, "var(--acc)", i); if (m.low) drawRing(P.layers.rings, m); });
+  P.marks.forEach((m, i) => drawMark(P.layers.base, m, "var(--acc)", i));
   placeLabels(P.marks.filter((m) => m.share >= LABEL_MIN).slice(0, P.w < NARROW ? LABEL_TOP_NARROW : LABEL_TOP), P.layers.labs, P.boxes, P.marks, true);
 }
 
@@ -2045,8 +2034,8 @@ const ANGLES = [0, 180, -90, 90, -45, 45, -135, 135, 60, 120, -60, -120, 30, 150
 // The big cities take the top, so the crowd around them keeps its sides.
 const ANGLES_BIG = [-90, -135, ...ANGLES.filter((a) => a !== -90 && a !== -135)];
 // COAST: text across a coast loses both edges, so a clean spot is worth this many px. LEAD: a leader at all costs this many.
-// ORDER: a price on two column labels read against their size. LOW_R: one ring size for every place, so size stays voting power on the disc alone.
-const LINE_T = Array.from({ length: 17 }, (_, i) => i / 16), LABEL_H = 16, COAST = 8, LEAD = 12, SPOTS = 40, BUDGET = 40000, LINE_MAX = 60, RAIL_CLEAR = 32, ORDER = 30, LOW_R = 5.5;
+// ORDER: a price on two column labels read against their size.
+const LINE_T = Array.from({ length: 17 }, (_, i) => i / 16), LABEL_H = 16, COAST = 8, LEAD = 12, SPOTS = 40, BUDGET = 40000, LINE_MAX = 60, RAIL_CLEAR = 32, ORDER = 30;
 // Europe's labels have the North Atlantic: a right-aligned column off Ireland, on rows ATL_Y apart.
 const ATL_LON = -24, ATL_LAT = 50, ATL_Y = 6, ATL_TOP = 14, ATL_ROWS = 22, ATL_PULL = 30;
 const along = (l, t) => [l.x1 + (l.x2 - l.x1) * t, l.y1 + (l.y2 - l.y1) * t];
@@ -2059,11 +2048,10 @@ const reach = (l) => (l ? LEAD + Math.hypot(l.x2 - l.x1, l.y2 - l.y1) : 0);
 
 // Every place a label may stand, given the marks and the side list, cheapest first.
 function spotsFor({ d, w }, around, boxes, inland = false, clear = 2) {
-  const edge = (m) => Math.max(m.r, m.low ? LOW_R : 0);
   const hitMark = (a) => around.some((m) => {
     const cx = Math.max(a.x0, Math.min(m.x, a.x1)), cy = Math.max(a.y0, Math.min(m.y, a.y1));
     // A label that ends beside another mark reads as that mark's.
-    return Math.hypot(m.x - cx, m.y - cy) < edge(m) + (m === d ? 2 : P.w < SMALL ? 4 : 6);
+    return Math.hypot(m.x - cx, m.y - cy) < m.r + (m === d ? 2 : P.w < SMALL ? 4 : 6);
   });
   // A leader through a disc says the label might be that disc's.
   const lineOnMark = (l) => around.some((m) => m !== d && LINE_T.some((t) => { const [x, y] = along(l, t); return Math.hypot(x - m.x, y - m.y) < m.r + clear; }));
@@ -2081,7 +2069,7 @@ function spotsFor({ d, w }, around, boxes, inland = false, clear = 2) {
     const x0 = Math.max(8, Math.min(wanted, P.w - 8 - w)), cy = a === "middle" ? ey + Math.sign(s) * LABEL_H / 2 : ey, box = { x0, x1: x0 + w, y0: cy - LABEL_H / 2, y1: cy + LABEL_H / 2 };
     if (box.y0 < 6 || box.y1 > P.h - 6 || boxes.some((b) => boxesMeet(box, b)) || hitMark(box) || inLine(box)) continue;
     if (gap <= NO_LINE && !nearestIs(box)) continue;
-    const line = gap > NO_LINE ? { x1: d.x + (edge(d) + 1) * c, y1: d.y + (edge(d) + 1) * s, x2: ex - 2 * c, y2: ey - 2 * s } : null;
+    const line = gap > NO_LINE ? { x1: d.x + (d.r + 1) * c, y1: d.y + (d.r + 1) * s, x2: ex - 2 * c, y2: ey - 2 * s } : null;
     if (line && (boxes.some((b) => lineOnBox(line, b)) || lineOnMark(line) || reach(line) - LEAD > LINE_MAX)) continue;
     // Far from its mark a label over land reads as that land's.
     if (line && !inland && wet(box) < .5) continue;
@@ -2091,9 +2079,9 @@ function spotsFor({ d, w }, around, boxes, inland = false, clear = 2) {
   for (let k = 0; k < ATL_ROWS; k++) {
     // A nearly level leader is drawn level.
     const row = ATL_TOP + k * ATL_Y, y = Math.abs(row - d.y) < ATL_Y ? d.y : row, x0 = right - w, box = { x0, x1: right, y0: y - LABEL_H / 2, y1: y + LABEL_H / 2 }, dx = right + 2 - d.x, dy = y - d.y, len = Math.hypot(dx, dy);
-    if (dx >= 0 || x0 < 8 || box.y1 > P.h - 6 || len <= edge(d) + 2) continue;
+    if (dx >= 0 || x0 < 8 || box.y1 > P.h - 6 || len <= d.r + 2) continue;
     if (boxes.some((b) => boxesMeet(box, b)) || hitMark(box)) continue;
-    const line = { x1: d.x + (edge(d) + 1) * dx / len, y1: d.y + (edge(d) + 1) * dy / len, x2: right + 2, y2: y };
+    const line = { x1: d.x + (d.r + 1) * dx / len, y1: d.y + (d.r + 1) * dy / len, x2: right + 2, y2: y };
     if (boxes.some((b) => lineOnBox(line, b)) || lineOnMark(line)) continue;
     out.push({ box, x: x0 + 4, y, line, cost: reach(line) - ATL_PULL, atl: true });
   }
@@ -2187,11 +2175,10 @@ function heat() {
 // Every city of a merged mark and every validator on a mark is named; a long list takes two columns. Two decimals throughout, so parts add up to the whole.
 function tipMark(m) {
   const list = (rows) => { const html = rows.map(([k, w]) => tipRow(k, finePct(w))).join(""); return rows.length > 6 ? `<div class="cols">${html}</div>` : html; };
-  const lows = m.vs.filter(lowHost).sort((a, b) => rateOf(a) - rateOf(b)).map((v) => tipRow(`${v.moniker}, checks answered`, pct(rateOf(v), 2))).join("");
   const base = tipRow("Voting power", finePct(m.vp)) + tipRow("Fibre hosts", m.vs.length), names = list([...m.vs].sort((a, b) => shareOf(b) - shareOf(a)).map((v) => [v.moniker, shareOf(v)]));
-  if (m.cities.length > 1) return tipHead(m.name) + base + list(m.cities.map((c) => [c.g.c.name, sum(c.g.vs, shareOf)])) + names + lows;
+  if (m.cities.length > 1) return tipHead(m.name) + base + list(m.cities.map((c) => [c.g.c.name, sum(c.g.vs, shareOf)])) + names;
   const place = short(m.head.c.country);
-  return tipHead(m.name) + (place.includes(m.head.c.name) ? "" : tipRow(place)) + base + names + lows;
+  return tipHead(m.name) + (place.includes(m.head.c.name) ? "" : tipRow(place)) + base + names;
 }
 
 /* ---------- map focus ---------- */
@@ -2202,7 +2189,7 @@ function drawIso(f) {
   svg.classList.toggle("iso", !!only);
   L.iso.textContent = ""; L.isoLabs.textContent = ""; P.iso = []; P.isoBoxes = [];
   P.marks.forEach((m) => { m.gone = m.cities.some((c) => keys.has(c.g.k)); });
-  [...$$(".m", L.base), ...$$(".m", L.rings)].forEach((e) => e.classList.toggle("gone", e.mark.gone));
+  $$(".m", L.base).forEach((e) => e.classList.toggle("gone", e.mark.gone));
   if (!only) return;
   const marks = marksOf(focus);
   // One teal holds in focus too: a deep step would vanish on the land. Only picks need telling apart.
@@ -2240,7 +2227,6 @@ function renderKey() {
     el("circle", { r }, ks); keyBox.insertAdjacentHTML("beforeend", `<span>${label}</span>`);
   });
   keyBox.insertAdjacentHTML("beforeend", `<span class="of">${vp ? "of voting power" : "Fibre hosts"}</span>`);
-  if (N().validators.some((v) => v.has_host && lowHost(v))) keyBox.insertAdjacentHTML("beforeend", `<div class="mlow"><i></i><span>a place with a host under 99% of checks</span></div>`);
 }
 function draw() {
   svg.setAttribute("aria-label", `World map of Fibre hosts, sized by ${S.weigh === "vp" ? "voting power" : "number of hosts"}`);

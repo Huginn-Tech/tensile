@@ -13,7 +13,7 @@ import path from "node:path";
 const API = `http://${process.env.API_LISTEN || "127.0.0.1:8081"}/v1`;
 const NET = process.env.NETWORK || "mocha";
 const DIR = process.env.STATE_DIRECTORY || ".";
-const WINDOWS = ["7d", "30d", "all"];
+const WINDOWS = ["24h", "7d", "30d", "all"];
 // The last day of settlements is read again each run: a recent blob's availability is still being decided.
 const REREAD_S = 24 * 3600;
 // A validator's own page costs the database a third of a second, and what is taken from it moves slowly.
