@@ -12,7 +12,7 @@
  */
 
 /** ms between two endorsers named */
-export const ROTATE_MS = 1000;
+export const ROTATE_MS = 100;
 /** ms a new or changed endpoint holds the pill */
 export const HOLD_MS = 12000;
 
@@ -86,10 +86,11 @@ export class PillPicker<E> {
     this.epUntil = now + HOLD_MS;
   }
 
-  /** the next endorser (every ROTATE_MS), until the last, which stays; not while an endpoint holds the pill */
-  tick(now: number): void {
-    if (now < this.epUntil || !this.order || this.i >= this.order.length - 1) return;
+  /** the next endorser (every ROTATE_MS), until the last, which stays; not while an endpoint holds the pill. Whether it moved */
+  tick(now: number): boolean {
+    if (now < this.epUntil || !this.order || this.i >= this.order.length - 1) return false;
     this.i++;
+    return true;
   }
 
   /** what the pill names now */

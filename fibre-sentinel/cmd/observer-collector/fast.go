@@ -84,12 +84,17 @@ type fastTick struct {
 	files []fastFile
 	// lastErr is the failures the last tick logged, joined.
 	lastErr string
+	// landed, when set, is told when a tick stored a new blob, after its
+	// payment: the API then reads the tip at once (internal/status, MarkBlob).
+	landed func()
 }
 
 type fastFile struct {
 	what string
 	path string
 	tail func(*store.Store, string, time.Time) (ingest.Result, error)
+	// blobs is the file a new blob comes from.
+	blobs bool
 	// seen is the file as it was when it was last read to its end; nil
 	// before the first read, or while the file is missing.
 	seen os.FileInfo
@@ -103,7 +108,7 @@ func newFastTick(st *store.Store, statePath, costPath, pubsPath, payPath string,
 		state: fastFile{what: "state", path: statePath},
 		files: []fastFile{
 			{what: "tx costs", path: costPath, tail: ingest.TxCosts},
-			{what: "publications", path: pubsPath, tail: ingest.Publications},
+			{what: "publications", path: pubsPath, tail: ingest.Publications, blobs: true},
 			{what: "payments", path: payPath, tail: ingest.Payments},
 		},
 	}
@@ -113,6 +118,7 @@ func newFastTick(st *store.Store, statePath, costPath, pubsPath, payPath string,
 func (f *fastTick) run(now time.Time) {
 	// every failure, for the log; failed, the ones the status file is told
 	var errs, failed []string
+	stored := false
 	if fi, same := unchanged(f.state.seen, f.state.path); !same {
 		if err := ingest.State(f.st, f.state.path, now); err != nil {
 			errs = append(errs, "state: "+err.Error())
@@ -136,6 +142,10 @@ func (f *fastTick) run(now time.Time) {
 		if r.Deferred == "" {
 			ff.seen = fi
 		}
+		stored = stored || ff.blobs && r.Inserted > 0
+	}
+	if stored && f.landed != nil {
+		f.landed()
 	}
 	if msg := strings.Join(errs, "; "); msg != f.lastErr {
 		for _, e := range errs {

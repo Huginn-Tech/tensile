@@ -1535,6 +1535,9 @@ export type Tip = {
   server_time: string;
 };
 
+/** a blobs event of /v1/tip/stream: a new block's rows, as /v1/blobs?endorsers=1 gives them, and the settlements on record */
+export type TipBlobs = { blobs: Blob[]; total: number };
+
 /** one validator's newest successful endpoint registration, as its endpoint_history words it: its first, or a change */
 export type TipEndpointEvent = {
   /** the consensus address, as a Validator's address */

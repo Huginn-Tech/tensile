@@ -745,11 +745,15 @@ GET /v1/tip                   the newest block read, the newest blob stored (lat
                               pages poll it, and the registrations walked only when host_events
                               gains a row (its highest rowid) or a minute on
 GET /v1/tip/stream            /v1/tip as server-sent events: "tip" (the same JSON) on connecting
-                              and whenever a field but server_time changes, "ping" every 15 s,
+                              and whenever a field but server_time changes, "blobs" in front of a
+                              tip that names a new blob (the block's rows, up to 16, as
+                              /v1/blobs?endorsers=1 gives them, and the total), "ping" every 15 s,
                               "end" before the API closes it, within an hour; one producer reads
-                              /v1/tip's cache while any stream is open and hands each change to
-                              every stream, so a stream asks the node and the store nothing of
-                              its own; at most -tip-streams (2,000) open, a 503 past it
+                              /v1/tip's cache while any stream is open, at once when the collector
+                              says a new blob is stored (status/blob.mark, which the API watches),
+                              and hands each change to every stream, so a stream asks the node and
+                              the store nothing of its own and a block's rows are read once however
+                              many pages are open; at most -tip-streams (2,000) open, a 503 past it
                               (tip_streams in /v1/health fails on refusals in 5 minutes of 15;
                               the counts are in the journal, not there); a producer that panics
                               is logged and ends the streams until a restart

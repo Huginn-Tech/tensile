@@ -1,16 +1,18 @@
 "use client";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { type Validator, type TipEndpointEvent, API_BASE, ago, utcWord, int } from "@/lib/api";
-import { onTip, useEndpointEvent } from "@/lib/tip";
+import { onTip, settledAt, useEndpointEvent } from "@/lib/tip";
 import { validatorHref } from "@/lib/addr";
 import type { Hosting } from "@/lib/hosting";
 import { FRAME, COUNTRIES, project, countryPoint } from "@/lib/map/project";
 import { countryName } from "@/components/Flag";
 import { Eye } from "@/components/Metrics";
 import { type EndpointState, endpointState, isDown, readiness } from "@/components/Readiness";
-import { Flasher, onArrival, placesOf, type Arrival, type ArrivedBlob, type Flash } from "@/lib/mapflash";
+import { Flasher, burstsOf, onArrival, placesOf, type Arrival, type ArrivedBlob, type Flash } from "@/lib/mapflash";
 import { Burst, type BurstPlace, type Where, type Els } from "@/lib/mapburst";
+import { slide } from "@/lib/conveyor";
 import { PillPicker, HOLD_MS, ROTATE_MS } from "@/lib/pillpick";
 
 /**
@@ -37,7 +39,7 @@ import { PillPicker, HOLD_MS, ROTATE_MS } from "@/lib/pillpick";
  * counts in the centre. With each beat of the recent blobs (a block's blobs,
  * as they come: lib/pace.ts) the places of the validators that endorsed
  * them burst on the map (lib/mapflash.ts, lib/mapburst.ts), and the pill
- * names them, one a second (lib/pillpick.ts); a validator's new or changed
+ * names them, ten a second (lib/pillpick.ts); a validator's new or changed
  * endpoint (/v1/tip) takes the pill for 12 s, and its place bursts. The map has no heading
  * of its own: the counts say what
  * it shows, and the panel's one heading on the subject is "Current Fibre
@@ -239,11 +241,12 @@ function EventPill({ ev, pulse, v, place }: { ev: TipEndpointEvent; pulse: boole
 }
 
 /** a beat of the recent blobs as the pill names it: its newest blob, its block's time, its blobs, their endorsers (null while unknown), and whether it came while the page is open (live) or is what the grid opened with */
-type PillBeat = { key: string; at: string; height: number; blobs: number; endorsers: string[] | null; live: boolean };
+/** heard: when the page heard of the beat, on the observer's clock, for its age (lib/tip.ts, settledAt) */
+type PillBeat = { key: string; at: string; height: number; blobs: number; endorsers: string[] | null; live: boolean; heard?: number };
 
 /** "12 s ago" under a minute, the pill's clock after, by the observer's clock (now: the reader's, corrected by the tip's skew) */
-function secondsAgo(t: string, now: number): string {
-  const s = Math.floor((now - Date.parse(t)) / 1000);
+function secondsAgo(t: number, now: number): string {
+  const s = Math.floor((now - t) / 1000);
   if (!Number.isFinite(s)) return "";
   if (s < 1) return "just now";
   if (s < 60) return `${s} s ago`;
@@ -270,7 +273,9 @@ function useReducedMotion(): boolean {
 /**
  * The pill: an endorser of the newest beat at a time, "B-Harvest endorsed · 12 s ago", a new one each
  * ROTATE_MS in a shuffled order, each once (lib/pillpick.ts); with reduced motion one name a beat. The names
- * cross-fade in place, every name of the beat stacked in one cell, the cell easing to the width of the name shown. A
+ * change in place with no fade, every name of the beat stacked in one cell as wide as the widest, so at that pace
+ * nothing beside them moves and nothing is measured. The name is a plain link with the app's router on a plain click:
+ * one of Next's links per name would be mounted, and prefetch, ten times a second. A
  * new beat takes the pill in the frame the grid moves, and its dot pops (not for what the grid opened with); a
  * validator's new or changed endpoint takes it for HOLD_MS (ev, at epAt) and pops it too. A beat whose endorsers are
  * not known yet is named once they are; until then the pill keeps what it names, its beat with it (named), or waits
@@ -302,20 +307,25 @@ function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost, motion, skew }: {
   useLayoutEffect(() => {
     if (ev && epAt) { pk.endpoint(ev, epAt); render((n) => n + 1); }
   }, [epAt]); // eslint-disable-line react-hooks/exhaustive-deps
-  // a name a second, with motion and while not held; the age on screen moves with it, or every 15 s without
+  // the next name every ROTATE_MS, with motion and while not held; the age on screen once a second, or every 15 s
+  // without motion. Rendered only when one of them moves, so a round that has ended costs a render a second.
   useEffect(() => {
+    let since = 0;
     const t = window.setInterval(() => {
-      if (motion && !heldRef.current) pk.tick(Date.now());
-      render((n) => n + 1);
+      if (document.hidden) return;
+      since += ROTATE_MS;
+      const moved = motion && !heldRef.current && pk.tick(Date.now());
+      if (moved || !motion || since >= 1000) { since = 0; render((n) => n + 1); }
     }, motion ? ROTATE_MS : 15000);
     return () => window.clearInterval(t);
   }, [pk, motion]);
-  // the names' cell as wide as the name shown, after every render: one measure a second
-  const whoRef = useRef<HTMLSpanElement>(null);
-  useLayoutEffect(() => {
-    const el = whoRef.current, on = el?.querySelector<HTMLElement>(":scope > .on");
-    if (el && on) el.style.width = `${Math.ceil(on.getBoundingClientRect().width)}px`;
-  });
+  const router = useRouter();
+  const open = (e: React.MouseEvent, href: string) => {
+    // a plain click stays in the app; a modified or middle click is the browser's
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    router.push(href);
+  };
   // the beat of the name shown: a newer one whose endorsers are not known yet waits, out of the pill's title and dot
   const named = useRef<PillBeat | null>(null);
   const now = Date.now();
@@ -330,7 +340,7 @@ function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost, motion, skew }: {
     onFocus: () => setHeld(true),
     onBlur: (e: React.FocusEvent<HTMLElement>) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHeld(false); },
   };
-  const ago = (t: string) => secondsAgo(t, now + skew());
+  const ago = (t: string) => secondsAgo(b ? settledAt(t, b.height, b.heard) : Date.parse(t), now + skew());
   // nothing to name yet: a placeholder until the tip answers and the newest beat's endorsers are known; once the tip
   // has answered, naming no blob and no endpoint, no pill (a network whose Fibre has just gone live)
   if (!s || s.kind === "wait") return ev === undefined || s ? <p className="cm-ev"><span className="cm-ev-t wait">{" "}</span></p> : null;
@@ -341,9 +351,9 @@ function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost, motion, skew }: {
     <p className="cm-ev" {...hold}>
       <i key={s.key} className={`cm-ev-dot${b?.live ? " pop" : ""}`} aria-hidden="true" />
       <span className="cm-ev-t" title={`${who.name} endorsed ${many ? "blobs" : "the blob"}${at} · settled ${utcWord(s.at)}`}>
-        <span className="cm-ev-who" ref={whoRef}>
+        <span className="cm-ev-who">
           {names.map((w) => (w === s.who
-            ? <span key={w} className="on"><Link href={who.href}>{who.name}</Link></span>
+            ? <span key={w} className="on"><a href={who.href} onClick={(e) => open(e, who.href)}>{who.name}</a></span>
             : <span key={w} aria-hidden="true">{nameOf(w).name}</span>))}
         </span>
         {" "}endorsed
@@ -355,9 +365,10 @@ function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost, motion, skew }: {
 
 /**
  * The map's bursts (lib/mapburst.ts on the canvas fx), driven by the recent blobs' moves (lib/mapflash.ts): each move
- * is heard (onMove, for the pill, every time), and the endorsers of the blobs it brought in, which the grid's own read
- * carries (/v1/blobs?endorsers=1), burst their places with the move. Of a move that brings several blocks (a stall's
- * catch-up) only the newest block bursts; the older are marked seen. Nothing bursts with reduced motion (motion
+ * is heard (onMove, for the pill, every time), and the endorsers of the blobs it brought in, which the rows on the tip
+ * stream or the grid's own read carry (/v1/blobs?endorsers=1), burst their places with the move. Of a move that brings
+ * several blocks (a stall's catch-up) only the newest block bursts; the older are marked seen. A block of several blobs bursts once for each,
+ * at the pace its squares come onto the grid (lib/conveyor.ts). Nothing bursts with reduced motion (motion
  * false; it is heard again when that changes), while the page is hidden, or for what it missed meanwhile once it is
  * shown again (the tip's height then, from the page's one tip). Returns a ref whose fire() bursts other places (a new
  * endpoint's).
@@ -374,8 +385,9 @@ function useBurst(fx: React.RefObject<HTMLCanvasElement | null>, motion: boolean
     let backAt = 0;
     const show = (fl: Flash | null) => {
       if (!fl || !burst || document.hidden || fl.endorsers.length === 0) return;
-      const { places } = placesOf(fl.endorsers, latest.current.owners());
-      burst.fire([...places].map(([id, n]) => ({ id, n })));
+      const owners = latest.current.owners();
+      const bursts = burstsOf(fl).map((es) => [...placesOf(es, owners).places].map(([id, n]) => ({ id, n })));
+      burst.run(bursts, slide(fl.blobs.length, fl.blobs.length).ms / bursts.length);
     };
     const off = onArrival((a) => {
       latest.current.onMove(a);
@@ -645,7 +657,7 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
     const top = a.blobs.reduce((m, b) => Math.max(m, b.settlement_height), 0);
     const block = a.blobs.filter((b) => b.settlement_height === top);
     const nb = block.reduce((m, b) => ((b.settlement_tx_index ?? 0) > (m.settlement_tx_index ?? 0) ? b : m));
-    const beat: PillBeat = { key: nb.promise_hash, at: nb.settlement_time ?? "", height: top, blobs: block.length, endorsers: unionOf(block), live: a.live };
+    const beat: PillBeat = { key: nb.promise_hash, at: nb.settlement_time ?? "", height: top, blobs: block.length, endorsers: unionOf(block), live: a.live, heard: a.live ? Date.now() + skew.current : undefined };
     setBeatNow(beat);
     // what the grid opened with was read without its endorsers: its newest block's, once
     if (a.id === 0 && beat.endorsers === null) {

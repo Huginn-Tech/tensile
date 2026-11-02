@@ -3,7 +3,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { API_BASE, isDown, lost, noAnswer, onBack, onReach, reach, useApi, type Blob, int, pctOf, bytes, whenUTC, utcWord } from "@/lib/api";
-import { useTip } from "@/lib/tip";
+import { onBlobs, settledAt, useTip } from "@/lib/tip";
 import RollNumber, { reducedMotion } from "@/components/RollNumber";
 import Info from "@/components/Info";
 import { lane } from "@/lib/status";
@@ -60,12 +60,13 @@ import { slide, frames, enters } from "@/lib/conveyor";
  * While the pointer is on the grid or a square has focus, the grid holds
  * still: reads go on, and letting go brings what came in in one move.
  *
- * Reading the list: GET /v1/blobs as soon as the tip names a newest blob the
- * grid does not hold. The tip is the page's one (useTip, lib/tip.ts), so no
- * request of its own, and its latest_blob is the newest blob Tensile has
- * stored, which the collector stores within about a second of the scanner
- * reading its block: a new blob is on the grid a few seconds after its block,
- * and while none arrives the list is not read at all. Besides that, one read
+ * Reading the list: the tip stream brings a new block's rows (onBlobs,
+ * lib/tip.ts), so a new blob is on the grid with no read of its own, as its
+ * block settles. A page with no stream, or one that missed the rows, reads
+ * GET /v1/blobs as soon as the tip names a newest blob the grid does not hold:
+ * the tip is the page's one (useTip, lib/tip.ts), so no request of its own,
+ * and its latest_blob is the newest blob Tensile has stored. While none
+ * arrives the list is not read at all. Besides that, one read
  * every 30 s, for an API whose tip does not name its newest blob and for a
  * chain that stops; and never while the tab is hidden. Each read asks for
  * about as many rows as the last one brought, and the API's total says
@@ -84,8 +85,8 @@ const FALLBACK_MS = 30000;
 /** the least time between two reads of the whole grid for its statuses (recheck), so one that fails is not asked every 5 s */
 const RECHECK_MS = 30000;
 
-/** at: when the read that brought the blob's record was made */
-type Cell = { b: Blob; seq: number; at: number };
+/** at: when the read that brought the blob's record was made; came: when it came in, for a blob that came while the page was open */
+type Cell = { b: Blob; seq: number; at: number; came?: number };
 type Feed = {
   /** newest arrival first, at most CELLS; seq counts arrivals on this page, the newest highest */
   cells: Cell[];
@@ -131,10 +132,11 @@ function merge(s: Feed, p: Page, at: number, extra = 0): { feed: Feed; fresh: nu
     return nb ? { ...c, b: nb.endorsers || !c.b.endorsers ? nb : { ...nb, endorsers: c.b.endorsers }, at } : c;
   });
   const fresh = p.blobs.filter((b) => !known.has(b.promise_hash)).slice(0, CELLS);
-  const total = Number.isFinite(p.total) ? p.total : s.total;
+  // a read that left before the stream's last rows came back behind them: the total does not step back
+  const total = Number.isFinite(p.total) ? Math.max(p.total, s.total ?? 0) : s.total;
   // the oldest of the new takes the lowest seq, the newest the highest
   const n = fresh.length + (fresh.length ? Math.max(0, extra) : 0);
-  const add: Cell[] = fresh.map((b, i) => ({ b, seq: s.next + n - 1 - i, at }));
+  const add: Cell[] = fresh.map((b, i) => ({ b, seq: s.next + n - 1 - i, at, came: s.loaded ? at : undefined }));
   return {
     feed: { cells: [...add, ...kept].slice(0, CELLS), next: s.next + n, total, loaded: true, error: null },
     fresh: fresh.length,
@@ -192,28 +194,35 @@ function useBlobFeed(mark: string | undefined) {
         if (whole.current) lastWhole.current = at;
         whole.current = false;
         try {
-          const before = cur.current;
+          // the feed as it stands when each answer lands, never as it stood when the read left: the stream's rows
+          // may have come in meanwhile, and a read is not to take them back off the grid
+          const allNew = (pg: Page) => {
+            const known = new Set(cur.current.cells.map((c) => c.b.promise_hash));
+            return pg.blobs.length > 0 && pg.blobs.every((b) => !known.has(b.promise_hash));
+          };
           // how many settled since the last read, by the API's total
-          const known = new Set(before.cells.map((c) => c.b.promise_hash));
-          const allNew = (pg: Page) => pg.blobs.length > 0 && pg.blobs.every((b) => !known.has(b.promise_hash));
+          const since = (pg: Page) => {
+            const f = cur.current;
+            return f.loaded && f.total != null && Number.isFinite(pg.total) ? pg.total - f.total : 0;
+          };
           let page = await readPage(lim, named);
-          const since = (pg: Page) => (before.loaded && before.total != null && Number.isFinite(pg.total) ? pg.total - before.total : 0);
           let delta = since(page);
           // More arrived than the page returned, all of it new: one more read fills the squares. The second
           // page, newest first, holds the first, so it replaces it. A block that settles between the two reads
           // pushes the second page's oldest rows past its end, and its total says so: then once more, rather than
           // leave those blobs off the grid.
-          for (let i = 0; i < 2 && before.loaded && allNew(page) && delta > page.blobs.length && page.blobs.length < CELLS; i++) {
+          for (let i = 0; i < 2 && cur.current.loaded && allNew(page) && delta > page.blobs.length && page.blobs.length < CELLS; i++) {
             page = await readPage(Math.min(CELLS, delta), named);
             delta = since(page);
           }
           // what even that page had no room for is counted, not shown
-          const extra = before.loaded && allNew(page) ? Math.max(0, delta - page.blobs.length) : 0;
-          const { feed: f, fresh } = merge(before, page, at, extra);
+          const had = cur.current;
+          const extra = had.loaded && allNew(page) ? Math.max(0, delta - page.blobs.length) : 0;
+          const { feed: f, fresh } = merge(had, page, at, extra);
           apply(f);
           refused.current = 0;
           // ask next time for about as many as this time brought
-          const came = before.loaded ? Math.max(fresh, delta) : 0;
+          const came = had.loaded ? Math.max(fresh, delta) : 0;
           limit.current = Math.min(CELLS, Math.max(2, Math.ceil(came * 1.5) + 2));
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
@@ -242,14 +251,26 @@ function useBlobFeed(mark: string | undefined) {
     read();
     return () => { window.clearTimeout(retryT.current); window.clearTimeout(markT.current); };
   }, [read]);
+  // a new block's rows from the tip stream, on the grid with no read. A block the stream did not bring (this page fell
+  // behind it, or the block held more rows than an event) shows in the total, and a read fills it: rows laid over a
+  // gap would put newer squares under older ones
+  useEffect(() => onBlobs((p) => {
+    const f = cur.current;
+    if (!f.loaded || document.hidden) return;
+    const known = new Set(f.cells.map((c) => c.b.promise_hash));
+    const fresh = p.blobs.filter((b) => !known.has(b.promise_hash)).length;
+    if (fresh === 0) return;
+    if (f.total === null || p.total - f.total !== fresh) { self.current(); return; }
+    apply(merge(f, p, Date.now()).feed);
+  }), [apply]);
   // a read as soon as the tip names a newest blob the feed does not hold, within half a second at a time of the
   // page's own: the stream tells every open page of a blob in the same instant, and all their reads at once would
-  // be more than the site's proxy lets through together
+  // be more than the site's proxy lets through together. The rows it brought may be here by then.
   useEffect(() => {
     markRef.current = mark;
     if (mark === undefined || holds(cur.current, mark)) return;
     window.clearTimeout(markT.current);
-    markT.current = window.setTimeout(read, Math.random() * 500);
+    markT.current = window.setTimeout(() => { if (!holds(cur.current, mark)) read(); }, Math.random() * 500);
   }, [mark, read]);
   // the slow read, and one when the page comes back into view if a blob came while it was hidden or the slow
   // read fell due; and a read of the whole grid when a square's status may have moved on since its read (stale)
@@ -282,8 +303,8 @@ function nth(n: number): string {
  * "8s ago", "4m ago", "3h 5m ago", "2d ago", by the given clock: short, so the readout's heading, its blob's state
  * label and "settled 3h 5m ago" share one line in the card's width; the settlement's full time is on hover
  */
-function liveAgo(t: string, now: number): string {
-  const s = Math.floor((now - Date.parse(t)) / 1000);
+function liveAgo(t: number, now: number): string {
+  const s = Math.floor((now - t) / 1000);
   if (!Number.isFinite(s)) return "";
   if (s < 1) return "just now";
   if (s < 60) return `${s}s ago`;
@@ -324,21 +345,24 @@ function useFitHead() {
   return ref;
 }
 
-/** a blob's age on the observer's clock, every second while it is under a minute old, then every 15 s */
-function Age({ at, skew }: { at: string; skew: number }) {
+/**
+ * a blob's age on the observer's clock from when it settled (at, lib/tip.ts, settledAt), every second while it is under
+ * a minute old, then every 15 s; stamp is its block's own time, on hover
+ */
+function Age({ at, stamp, skew }: { at: number; stamp: string; skew: number }) {
   const [now, setNow] = useState(0);
   useEffect(() => {
     let t: number | undefined;
     const tick = () => {
       const n = Date.now() + skew;
       setNow(n);
-      const age = n - Date.parse(at);
+      const age = n - at;
       t = window.setTimeout(tick, age < 60000 ? 1000 - (Math.max(0, age) % 1000) : 15000);
     };
     tick();
     return () => window.clearTimeout(t);
   }, [at, skew]);
-  return now ? <span className="ov-when" title={`Settled ${utcWord(at)}`}>settled {liveAgo(at, now)}</span> : null;
+  return now ? <span className="ov-when" title={`Settled ${utcWord(stamp)}`}>settled {liveAgo(at, now)}</span> : null;
 }
 
 /** what the grid shows: a snapshot of the feed, and the last move into it */
@@ -539,6 +563,8 @@ export default function RecentBlobs() {
   const selAt = sel ? cells.findIndex((c) => c.b.promise_hash === sel) : -1;
   const blob = selAt >= 0 ? cells[selAt].b : latest;
   const isLatest = !!blob && blob.promise_hash === latest?.promise_hash;
+  // the moment the page heard of it, on the observer's clock, when it came while the page was open
+  const came = blob ? cells.find((c) => c.b.promise_hash === blob.promise_hash)?.came : undefined;
   // the endorsed voting power over the set's total at the promise height: the figure and its bar
   // the blob's state as the Blobs list words it: in its retention window, then what Tensile's reading found. From the
   // feed's own record of it: while the grid holds still under the pointer, reads go on, and a status read since counts
@@ -566,7 +592,7 @@ export default function RecentBlobs() {
     ? `The observer API did not answer (${feed.error}); the grid shows the last read.`
     : away ? "This browser is not reaching Tensile right now; the grid shows the last read and fills in once it does."
     : mark
-      ? "New blobs come in a few seconds after their block, while this page is open."
+      ? "New blobs come in as their block settles, while this page is open."
       : `New blobs come in every ${FALLBACK_MS / 1000} s while this page is open.`;
 
   const rows = Array.from({ length: ROWS }, (_, r) => r);
@@ -622,7 +648,7 @@ export default function RecentBlobs() {
         <h3 className="rb-read-h" ref={headRef}>
           <span className="ov-eyebrow">{isLatest || !blob ? "Latest blob" : `Blob · ${selAt === 0 ? "newest" : `${nth(selAt + 1)} newest`}`}</span>
           {st && <span className={`rb-st${st.tier === "kept" ? " ok" : st.tier === "hold" || st.tier === "fault" ? " bad" : ""}`} title={st.title}>{st.word}</span>}
-          {blob && <Age at={blob.settlement_time} skew={skew} />}
+          {blob && <Age at={settledAt(blob.settlement_time, blob.settlement_height, came === undefined ? undefined : came + skew)} stamp={blob.settlement_time} skew={skew} />}
         </h3>
         {/* the height as the figure, "Height · time · size" under it; the endorsed share before its bar, the ⅔ a blob
             needs as a bare needle on it (the providers' strip beside it says what the needle is), "Endorsed voting

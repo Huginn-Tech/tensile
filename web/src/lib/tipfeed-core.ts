@@ -1,4 +1,4 @@
-import type { Fetch, Tip } from "@/lib/api";
+import type { Fetch, Tip, TipBlobs } from "@/lib/api";
 
 /**
  * The tip (/v1/tip) for every reader on a page: the API's stream of it (/v1/tip/stream, server-sent events) in front of
@@ -7,7 +7,9 @@ import type { Fetch, Tip } from "@/lib/api";
  * with no React, no EventSource and no fetch of its own, for its test (tipfeed.test.mjs). Type imports only.
  *
  *  - opening: the stream is asked for, and the page polls meanwhile. Its first tip makes it live, and the polling stops.
- *  - live: the tips come from the stream, a tip or a ping at least every STALL_MS (the API pings every 15 s).
+ *  - live: the tips come from the stream, a tip or a ping at least every STALL_MS (the API pings every 15 s). A new
+ *    blob's rows come on it too, in front of the tip that names them, for whoever listens (onBlobs); a page that misses
+ *    them, or has no stream, reads /v1/blobs when the tip names a blob it does not hold.
  *  - a failure (the stream cannot be opened, is refused, ends or errs, sends a tip that cannot be read, or nothing for
  *    STALL_MS): the stream is closed and the page polls again at once; the stream is asked for again after retryMs,
  *    2 s doubling to a minute, from 2 s again once a stream had stayed live STEADY_MS. A stream that goes quiet twice
@@ -83,6 +85,10 @@ export type Deps = {
 export type Feed = {
   /** every answer to fn, as useApi's streams give them; the current one at once when there is one */
   subscribe(fn: (f: Fetch<Tip>) => void): () => void;
+  /** every blobs event of the stream to fn, from now on; returns the unsubscribe */
+  onBlobs(fn: (b: TipBlobs) => void): () => void;
+  /** the newest tip on the page, null before the first */
+  last(): Tip | null;
   phase(): Phase;
 };
 
@@ -90,6 +96,7 @@ export function createTipFeed(deps: Deps): Feed {
   const now = deps.now ?? Date.now;
   const random = deps.random ?? Math.random;
   const subs = new Set<(f: Fetch<Tip>) => void>();
+  const blobSubs = new Set<(b: TipBlobs) => void>();
   let last: Fetch<Tip> = { data: null, error: null, loading: true, fetchedAt: null };
   let phase: Phase = "asleep";
   let started = false;
@@ -166,6 +173,15 @@ export function createTipFeed(deps: Deps): Feed {
       emit();
     }));
     s.addEventListener("ping", mine(beat));
+    // a new blob's rows: rows that cannot be read cost only the read the tip behind them sets off
+    s.addEventListener("blobs", mine((e) => {
+      let got: TipBlobs | null = null;
+      try { got = JSON.parse(String(e.data)) as TipBlobs; } catch { /* below */ }
+      if (!got || !Array.isArray(got.blobs) || typeof got.total !== "number") return;
+      beat();
+      const b = got;
+      blobSubs.forEach((fn) => fn(b));
+    }));
     // the end of the stream's life (an hour at most): another at once, which is no failure
     s.addEventListener("end", mine(() => {
       if (phase !== "live" || now() - liveSince < STEADY_MS) return fail();
@@ -224,6 +240,11 @@ export function createTipFeed(deps: Deps): Feed {
         }
       };
     },
+    onBlobs(fn) {
+      blobSubs.add(fn);
+      return () => { blobSubs.delete(fn); };
+    },
+    last: () => last.data,
     phase: () => phase,
   };
 }

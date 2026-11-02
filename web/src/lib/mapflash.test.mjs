@@ -1,6 +1,6 @@
 // mapflash.ts (npm test; node --test): which blobs flash the overview map's places, and when. The flash follows the
 // recent blobs' grid: only blobs that just came into it flash, each once, with the endorsers the latest blob's card
-// counts; a block's blobs flash once together; nothing flashes on load, after the page was hidden, or for a record
+// counts; a block's blobs are one flash of a burst each; nothing flashes on load, after the page was hidden, or for a record
 // that answers for a blob the grid does not show. The module is TypeScript with no imports, so the test compiles it
 // with the project's own TypeScript.
 import { test } from "node:test";
@@ -13,7 +13,7 @@ const load = (file) => {
   const js = ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 } }).outputText;
   return import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
 };
-const { Flasher, endorsersOf, placesOf, onArrival, announce } = await load("./mapflash.ts");
+const { Flasher, endorsersOf, placesOf, onArrival, announce, burstsOf, MAX_BURSTS } = await load("./mapflash.ts");
 
 // a validator set of 90: the first 70 hold rows, and of those the ones a blob's seed picks signed
 const VALS = Array.from({ length: 90 }, (_, i) => (i + 1).toString(16).padStart(40, "0"));
@@ -72,6 +72,26 @@ test("several blobs in one block: one flash for all of them, once every record i
   assert.deepEqual(sorted(done.endorsers), sorted(union), "the union of their endorsers");
   for (const x of done.blobs) assert.equal(x.endorsers, x.card);
   assert.equal(f.record(bs[3].row.promise_hash, endorsersOf(bs[3].assignments)), null, "never twice");
+});
+
+test("a block's bursts: one per blob, oldest first as the grid brings them, the last the newest", () => {
+  const f = new Flasher();
+  const bs = [blob(16, 210, 60), blob(15, 210, 62), blob(14, 210, 64)]; // newest first, as the grid gives them
+  f.arrive({ id: 1, blobs: bs.map((b) => b.row), live: true }, true);
+  let done = null;
+  for (const b of bs) done = f.record(b.row.promise_hash, endorsersOf(b.assignments)) ?? done;
+  assert.deepEqual(burstsOf(done), [...bs].reverse().map((b) => endorsersOf(b.assignments)));
+});
+
+test("a block of many blobs: at most MAX_BURSTS bursts, the oldest together, nobody left out; a blob without a record sends none", () => {
+  const fl = (lists) => ({ moves: [1], blobs: lists.map((who, i) => ({ hash: String(i), height: 1, endorsers: who ? who.length : null, who, card: null })), endorsers: [] });
+  const many = Array.from({ length: 9 }, (_, i) => [`v${i}`, "all"]); // newest first
+  const out = burstsOf(fl(many));
+  assert.equal(out.length, MAX_BURSTS);
+  assert.deepEqual(sorted(out[0]), ["all", "v5", "v6", "v7", "v8"], "the four oldest in the first burst, each endorser once");
+  assert.deepEqual(out[MAX_BURSTS - 1], many[0], "the newest blob last, on its own");
+  assert.deepEqual(burstsOf(fl([["a"], null, ["b"]])), [["b"], ["a"]]);
+  assert.deepEqual(burstsOf(fl([null])), []);
 });
 
 test("a record that answers after the grid moved flashes then; one for a blob the grid does not show never does", () => {

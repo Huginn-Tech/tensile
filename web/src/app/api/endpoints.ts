@@ -978,7 +978,7 @@ export const GROUPS: Group[] = [
         id: "tip-stream",
         path: "/v1/tip/stream",
         summary: "/v1/tip as server-sent events, sent as soon as it changes.",
-        desc: "A `tip` event, its data the answer /v1/tip gives on one line, comes on connecting and whenever a field other than `server_time` changes. A `ping` event comes every 15 seconds to keep the connection open, and an `end` event before the API closes it, within an hour: connect again.",
+        desc: "A `tip` event, its data the answer /v1/tip gives on one line, comes on connecting and whenever a field other than `server_time` changes. A `blobs` event comes in front of a tip that names a new blob: `blobs`, up to 16 of the block's rows as /v1/blobs?endorsers=1 gives them, and `total`, the settlements on record. A `ping` event comes every 15 seconds to keep the connection open, and an `end` event before the API closes it, within an hour: connect again.",
         params: [],
         errors: "503 while as many streams are open as the API allows; ask /v1/tip instead.",
         format: "text",

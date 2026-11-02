@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { API_BASE, TIP_MS, subscribe, type Fetch, type Tip, type TipEndpointEvent } from "@/lib/api";
+import { API_BASE, TIP_MS, subscribe, type Fetch, type Tip, type TipBlobs, type TipEndpointEvent } from "@/lib/api";
 import { createTipFeed, streamsOver, type Feed } from "@/lib/tipfeed-core";
 
 /**
@@ -67,6 +67,28 @@ export function useNewestBlob(): string | null {
  */
 export function onTip(fn: (f: Fetch<Tip>) => void): () => void {
   return tipFeed().subscribe(fn);
+}
+
+/** a new blob's rows as the page's stream brings them, without a render: the overview's grid. Returns the unsubscribe. */
+export function onBlobs(fn: (b: TipBlobs) => void): () => void {
+  return tipFeed().onBlobs(fn);
+}
+
+/** how far past its block's stamp a blob may be heard of and still be news; older, the page caught up on it */
+const HEARD_MS = 15000;
+
+/**
+ * When a blob settled, in ms on the observer's clock. A blob settles when its block is committed, about a block after
+ * the stamp its settlement_time carries, so the moment a page heard of it (heard, on the same clock) is the nearest
+ * measure of it. A page that did not hear of it takes the stamp and one block, the average over the blocks since by the
+ * page's tip; the stamp alone when the tip is at that block.
+ */
+export function settledAt(stamp: string, height: number, heard?: number): number {
+  const t = Date.parse(stamp);
+  if (heard !== undefined && heard >= t && heard - t < HEARD_MS) return heard;
+  const tip = tipFeed().last();
+  const blocks = tip?.block_time ? tip.height - height : 0;
+  return blocks > 0 ? t + (Date.parse(tip!.block_time!) - t) / blocks : t;
 }
 
 /**
