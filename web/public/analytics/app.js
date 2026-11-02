@@ -10,7 +10,6 @@ const siteTheme = () => (document.documentElement.dataset.theme === "light" ? "l
 shadow.host.dataset.theme = siteTheme();
 shadow.querySelector("#page").innerHTML = `<main class="page">
 <div class="bar"><h1>Analytics</h1><nav class="jump seg" aria-label="On this page"><i></i><button type="button" data-to="cost">What a blob costs</button><button type="button" data-to="publishers">Publishers</button><button type="button" data-to="hosting">Hosting</button></nav><div class="ctl"><span class="ctl-l"><span class="dt">Period</span></span><div class="seg" id="seg-win" role="group" aria-label="Period for usage, cost and publishers"></div><span class="hold"></span></div></div>
-<p class="lede"></p>
 
 <section class="sec" id="top" aria-label="Usage">
     <div class="grid">
@@ -53,7 +52,7 @@ shadow.querySelector("#page").innerHTML = `<main class="page">
   </section>
 
 <section class="sec" id="publishers" aria-label="Publishers">
-    <div class="sec-h"><h2>Publishers</h2><p></p></div>
+    <div class="sec-h"><h2>Publishers</h2></div>
     <div class="card pb-card">
       <div class="pb-share">
         <div class="pb-top"><div class="pb-labels"></div><div class="ctl pb-of"><span class="ctl-l">Bar shows</span><div class="seg" role="group" aria-label="Bar shows"></div></div></div>
@@ -350,9 +349,8 @@ const sorter = (opts, key, dir) => `<label class="ctl-l">Sort by<span class="sel
 
 /* ---------- header and foot: nobody's area ---------- */
 function chrome() {
-  const n = N(), kept = keptFor();
-  $(".lede").textContent = `Fibre lets anyone post data to Celestia as blobs.${kept ? ` Validators' hosts keep each blob for ${kept}.` : ""}`;
-  $("#foot").innerHTML = [`Data as of ${stamp(U().read_at)}`, `Hosts located ${stamp(n.hosting_looked_up_at)}`, "ASN data by IPtoASN"].map((t) => `<span>${esc(t)}</span>`).join("");
+  const how = touch() ? ["Tap a circle", "Tap a figure"] : ["Click rows", "Hover a heading or figure"];
+  $("#foot").innerHTML = `<span>${esc(`Data as of ${stamp(U().read_at)}`)}</span><span class="how"><span>${how[0]} to compare, up to ${MAX_PINS}</span><span>${how[1]} for what it means</span></span>`;
   $('#seg-win [data-v="30d"]').hidden = young(state.net);
   // In Hosting the switch would claim a period the section does not follow, so the pinned bar says what it does follow.
   $(".hold").textContent = `Hosts now, checks and shards ${young(state.net) ? "since launch" : "last 30 days"}`;
@@ -917,7 +915,6 @@ const TICKS = 6, TICK_W = 58, INSET = 18, SLOT = 82, H = 40, MID = H / 2, RULE_W
 const PITCH = 2, GAP = 1, DOT_EVERY = 3, FLOOR = 8, CEIL = 36, APART = 3, FEW = 3, REACH = 6, OVER = .03;
 // The height scale's possible tops; the first is the largest blob allowed.
 const TOPS = [2 ** 27, 2 ** 29, 2 ** 31, 2 ** 33, 2 ** 35];
-const WINDOW = { "7d": "last 7 days", "30d": "last 30 days", all: "since launch" };
 const S = { metric: "bytes", sort: "bytes", dir: -1, open: false, slices: [], seg: null };
 const COLS = [
   ["name", "Publisher", "w"], ["settlements", "Settlements", "a"], ["bytes", "Data · share", "d"],
@@ -1309,8 +1306,6 @@ function wire() {
 area("publishers", (why) => {
   if (why === "boot") wire();
   if (why === "net") { Object.assign(S, { metric: "bytes", sort: "bytes", dir: -1, open: false }); S.seg.sync(); }
-  const m = market();
-  $("#publishers .sec-h p").textContent = `${int(pubs().length)} of ${count(m.escrow_accounts, "escrow account")} settled blobs, ${WINDOW[M.state.win]}`;
   head();
   drawBar();
   drawTable();
@@ -1370,19 +1365,16 @@ const readyKnown = (g) => !silent(g) || g.ready_share >= READY_MIN;
 // A null never leads a column, in either direction.
 const SORT = {
   vp: (g) => g.vp, hosts: (g) => g.hosts, reach: (g) => g.reachability, served: srate,
-  ready: (g) => g.ready_hosts, vpready: (g) => (readyKnown(g) ? g.ready_share : null),
 };
 // These open on the worst figure, where the reader is looking for trouble.
-const WORST_LOW = new Set(["reach", "served", "ready", "vpready"]);
-// The ready column follows the weighing, so a count never stands alone under voting power.
-const readyKey = (w = S.weigh) => (w === "vp" ? "vpready" : "ready");
+const WORST_LOW = new Set(["reach", "served"]);
 const ordered = (rows) => [...rows].sort((a, b) => { const x = SORT[S.sort](a), y = SORT[S.sort](b); return (x == null) - (y == null) || S.dir * (x - y) || b.vp - a.vp; });
 const midOf = (a) => [...a].sort((x, y) => x - y)[a.length >> 1];
 
 let V = null;
 function members(g) {
   if (V.mem.has(g.key)) return V.mem.get(g.key);
-  const k = keyFn[S.by], match = g.key === "__all" ? () => true : g.key === "__rest" ? (v) => V.tailKeys.has(k(v)) : (v) => k(v) === g.key;
+  const k = keyFn[S.by], match = g.key === "__rest" ? (v) => V.tailKeys.has(k(v)) : (v) => k(v) === g.key;
   const out = N().validators.filter((v) => v.has_host && match(v));
   V.mem.set(g.key, out);
   return out;
@@ -1403,13 +1395,13 @@ function model() {
   const ranked = [...src].sort((a, b) => weight(b) - weight(a) || b.vp - a.vp), named = ranked.slice(0, RANKS), unnamed = ranked.slice(RANKS);
   const resting = S.sort === S.weigh && S.dir < 0, top = ordered(src).slice(0, SORTED_TOP), shown = new Set(top.map((g) => g.key));
   const tail = src.filter((g) => !shown.has(g.key));
-  const all = { ...agg(src, "__all", `All ${src.length} ${noun()}`), sum: true, lows: [], rep: sum(src, (g) => g.rep) };
+  const all = agg(src, "__all", "All");
   const rest = { ...agg(tail, "__rest", `${tail.length} more`), sum: true, lows: tail.flatMap((g) => g.lows).sort((a, b) => rateOf(a) - rateOf(b)), rep: sum(tail, (g) => g.rep) };
   // The scale is the weighing's, so a bar keeps its length through every sort. The others are a figure, or their bar would halve every other.
   const scale = weight(ranked[0]);
   V = { src, ranked, named, unnamed, top, tail, all, rest, scale, resting, tailKeys: new Set(tail.map((g) => g.key)), step: new Map(named.map((g, i) => [g.key, `var(--p${i + 1})`])), mem, byKey: new Map(),
     midChecks: midOf(hosted.map((v) => v.reach?.den ?? 0)) };
-  [...src, all, rest].forEach((g) => V.byKey.set(g.key, g));
+  [...src, rest].forEach((g) => V.byKey.set(g.key, g));
   src.forEach((g) => { g.win = windowOf(g); });
 }
 
@@ -1460,9 +1452,8 @@ function say() {
   const n = N(), t = n.totals, hosts = S.weigh === "hosts", lead = V.ranked.filter((g) => weight(g) === weight(V.ranked[0])), names = and(lead.map((g) => `<b>${esc(nameOf(g))}</b>`));
   const stop = toStop(V.src, t.voting_power), many = stop.n === 1 ? noun1() : `${stop.n} ${noun()}`;
   const why = hosts ? `${third(toThird(V.src, weight, t.hosts), noun1(), noun(), "Fibre hosts")}.` : stop.n ? `Minus the top ${many}, <b>${sharePct(stop.left)}</b> of it is left.` : "";
-  const need = !hosts && stop.n ? "A blob needs two thirds of voting power to settle." : "";
   const who = (where) => (hosts ? `${names} ${lead.length > 1 ? "have" : "has"} the most Fibre hosts, <b>${lead[0].hosts}</b> of ${t.hosts}${lead.length > 1 ? " each" : ""}.` : `${names} ${lead.length > 1 ? "host" : "hosts"} the most voting power, <b>${sharePct(shareOf(lead[0]))}</b>${lead.length > 1 ? " each" : where}.`);
-  sayWho.innerHTML = `<span class="lead">${who(mostly(lead[0]))}</span><small>${why}</small><small>${need}</small>`;
+  sayWho.innerHTML = `<span class="lead">${who(mostly(lead[0]))}</span><small>${why}</small>`;
   // One line: the place goes first, the row under the name still says it.
   const whoLine = $(".lead", sayWho);
   if (whoLine.scrollWidth > whoLine.clientWidth) whoLine.innerHTML = who("");
@@ -1709,38 +1700,31 @@ function vsNames(g, k = VS_NAMES) {
 const shardText = (g) => `${int(g.not_served)} of ${int(settled(g))}`;
 // A narrow row has no heads over it, so each figure carries its own name: the table's, period included.
 const periodNote = () => (M.young(state.net) ? scope() : "30d");
-const labelOf = () => { const vp = S.weigh === "vp"; return { own: vp ? "Voting power" : "Fibre hosts", other: vp ? "Fibre hosts" : "Voting power", reach: `Checks answered, ${periodNote()}`, served: `Blob shards served, ${periodNote()}`, ready: vp ? "Its power ready now" : "Hosts ready now" }; };
+const labelOf = () => { const vp = S.weigh === "vp"; return { own: vp ? "Voting power" : "Fibre hosts", other: vp ? "Fibre hosts" : "Voting power", reach: `Checks answered, ${periodNote()}`, served: `Blob shards served, ${periodNote()}` }; };
 // A share ready is a floor while any host stays silent, and says so in words. With next to nothing ready it gives no figure: 0.0% would read as a failure.
 const unheard = (g) => silent(g) && !g.ready_hosts && !g.not_ready_hosts;
 const readyParts = (g) => (!silent(g) ? ["", readyPct(g.ready_share)] : readyKnown(g) ? ["at least ", readyPct(Math.min(g.ready_share, .999))] : unheard(g) ? ["", "not reported"] : ["under ", "0.1%"]);
 const readyText = (g) => readyParts(g).join("");
-const readyCell = (g) => { const [floor, v] = readyParts(g); return floor ? `<span class="fl">${floor}</span>${v}` : v; };
 const weighText = (g) => (S.weigh === "vp" ? sharePct(shareOf(g)) : g.hosts);
 const otherText = (g) => (S.weigh === "vp" ? g.hosts : sharePct(shareOf(g)));
-const unrepShare = (g) => (g.rep < g.vp ? 1 - g.rep / g.vp : 0);
-// More of the row is silent than ready: the floor says little, so it must not read as a poor score.
-const thinFloor = (g) => silent(g) && g.vp - g.rep > g.ready_share * g.vp;
-// The whole's share of silence stands under its floor: alone, the floor reads as an outage.
-const unrepLine = (g) => (g.key !== "__all" || !silent(g) ? "" : `<small class="nr">${S.weigh === "vp" ? `${readyPct(unrepShare(g))} not reported` : `${g.not_reported_hosts} not reported`}</small>`);
 function cells(g) {
   const s = (k) => (S.sort === k ? " srt" : ""), vp = S.weigh === "vp", o = vp ? "hosts" : "vp", L = labelOf();
   return `<span class="k-n${s(o)}" data-t="${o}" data-l="${L.other}">${otherText(g)}</span>
     <span class="k-r${s("reach")}${g.reachability == null ? " nil" : g.reachability === 1 ? " full" : ""}" data-t="reach" data-l="${L.reach}">${lowMark(g)}${reachText(g)}</span>
-    <span class="k-s${s("served")}${settled(g) ? (srate(g) === 1 ? " full" : "") : " nil"}" data-t="served" data-l="${L.served}">${srateText(g)}</span>
-    <span class="k-v${s(readyKey())}${vp && (unheard(g) || thinFloor(g)) ? " nil" : ""}" data-t="ready" data-l="${L.ready}">${vp ? readyCell(g) : `${g.ready_hosts} of ${g.hosts}`}${unrepLine(g)}</span>`;
+    <span class="k-s${s("served")}${settled(g) ? (srate(g) === 1 ? " full" : "") : " nil"}" data-t="served" data-l="${L.served}">${srateText(g)}</span>`;
 }
 function row(g, kind) {
-  const pickable = kind === "lead" || kind === "tail", plain = kind === "sum" || kind === "rest", vb = plain ? "" : bar(weight(g) / V.scale);
+  const pickable = kind === "lead" || kind === "tail", vb = kind === "rest" ? "" : bar(weight(g) / V.scale);
   const mark = kind === "rest" ? `<button type="button" class="ex" aria-expanded="${S.open}" aria-label="${S.open ? "Hide" : "Show"} ${esc(g.name)}">${CHEV}</button>` : pickable ? `<button type="button" class="pk" data-t="name" aria-pressed="false" aria-label="Pick ${esc(g.name)}">${CHECK}</button>` : "";
   const code = S.by === "city" && pickable ? `<code>${esc(g.cc)}</code>` : "";
-  const rank = !V.resting ? "" : kind === "lead" ? V.top.indexOf(g) + 1 : kind === "tail" ? SORTED_TOP + ordered(V.tail).indexOf(g) + 1 : "", sub = kind === "sum" || kind === "rest" ? "" : subOf(g);
-  return `<div class="tr rw ${kind}${kind === "rest" && S.open ? " opened" : ""}" data-k="${esc(g.key)}"${pickable ? " data-p" : ""} style="--c:${kind === "sum" ? "var(--ink2)" : kind === "rest" ? "var(--ink3)" : rowTone(g)}">
-    <span class="k-a">${mark}${kind === "sum" ? "" : `<em>${rank}</em>`}<span class="nm"${pickable ? ' data-t="list"' : ""}>${esc(nameOf(g))}</span>${code}${sub ? `<small class="sub"${pickable ? ' data-t="list"' : ""}>${sub}</small>` : ""}</span>
-    <span class="vb"><b class="vv${S.sort === S.weigh ? " srt" : ""}" data-t="${S.weigh}" data-l="${labelOf().own}">${weighText(g)}</b>${kind === "sum" ? HINT() : vb}</span>
+  const rank = !V.resting ? "" : kind === "lead" ? V.top.indexOf(g) + 1 : kind === "tail" ? SORTED_TOP + ordered(V.tail).indexOf(g) + 1 : "", sub = kind === "rest" ? "" : subOf(g);
+  return `<div class="tr rw ${kind}${kind === "rest" && S.open ? " opened" : ""}" data-k="${esc(g.key)}"${pickable ? " data-p" : ""} style="--c:${kind === "rest" ? "var(--ink3)" : rowTone(g)}">
+    <span class="k-a">${mark}<em>${rank}</em><span class="nm"${pickable ? ' data-t="list"' : ""}>${esc(nameOf(g))}</span>${code}${sub ? `<small class="sub"${pickable ? ' data-t="list"' : ""}>${sub}</small>` : ""}</span>
+    <span class="vb"><b class="vv${S.sort === S.weigh ? " srt" : ""}" data-t="${S.weigh}" data-l="${labelOf().own}">${weighText(g)}</b>${vb}</span>
     ${cells(g)}</div>`;
 }
-// The road into Compare, and to what the figures mean, ending where the bars do. The sum row sticks with the head, so it stays in reach.
-const HINT = () => `<span class="hint"><span class="next" hidden><button type="button" class="clear">Clear picks</button></span><span class="ask">${M.touch() ? "Tap a circle" : "Click rows"} to compare<span class="up">, up to ${MAX_PINS}</span></span><span class="ask2">${M.touch() ? "Tap" : "Hover"} <span class="up">${M.touch() && M.narrow() ? "a figure" : "a heading or figure"} </span>for what it means</span><span class="ask3" hidden>Pick one more</span></span>`;
+// What one pick leaves to do, in the head, over the bars and ending where they do.
+const HINT = () => `<span class="hint"><span class="ask3" hidden>Pick one more</span><span class="next" hidden><button type="button" class="clear">Clear picks</button></span></span>`;
 // A narrow list is long and Compare stands under it, so the picks ride along at the foot of the screen.
 const TRAY = `<div class="tray"><span class="tray-n"></span><button type="button" class="go">Compare</button><button type="button" class="clear">Clear picks</button></div>`;
 const firstHead = () => (prov() ? "Provider" : S.by === "country" ? "Country" : "City");
@@ -1748,8 +1732,8 @@ function head() {
   const th = (k, name, cls = "", tail = "") =>
     `<button type="button" class="h${cls}${S.sort === k ? " on" : ""}${S.sort === k && S.dir > 0 ? " asc" : ""}" data-s="${k}" aria-pressed="${S.sort === k}" aria-label="Sort by ${name}"><span class="h1"><span${HEAD[k] ? ' class="dt"' : ""}>${name}</span>${tail}</span></button>`;
   const vp = S.weigh === "vp", per = M.young(state.net) ? `<span class="per"><br>${scope()}</span>` : `<span class="per">, 30d</span>`;
-  const L = labelOf(), sorts = [[S.weigh, L.own], [vp ? "hosts" : "vp", L.other], ["reach", L.reach], ["served", L.served], [readyKey(), L.ready]];
-  return `<div class="tr th"><span class="k-a"><span class="fh">${firstHead()}</span></span>${th(S.weigh, vp ? "Voting power" : "Fibre hosts", " wt")}${vp ? th("hosts", "Fibre hosts") : th("vp", "Voting power")}${th("reach", "Checks answered", "", per)}${th("served", "Blob shards served", "", per)}${th(readyKey(), vp ? "Its power ready now" : "Hosts ready now")}</div><div class="sorter">${M.sorter(sorts, S.sort, S.dir)}</div>`;
+  const L = labelOf(), sorts = [[S.weigh, L.own], [vp ? "hosts" : "vp", L.other], ["reach", L.reach], ["served", L.served]];
+  return `<div class="tr th"><span class="k-a"><span class="fh">${firstHead()}</span></span>${th(S.weigh, vp ? "Voting power" : "Fibre hosts", " wt")}${vp ? th("hosts", "Fibre hosts") : th("vp", "Voting power")}${th("reach", "Checks answered", "", per)}${th("served", "Blob shards served", "", per)}${HINT()}</div><div class="sorter">${M.sorter(sorts, S.sort, S.dir)}</div>`;
 }
 function render() {
   model();
@@ -1757,7 +1741,7 @@ function render() {
   box.dataset.by = S.by;
   box.classList.toggle("young", M.young(state.net));
   say();
-  list.innerHTML = `<div class="top">${head()}${row(V.all, "sum")}</div>`
+  list.innerHTML = `<div class="top">${head()}</div>`
     + ordered(V.top).map((g) => row(g, "lead")).join("")
     + (V.tail.length ? row(V.rest, "rest") + `<div class="tailbox${S.open ? " open" : ""}"><div>${ordered(V.tail).map((g) => row(g, "tail")).join("")}</div></div>` : "") + TRAY;
   // The way back from an open tail stops under the head, whose height differs by width.
@@ -1793,8 +1777,6 @@ function syncPicks() {
   $$(".tr[data-p]", list).forEach((r) => { const on = p.includes(r.dataset.k), tone = rowTone(V.byKey.get(r.dataset.k)); r.classList.toggle("on", on); r.style.setProperty("--c", tone); r.style.setProperty("--on", inkOn(tone)); $(".pk", r).setAttribute("aria-pressed", on); });
   const any = !!(state.pinned.length || S.picks.length);
   $(".hint .next", list).hidden = !any || open;
-  $(".hint .ask", list).hidden = any;
-  $(".hint .ask2", list).hidden = any;
   $(".hint .ask3", list).hidden = !any || open;
   const tray = $(".tray", list);
   tray.classList.toggle("on", any);
@@ -1810,7 +1792,7 @@ function syncPicks() {
 // Only a hover dims: a pick must not grey out the rows still to choose from.
 function paintRows() {
   const h = S.hot, set = h && new Set(h.vs); let n = 0;
-  $$(".tr.rw:not(.sum)", list).forEach((r) => {
+  $$(".tr.rw", list).forEach((r) => {
     const g = V.byKey.get(r.dataset.k), on = !!h && (h.key === r.dataset.k || (h.key !== "__rest" && !!g && h.from !== "row" && members(g).some((v) => set.has(v))));
     n += on; r.classList.toggle("lit", on);
   });
@@ -1820,7 +1802,7 @@ function paintRows() {
 }
 
 /* ---------- head to head ---------- */
-const VS_ROW = 62, VS_ROW_MAX = 104, VS_NAMES_PHONE = 3;
+const VS_ROW = 54, VS_ROW_MAX = 104, VS_NAMES_PHONE = 3;
 // The table's own heads, period included, so one figure never has two names.
 const METRIC = () => { const per = M.young(state.net) ? scope() : "30d"; return [["vp", "Voting power"], ["hosts", "Fibre hosts"], ["geo", ""], ["reach", `Checks answered, ${per}`], ["served", `Blob shards served, ${per}`], ["ready", "Hosts ready now"]]; };
 const label = (m) => m[1] || (prov() ? "Countries" : "Providers");
@@ -1859,12 +1841,14 @@ function fitVs() {
   // On a phone every figure has a line of its own, so there is nothing to line up.
   if (M.phone()) { names(VS_NAMES_PHONE); rows.flat().forEach((e) => { e.style.height = ""; }); return; }
   // Each row is as tall as its tallest cell, the names most of all; what is left of the list's height goes evenly to all.
-  const tall = () => { rows.flat().forEach((e) => { e.style.height = "auto"; }); return rows.map((a) => Math.max(VS_ROW, ...a.map((e) => Math.ceil(e.offsetHeight)))); };
+  const tall = (floor = VS_ROW) => { rows.flat().forEach((e) => { e.style.height = "auto"; }); return rows.map((a) => Math.max(floor, ...a.map((e) => Math.ceil(e.offsetHeight)))); };
   names(VS_NAMES);
   let need = tall();
   // Beside the list, a long list of names gives way to "and N more", so the panel still ends on the list's last line. The row's hover has them all.
   const beside = !S.open && !M.narrow();
   for (let k = VS_NAMES - 1; k > 0 && beside && head + sum(need, (x) => x) > list.offsetHeight; k--) { names(k); need = tall(); }
+  // Still too tall: a row with room to spare gives it up.
+  if (beside && head + sum(need, (x) => x) > list.offsetHeight) need = tall(0);
   const add = beside ? Math.max(0, Math.min(VS_ROW_MAX - VS_ROW, (list.offsetHeight - head - sum(need, (x) => x)) / rows.length)) : 0;
   rows.forEach((a, i) => a.forEach((e) => { e.style.height = need[i] + add + "px"; }));
 }
@@ -1872,7 +1856,7 @@ function fitVs() {
 /* ---------- table tooltips ---------- */
 const ccName = (cc) => (N().countries.find((c) => c.cc === cc) || {}).name || cc;
 const hd = (g) => tipHead(nameOf(g), g.sum ? null : tint(g));
-const worst = (g) => (g.key === "__all" ? V.src : V.tail).filter((x) => x.failed_checks).sort((a, b) => b.failed_checks - a.failed_checks).slice(0, 3);
+const worst = () => V.tail.filter((x) => x.failed_checks).sort((a, b) => b.failed_checks - a.failed_checks).slice(0, 3);
 // Every validator on the row; a long list takes two columns, as the map's tooltip does.
 const hostList = (g) => { const hosts = [...members(g)].sort((a, b) => b.share - a.share), html = hosts.map((v) => tipRow(v.moniker, finePct(v.share))).join(""); return hosts.length > 6 ? `<div class="cols">${html}</div>` : html; };
 const scope = () => servedScope().toLowerCase();
@@ -1887,11 +1871,11 @@ const TIP = {
   reach: (g) => hd(g) + tipRow(`Checks answered, ${scope()}`, reachText(g))
     + (g.win ? tipRow("Checked since", g.win.n < g.win.of ? `${g.win.on}, ${g.win.n} of ${g.win.of} hosts` : g.win.on) : "")
     + tipRow("Checks", `${int(g.checks - g.failed_checks)} of ${int(g.checks)}`) + tipRow("Missed", int(g.failed_checks))
-    + (g.key !== "__all" && V.all.failed_checks ? tipRow("Of all missed", pct(g.failed_checks / V.all.failed_checks)) : "")
+    + (V.all.failed_checks ? tipRow("Of all missed", pct(g.failed_checks / V.all.failed_checks)) : "")
     + belowMark(g)
-    + (g.sum && worst(g).length ? tipRow("Most missed") + worst(g).map((x) => tipRow(nameOf(x), int(x.failed_checks))).join("") : ""),
+    + (g.sum && worst().length ? tipRow("Most missed") + worst().map((x) => tipRow(nameOf(x), int(x.failed_checks))).join("") : ""),
   ready: (g) => hd(g) + tipRow("Hosts ready", `${g.ready_hosts} of ${g.hosts}`) + (g.not_ready_hosts ? tipRow("Not ready", String(g.not_ready_hosts)) : "") + (g.not_reported_hosts ? tipRow("Hosts not reported", String(g.not_reported_hosts)) : "")
-    + (unheard(g) ? "" : tipRow(g.key === "__all" ? "Hosted voting power ready" : "Of its voting power, ready", readyText(g))) + (g.rep < g.vp ? tipRow("Voting power not reported", readyPct(1 - g.rep / g.vp)) : "") + (g.key === "__all" ? tipRow("All voting power ready", pct(N().totals.ready_vp_share)) : "")
+    + (unheard(g) ? "" : tipRow("Of its voting power, ready", readyText(g))) + (g.rep < g.vp ? tipRow("Voting power not reported", readyPct(1 - g.rep / g.vp)) : "")
     + (silent(g) && !unheard(g) ? tipRow("The share may be higher") : "") + (silent(g) ? tipRow("Not reported is not the same as down") : ""),
   served: (g) => { const open = g.shards - settled(g); return hd(g) + tipRow(`Blob shards served, ${scope()}`, srateText(g)) + (settled(g) ? tipRow("Shards", `${int(g.served)} of ${int(settled(g))}`) + tipRow("Not served", int(g.not_served)) : "") + (open > 0 ? tipRow("Pending or not counted", int(open)) : ""); },
 };
@@ -1900,18 +1884,15 @@ const HEAD = {
   hosts: () => tipHead("Fibre hosts") + tipRow(`A server a validator runs for Fibre.${keptFor() ? ` It keeps a blob's shards for ${keptFor()}.` : ""}`),
   reach: () => tipHead("Checks answered") + tipRow("A connection to each host, no data asked for. A miss alone does not stop a blob") + tipRow("Period", scope()) + tipRow(`A ring marks a host under ${pct(MARK, 0)}, here and on the map. That mark is Tensile's, not a protocol rule`),
   served: () => tipHead("Blob shards served") + tipRow("A shard is a piece of a blob, read back from a host that endorsed it") + tipRow("Period", scope()),
-  vpready: () => tipHead("Its power ready now") + tipRow("Share of this row's own voting power on hosts that say they can take uploads now") + tipRow("At least means some hosts do not report, so the share may be higher. Not reported is not the same as down"),
   ready: () => tipHead("Hosts ready now") + tipRow("Hosts that say they can take uploads now") + tipRow("Hosts that do not report are not counted as failing"),
 };
 // A narrow row has no heads: its figures say what the head would.
-const meaning = (t) => { const k = t === "ready" ? readyKey() : t; return M.narrow() && HEAD[k] ? HEAD[k]().replace(/^<h4>[^]*?<\/h4>/, "") : ""; };
+const meaning = (t) => (M.narrow() && HEAD[t] ? HEAD[t]().replace(/^<h4>[^]*?<\/h4>/, "") : "");
 function tipMove(e, keyAt) {
   const c = e.target.closest("[data-t]");
   if (!c) return hideTip();
   const k = keyAt(c), g = k && V.byKey.get(k);
   if (!g) return;
-  // Beside its column, so the box never hides the figures it is there to compare.
-  if (c.dataset.t === "ready" && c.closest(".tb-list") && !M.narrow()) { const b = c.getBoundingClientRect(); return tipAt(TIP.ready(g), (box) => [b.right - 104 - box.width, b.top + b.height / 2 - box.height / 2]); }
   if (c.dataset.t !== "name") return showTip(TIP[c.dataset.t](g, c) + meaning(c.dataset.t), e.clientX, e.clientY);
   // The pick hint stands clear of the name it is about.
   const b = c.closest(".k-a").getBoundingClientRect();
@@ -1963,7 +1944,7 @@ list.addEventListener("click", (e) => {
   // On touch a tap on a row reads it; the circle picks.
   if (r.hasAttribute("data-p") && (!M.touch() || e.target.closest(".pk"))) togglePick(r.dataset.k);
 });
-list.addEventListener("mouseover", (e) => { const r = e.target.closest(".tr.rw:not(.sum)"); rowHover(r ? r.dataset.k : null); });
+list.addEventListener("mouseover", (e) => { const r = e.target.closest(".tr.rw"); rowHover(r ? r.dataset.k : null); });
 list.addEventListener("mousemove", (e) => {
   const h = e.target.closest("[data-s]"), tip = h && HEAD[h.dataset.s];
   if (tip) showTip(tip(), e.clientX, e.clientY); else tipMove(e, (c) => c.closest(".tr")?.dataset.k);
@@ -2286,7 +2267,7 @@ function regroup() {
   if (!calm) [$(".ringbox", root), list].forEach((b) => b.animate([{ opacity: .25 }, { opacity: 1 }], { duration: 200, easing: "ease-out" }));
 }
 const segBy = seg("#hs-by", [["provider", "Provider"], ["country", "Country"], ["city", "City"]], () => S.by, (v) => { S.by = v; S.picks = []; if (state.pinned.length) M.set("pinned", []); regroup(); draw(); });
-const segWeigh = seg("#hs-weigh", [["vp", "Voting power"], ["hosts", "Fibre hosts"]], () => S.weigh, (v) => { if (S.sort === S.weigh) { S.sort = v; S.dir = -1; } else if (S.sort === readyKey()) S.sort = readyKey(v); S.weigh = v; regroup(); draw(); });
+const segWeigh = seg("#hs-weigh", [["vp", "Voting power"], ["hosts", "Fibre hosts"]], () => S.weigh, (v) => { if (S.sort === S.weigh) { S.sort = v; S.dir = -1; } S.weigh = v; regroup(); draw(); });
 
 on("pinned", () => { if (V) { syncPicks(); paint(); } });
 on("resize", () => { if (root.clientWidth === S.width) return; S.width = root.clientWidth; render(); placeNames(); draw(); paint(); });

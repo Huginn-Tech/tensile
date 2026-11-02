@@ -152,7 +152,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec); font-weight: 600; line-height: 36px; letter-spacing: -.01em; }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-.page { padding: 20px 0 0; }
+.page { padding: 36px 0 0; }
 /* a jump leaves the section's head clear of the pinned bar */
 .sec { scroll-margin-top: calc(var(--stick) + 12px); }
 .ctl { flex: none; display: flex; align-items: center; gap: 6px; margin-left: auto; }
@@ -176,9 +176,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 .bar .seg { height: 36px; }
 .jump button { padding: 0 12px; color: var(--ink2); }
 .jump button:hover, .jump button.on { color: var(--ink); }
-/* what Fibre is, once, under the title */
-.lede { margin: 0 0 12px; font-size: var(--fs-lab); line-height: 18px; color: var(--ink2); }
-.lede + .sec { margin-top: 0; }
+.bar + .sec { margin-top: 0; }
 
 /* segmented control, built by seg() */
 .seg { position: relative; display: inline-flex; height: 34px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; }
@@ -192,7 +190,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #seg-win button.on, #seg-win button.on:hover { color: var(--t-on-ink); }
 
 /* section head */
-.sec { margin-top: 40px; }
+.sec { margin-top: 44px; }
 .sec-h { display: flex; align-items: baseline; gap: 12px; height: 36px; margin-bottom: var(--g); }
 .sec-h p { margin: 0; font-size: var(--fs-lab); color: var(--ink2); white-space: nowrap; }
 
@@ -200,7 +198,8 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 .mk u { flex: none; display: block; width: 8px; height: 8px; border-radius: 2px; background: var(--c); }
 .mk u.c { border-radius: 50%; }
 
-.foot { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 28px; font-size: var(--fs-note); color: var(--ink3); }
+.foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 18px; margin-top: 14px; font-size: var(--fs-note); color: var(--ink3); }
+.foot .how { display: flex; flex-wrap: wrap; gap: 2px 16px; padding: 7px 12px; border: 1px solid var(--line2); border-radius: var(--r3); font-size: var(--fs-lab); line-height: 16px; color: var(--ink2); }
 
 /* tooltip */
 #tip { position: fixed; z-index: 20; left: 0; top: 0; min-width: 150px; max-width: 280px; padding: 9px 11px; border-radius: var(--r3); background: var(--tip-bg); border: 1px solid var(--line2); box-shadow: var(--tip-shadow); font-size: var(--fs-note); line-height: 1.5; color: var(--ink2); pointer-events: none; opacity: 0; transition: opacity .1s; }
@@ -521,7 +520,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting .tr { display: grid; grid-template-columns: var(--cols); column-gap: var(--gap); align-items: center; padding: 0 12px; }
 #hosting .tb-list > .top { position: sticky; top: var(--stick); z-index: 4; background: var(--card); }
 /* every label on the head's foot; each head says its own period */
-#hosting .th { align-items: end; height: var(--th); margin: 0 -12px; padding: 0 24px; border-bottom: 1px solid var(--line); font-size: var(--fs-note); color: var(--ink2); }
+#hosting .th { align-items: end; height: var(--th); margin: 0 -12px; padding: 0 24px; border-bottom: 1px solid var(--line); font-size: var(--fs-lab); color: var(--ink2); }
 #hosting .th .k-a { display: flex; align-items: baseline; gap: 8px; padding: 0 0 8px 22px; line-height: 14px; white-space: nowrap; }
 #hosting .h { display: flex; align-items: flex-end; justify-content: flex-end; min-width: 0; padding-bottom: 8px; font-weight: 400; line-height: 14px; text-align: right; white-space: nowrap; transition: color .12s; }
 #hosting .h1 { position: relative; display: block; }
@@ -537,18 +536,12 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting .h.on .h1::after { border-top-color: currentColor; border-bottom-width: 0; opacity: 1; }
 #hosting .h.on.asc .h1::after { border-top-width: 0; border-top-color: transparent; border-bottom-width: 3.5px; border-bottom-color: currentColor; }
 /* flush right on the figures like every other head; the rest of the label overhangs the empty head to the left */
-#hosting .h.wt { justify-self: start; width: var(--slot); }
+#hosting .h.wt { grid-area: 1 / 2; justify-self: start; width: var(--slot); }
 
 /* every figure on the row's centre line, the name and its place around it, as Publishers' rows */
 #hosting .rw { --rowbg: transparent; position: relative; align-items: center; height: 40px; line-height: 18px; border-radius: var(--r3); background: var(--rowbg); cursor: pointer; transition: background .12s; }
 #hosting .rw:hover, #hosting .rw.lit { --rowbg: var(--wash2); }
 #hosting .tb.wide .rw.lit:not(:hover):not(.rest) { --rowbg: transparent; }
-#hosting .rw.sum, #hosting .rw.sum:hover { --rowbg: var(--wash2); margin-top: 7px; margin-bottom: 3px; cursor: default; }
-/* the figures on the first line, what qualifies them on the second */
-#hosting .rw.sum { align-items: start; padding-block: 4px; }
-#hosting .sum .vb { align-items: start; }
-#hosting .sum small.nr { display: block; font-size: var(--fs-tick); font-weight: 400; line-height: 14px; color: var(--ink3); }
-#hosting .tb.vs .rw.sum { align-items: center; padding-block: 0; }
 #hosting .rw.rest { --rowbg: var(--wash2); margin-top: 3px; }
 #hosting .rw.rest:hover, #hosting .rw.rest.lit { --rowbg: var(--wash3); }
 /* the way back stays in reach while the tail is open */
@@ -567,7 +560,6 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting .k-a code { flex: none; font: 500 var(--fs-tick) var(--m); color: var(--ink3); }
 #hosting .rest .nm { overflow: visible; }
 #hosting .nm small { margin-left: 6px; font-size: var(--fs-tick); font-weight: 400; color: var(--ink3); }
-#hosting .sum .k-a { display: block; padding-left: 22px; }
 
 /* hidden at rest: the bar carries the rank's colour, the row's hover offers the pick */
 #hosting .pk, #hosting .ex { display: grid; place-items: center; align-self: center; width: 14px; height: 14px; }
@@ -587,30 +579,23 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 /* the weighing: the figure under its label, then a solid bar from one zero line */
 #hosting .vb { position: relative; display: grid; grid-template-columns: var(--slot) minmax(0, 1fr); column-gap: 8px; align-items: center; min-width: 0; }
 #hosting .lb { position: relative; display: block; height: 8px; width: calc(100% * var(--f)); min-width: 2px; border-radius: 0 2px 2px 0; background: var(--c); transition: opacity .14s; }
-#hosting .vv { justify-self: end; font-size: var(--fs-lab); font-weight: 400; color: var(--ink2); text-align: right; white-space: nowrap; }
-/* the hint stands where the sum has no bar, beside the rows it talks about, and ends where the bars do */
-#hosting .hint { display: flex; flex-direction: column; align-items: flex-end; min-width: 0; text-align: right; white-space: nowrap; }
-#hosting .ask, #hosting .next { font-size: var(--fs-note); line-height: 18px; color: var(--ink2); }
-#hosting .next { display: flex; align-items: center; gap: 8px; }
-#hosting .ask2 { font-size: var(--fs-tick); line-height: 14px; color: var(--ink3); }
-#hosting .ask3 { font-size: var(--fs-tick); line-height: 14px; color: var(--ink2); }
-#hosting :is(.ask, .ask2, .ask3, .next)[hidden] { display: none; }
-#hosting .tb.vs .ask2 { display: none; }
-#hosting .tb.focus .rw:not(.lit):not(.on):not(.sum) .lb { opacity: .45; }
+#hosting .vv { justify-self: end; font-size: var(--fs-row); font-weight: 400; color: var(--ink2); text-align: right; white-space: nowrap; }
+/* what one pick leaves to do stands in the head, over the bars, and ends where they do */
+#hosting .hint { grid-area: 1 / 2; justify-self: end; display: flex; align-items: center; gap: 8px; min-width: 0; padding-bottom: 8px; line-height: 14px; white-space: nowrap; }
+#hosting .next { display: flex; }
+#hosting :is(.ask3, .next)[hidden] { display: none; }
+#hosting .tb.focus .rw:not(.lit):not(.on) .lb { opacity: .45; }
 
 /* columns */
-#hosting :is(.k-n, .k-r, .k-v, .k-s) { min-width: 0; font-size: var(--fs-lab); text-align: right; color: var(--ink2); white-space: nowrap; }
+#hosting :is(.k-n, .k-r, .k-s) { min-width: 0; font-size: var(--fs-row); text-align: right; color: var(--ink2); white-space: nowrap; }
 /* digits of one width, so points and percent signs stand in line down a column */
-#hosting :is(.vv, .k-n, .k-r, .k-v, .k-s), #publishers :is(.pb-n, .pb-d b, .pb-d em, [data-c="mib"], [data-c="left"]) { font-family: "IBM Plex Sans", var(--f); font-variant-numeric: tabular-nums; }
-#hosting :is(.k-r, .k-s, .k-v).nil { color: var(--ink3); }
-/* a floor in words: quiet, so the digits still read down their column */
-#hosting .fl { font-weight: 400; color: var(--ink3); }
-#hosting .sum :is(.vv, .k-n, .k-r, .k-v, .k-s) { color: var(--ink); font-weight: 500; }
+#hosting :is(.vv, .k-n, .k-r, .k-s), #publishers :is(.pb-n, .pb-d b, .pb-d em, [data-c="mib"], [data-c="left"]) { font-family: "IBM Plex Sans", var(--f); font-variant-numeric: tabular-nums; }
+#hosting :is(.k-r, .k-s).nil { color: var(--ink3); }
 
 /* sort shows in the column's figures */
-#hosting :is(.vv, .k-n, .k-r, .k-s, .k-v).srt { color: var(--ink); }
+#hosting :is(.vv, .k-n, .k-r, .k-s).srt { color: var(--ink); }
 /* a whole column at 100.00% recedes as one block, so any shortfall stands out */
-#hosting .rw:not(.sum) :is(.k-r, .k-s).full { color: var(--ink3); }
+#hosting .rw :is(.k-r, .k-s).full { color: var(--ink3); }
 
 /* expansion */
 #hosting .tailbox { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .26s cubic-bezier(.3,.7,.2,1); }
@@ -626,7 +611,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting .tb.young.vs { --th: 30px; }
 #hosting .tb.vs .tr { grid-template-columns: var(--vs1, 178px) minmax(0, 1fr); column-gap: 14px; }
 #hosting .tb[data-by="city"] { --vs1: 178px; }
-#hosting .tb.vs :is(.k-n, .k-r, .k-v, .k-s) { display: none; }
+#hosting .tb.vs :is(.k-n, .k-r, .k-s) { display: none; }
 #hosting .tb.vs .th .h:not(.wt) { display: none; }
 /* a sort still in force names the order, in the first head's place: the list has no room for the column */
 #hosting .tb.vs .th .h.on:not(.wt) { display: flex; grid-column: 1; grid-row: 1; justify-self: start; padding-left: 22px; }
@@ -645,8 +630,8 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting .vs-x { flex: none; display: grid; place-items: center; width: 24px; height: 24px; margin: 0 -6px 0 auto; border-radius: var(--r3); color: var(--ink3); transition: color .12s, background .12s; }
 #hosting .vs-x:hover { color: var(--ink); background: var(--wash3); }
 /* a label reads on its figure's line, wherever the mark under the figure ends */
-#hosting .vs-m { display: flex; flex-direction: column; justify-content: flex-start; gap: 3px; padding: 10px 0 8px; border-top: 1px solid var(--line); }
-#hosting .vs-l .vs-m { padding-top: 14px; font-size: var(--fs-note); line-height: 16px; color: var(--ink2); }
+#hosting .vs-m { display: flex; flex-direction: column; justify-content: flex-start; gap: 2px; padding: 7px 0 5px; border-top: 1px solid var(--line); }
+#hosting .vs-l .vs-m { padding-top: 11px; font-size: var(--fs-note); line-height: 16px; color: var(--ink2); }
 #hosting .vs-col .vs-m > b { font-size: var(--fs-fig2); font-weight: 500; letter-spacing: -.012em; line-height: 24px; color: var(--ink); white-space: nowrap; font-variant-numeric: proportional-nums; }
 
 #hosting .vs-m .dots { display: flex; flex-wrap: wrap; gap: 3px; }
@@ -666,8 +651,8 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 @keyframes hs-fade { from { opacity: 0; } }
 @keyframes hs-pop { from { transform: scale(0); } }
 
-/* name, weighing, the other count, then three equal tracks, so right edges step evenly */
-#hosting { --cols: 196px minmax(0, 1fr) 76px 136px 136px 136px; --gap: 14px; --th: 30px; --slot: 42px; }
+/* name, weighing, then three equal tracks, so right edges step evenly */
+#hosting { --cols: 196px minmax(0, 1fr) repeat(3, 166px); --gap: 14px; --th: 30px; --slot: 42px; }
 /* the period steps back, so the heavy part of each head ends sooner */
 #hosting .per { color: var(--ink3); }
 /* under 30 days the period takes a line of its own, and every label stays on the foot */
@@ -715,17 +700,16 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #hosting .k-a em { opacity: 0; }
 }
 
-/* the hint's long line clears the sum's figure from here up */
-@media (max-width: 1160px) {
-  #hosting .up { display: none; }
+/* Clear picks alone from here on, so it keeps clear of the head's label */
+@media (max-width: 1120px) {
+  #hosting .ask3 { display: none; }
 }
 @media (max-width: 1100px) {
   #hosting .mkey { position: static; margin-top: 4px; }
   #hosting .sec-h { flex-wrap: wrap; row-gap: 8px; }
   #hosting .sec-h p { flex: 0 0 auto; }
   #hosting .ctl { flex: 0 0 100%; margin-left: 0; }
-  /* Blob shards served is the longest head; the ready column gives up what it takes */
-  #hosting { --cols: 196px minmax(0, 1fr) 76px 128px 134px 122px; --gap: 12px; }
+  #hosting { --cols: 196px minmax(0, 1fr) repeat(3, 157px); --gap: 12px; }
   #hosting .vs-g { grid-template-columns: 100px repeat(var(--n), minmax(0, 1fr)); }
   #hosting .vs-col { padding: 0 8px; }
   /* three columns leave a long name two lines, inside the head's height */
@@ -807,7 +791,6 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #publishers .pb-rule { position: static; flex-wrap: wrap; gap: 4px 14px; min-height: 40px; margin-top: 2px; }
 
   /* hosting: the ring and its key, then the map the width of the card, then the regions */
-  #hosting .up { display: inline; }
   #hosting .sec-h p { flex: 1 1 100%; overflow: visible; }
   #hosting .band { grid-template-columns: minmax(0, 1fr); row-gap: 20px; }
   #hosting .say .lead { white-space: normal; }
@@ -827,11 +810,10 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #hosting .tb-list > .top { position: static; }
   #hosting .th, #hosting .tb.vs .tr.th { display: none; }
   #hosting .sorter { padding: 6px 0; }
-  #hosting .rw, #hosting .tb.vs .tr { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-areas: "a a a a" "v v v v" "n r s k"; gap: 6px 8px; align-items: end; }
+  #hosting .rw, #hosting .tb.vs .tr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-areas: "a a a" "v v v" "n r s"; gap: 6px 8px; align-items: end; }
   #hosting .rw { height: auto; padding: 8px; }
   #hosting .tr.rw { padding-inline: 0; border-top: 1px solid var(--line); border-radius: 0; }
   #hosting .rw:hover, #hosting .rw.lit { --rowbg: transparent; }
-  #hosting .rw.sum, #hosting .rw.sum:hover, #hosting .tb.vs .rw.sum { margin: 0 0 4px; padding: 10px 8px; border: 0; border-radius: var(--r3); align-items: end; }
   #hosting .rw.rest, #hosting .tb.vs .rw.rest { margin-top: 2px; padding: 10px 8px; border: 0; border-radius: var(--r3); }
   #hosting .rest.opened { top: var(--stick); }
   #hosting .k-a { grid-area: a; grid-template-columns: 26px minmax(0, 1fr) auto; column-gap: 0; }
@@ -842,7 +824,6 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #hosting .k-a > code { grid-column: 3; }
   #hosting .k-a > .sub { grid-column: 2 / -1; }
   #hosting .rw .k-a em, #hosting .rw:hover .k-a em, #hosting .rw.on .k-a em { opacity: 1; }
-  #hosting .sum .k-a { padding-left: 0; }
   #hosting .rest .k-a > .nm { padding-left: 0; }
 
   /* a pick you can see and hit: 44 px around an 18 px circle */
@@ -852,22 +833,14 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #hosting .pk::before { inset: 0; }
 
   #hosting .vb { grid-area: v; grid-template-columns: auto minmax(0, 1fr); column-gap: 8px; }
-  #hosting .sum .vb { display: contents; }
-  #hosting .sum .vv { grid-area: v; justify-self: start; }
   #hosting .vv { display: flex; align-items: baseline; gap: 8px; justify-self: start; font-weight: 500; }
   #hosting .vv::before { display: inline; }
-  #hosting :is(.k-n, .k-r, .k-s, .k-v), #hosting .tb.vs :is(.k-n, .k-r, .k-s, .k-v) { display: block; text-align: left; white-space: normal; }
+  #hosting :is(.k-n, .k-r, .k-s), #hosting .tb.vs :is(.k-n, .k-r, .k-s) { display: block; text-align: left; white-space: normal; }
   #hosting .k-n { grid-area: n; }
   #hosting .k-r { grid-area: r; }
   #hosting .k-s { grid-area: s; }
-  #hosting .k-v { grid-area: k; }
-  #hosting .fl { display: block; font-size: var(--fs-tick); line-height: 14px; }
-  #hosting .hint { grid-column: 1 / -1; grid-row: 4; align-items: flex-start; text-align: left; white-space: normal; }
-  #hosting .tb.vs .ask2 { display: block; }
 
   /* the picks ride along at the foot of the screen for as long as the list lasts */
-  #hosting .hint .next { display: none; }
-  #hosting .ask3 { display: none; }
   #hosting .tray { position: sticky; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 5; visibility: hidden; display: flex; align-items: center; gap: 6px; height: 0; }
   #hosting .tray.on { visibility: visible; height: 52px; margin-top: 10px; padding: 0 6px 0 14px; border: 1px solid var(--line2); border-radius: 999px; background: var(--tip-bg); box-shadow: var(--tip-shadow); }
   #hosting .tray-n { flex: 1 1 auto; min-width: 0; font-size: var(--fs-lab); color: var(--ink); white-space: nowrap; }
@@ -906,7 +879,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   .jump button { flex: 1 1 auto; padding: 0 4px; }
   .seg button { min-width: 44px; padding: 0 9px; }
   .sel select { font-size: 16px; }
-  .lede { margin: 8px 0 14px; }
+  .bar + .sec { margin-top: 12px; }
 
   /* top: one tile to a line where two would clip */
   #top .grid { grid-template-rows: auto repeat(2, 144px); }
@@ -975,14 +948,12 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #top .main { grid-column: auto; }
 }
 
-/* the smallest phones: the four small figures two by two */
+/* the smallest phones: Publishers' four small figures two by two */
 @media (max-width: 359px) {
   :host { --fs-page: 22px; --pad: 14px; }
   #publishers tbody tr[data-i] { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "w w" "c c" "d d" "n m" "v l"; }
   #publishers tbody td.d { text-align: left; }
   #publishers tbody td.d .pb-d { justify-content: flex-start; }
-  #hosting .rw, #hosting .tb.vs .tr { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "a a" "v v" "n r" "s k"; }
-  #hosting .hint { grid-row: 5; }
   .seg button { min-width: 40px; padding: 0 7px; }
   #hosting .tray button { padding: 0 9px; }
   #hosting .whobox { grid-template-columns: 126px minmax(0, 1fr); column-gap: 10px; }
