@@ -56,7 +56,7 @@
 
   /* one ramp, strongest first; adjacent steps at least 0.07 OKLCH L apart. --u1..5 rank publishers, --p1..5 rank providers at 3:1 or more.
      Five is all that floor allows in both themes, so past rank 5 a number names the rank; the ring's key alone cuts the ramp finer (app.js, keyTone), its leaders telling neighbours apart.
-     Neutral: --tail the rest as a thin mark, 3:1 or more and never stronger than --u5; --rest the same rest as a fill beside the ramp, a step under --u5; --none the empty arc. */
+     Neutral: --tail the rest as a thin mark, 3:1 or more and never stronger than --u5; --rest the same rest as a fill beside the ramp, about 3:1, a touch under --tail and a step under --u5; --none the empty arc. */
   --u1: #9ff0f9;
   --u2: #65d5e0;
   --u3: #33b3bf;
@@ -68,7 +68,7 @@
   --p4: var(--u4);
   --p5: var(--u5);
   --tail: #62676a;
-  --rest: #474d51;
+  --rest: #5f6568;
   --none: #1b2125;
 
   --land: #20262a;
@@ -123,7 +123,7 @@
   --u4: #058793;
   --u5: #4b9ca8;
   --tail: #909599;
-  --rest: #b4b9bc;
+  --rest: #919699;
   --none: #eef0f2;
 
   --land: #e1e5e7;
@@ -252,6 +252,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 
 #top .rate { fill: none; stroke: var(--acc); stroke-width: 1.5; stroke-linejoin: round; }
 #top .dot { fill: var(--acc); stroke: var(--card); stroke-width: 1; paint-order: stroke; }
+#top .level { stroke: var(--rule3); stroke-dasharray: 3 3; }
 
 #top .tick { fill: var(--rule3); }
 #top .tick.on { fill: var(--acc); }
@@ -267,16 +268,12 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #top text.val { fill: var(--ink2); font-weight: 500; }
 
 /* cost */
-#cost.sec { margin-top: var(--g); }
-#cost .card { position: relative; display: flex; flex-direction: column; height: 360px; padding: 18px var(--pad) var(--pad); }
-#cost h3 { margin: 0; font-size: var(--fs-lab); font-weight: 500; line-height: 16px; color: var(--ink2); }
+#cost .card { position: relative; display: flex; flex-direction: column; height: 344px; padding: 18px var(--pad) var(--pad); }
 
 #cost .fig { display: flex; align-items: baseline; margin: 5px 0 0; font-size: var(--fs-fig); font-weight: 600; line-height: 32px; letter-spacing: -.025em; font-variant-numeric: proportional-nums; }
 #cost .fig em { margin: 0 .3em 0 .24em; font-style: normal; font-size: var(--fs-row); font-weight: 400; letter-spacing: 0; color: var(--ink2); }
 #cost .fig em.at { margin-left: 5px; }
 #cost .pair { display: contents; }
-/* one line on the title's row: how to read the chart, and the rule behind the curve */
-#cost .key { position: absolute; top: 18px; right: var(--pad); margin: 0; font-size: var(--fs-note); line-height: 16px; color: var(--ink2); white-space: nowrap; }
 
 #cost .plot { flex: 1; min-height: 0; display: block; width: 100%; margin-top: 8px; overflow: visible; outline-offset: 6px; border-radius: 8px; }
 
@@ -626,7 +623,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 
 #hosting .vs-m .dots { display: flex; flex-wrap: wrap; gap: 3px; }
 #hosting .vs-m .dots u { width: 8px; height: 8px; }
-#hosting .vs-m .lb { width: calc(100% * var(--f)); height: 8px; }
+#hosting .vs-m .lb { width: calc(var(--lbw, 100%) * var(--f)); max-width: 100%; height: 8px; }
 #hosting .vs-m small { font-size: var(--fs-note); line-height: 15px; color: var(--ink2); }
 #hosting .vs-m small.vn { font-size: var(--fs-tick); line-height: 14px; color: var(--ink3); overflow-wrap: anywhere; }
 
@@ -741,9 +738,8 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #top .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: 300px repeat(2, 144px); }
   #top .main { grid-row: auto; grid-column: 1 / -1; }
 
-  /* cost: its sentence under the title, where it can wrap */
-  #cost .card { height: 380px; }
-  #cost .key { position: static; margin-top: 2px; white-space: normal; }
+  /* cost: its sentence under the heading, where it can wrap */
+  #cost .card { height: 330px; }
 
   /* publishers: a row per account, the trace the width of the card */
   #publishers .pb-wrap { padding: 0 var(--pad) 6px; }
@@ -753,6 +749,8 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #publishers colgroup { display: none; }
   #publishers th:not(.a) { display: none; }
   #publishers th.a { display: block; height: auto; padding: 4px 0 8px; }
+  /* the days stay over the cards as they scroll, so every card's trace has its dates */
+  #publishers thead { position: sticky; top: var(--stick); z-index: 3; background: var(--card); }
   #publishers .pb-h > button:not(.pb-first) { display: none; }
   #publishers .pb-first { cursor: help; }
   #publishers .pb-first::after { display: none; }
@@ -873,6 +871,8 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   .seg button { min-width: 44px; padding: 0 9px; }
   .sel select { font-size: 16px; }
   .bar + .sec { margin-top: 12px; }
+  /* the pinned bar sits under the site's header and the parts hang under it: the days stand under the parts, and move with them */
+  #publishers thead { top: calc(var(--hdr, 0px) + 44px); transition: top 220ms cubic-bezier(.2, .7, .2, 1); }
 
   /* top: one tile to a line where two would clip */
   #top .grid { grid-template-rows: auto repeat(2, 144px); }
@@ -908,8 +908,8 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #hosting .sec-h .ctl .seg { justify-self: start; }
   #hosting .seg + .ctl-l { margin-left: 0; }
   #hosting .band { padding-inline: var(--pad); }
-  #hosting .whobox { display: grid; grid-template-columns: 132px minmax(0, 1fr); column-gap: 14px; align-items: center; height: auto; max-width: none; }
-  #hosting .ringbox { position: relative; left: 0; top: 0; width: 132px; height: 132px; }
+  #hosting .whobox { display: grid; grid-template-columns: 148px minmax(0, 1fr); column-gap: 14px; align-items: center; height: auto; max-width: none; }
+  #hosting .ringbox { position: relative; left: 0; top: 0; width: 148px; height: 148px; }
   #hosting .ldrs { display: none; }
   #hosting .names { position: static; width: auto; }
   #hosting .nl { position: relative; height: auto; min-height: 22px; margin-top: 0; }
@@ -939,6 +939,10 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 @media (max-width: 520px) {
   #top .grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-auto-rows: 144px; }
   #top .main { grid-column: auto; }
+  /* four to a row, a long name takes two lines: every name ends on the same line, over its figure */
+  #publishers :is(.pb-n, td[data-c])[data-l]::before { display: flex; align-items: flex-end; min-height: 28px; }
+  /* the key three to a line, so its last step never stands alone */
+  #publishers .pb-rule { display: grid; grid-template-columns: repeat(3, max-content); gap: 4px 16px; }
 }
 
 /* four periods beside the title leave no room for their label */
@@ -950,10 +954,11 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 @media (max-width: 359px) {
   :host { --fs-page: 22px; --pad: 14px; }
   #publishers tbody tr[data-i] { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "w w" "c c" "d d" "n m" "v l"; }
+  #publishers :is(.pb-n, td[data-c])[data-l]::before { min-height: 0; }
   #publishers tbody td.d { text-align: left; }
   #publishers tbody td.d .pb-d { justify-content: flex-start; }
   .seg button { min-width: 40px; padding: 0 7px; }
   #hosting .tray button { padding: 0 9px; }
-  #hosting .whobox { grid-template-columns: 126px minmax(0, 1fr); column-gap: 10px; }
-  #hosting .ringbox { width: 126px; height: 126px; }
+  #hosting .whobox { grid-template-columns: 140px minmax(0, 1fr); column-gap: 10px; }
+  #hosting .ringbox { width: 140px; height: 140px; }
 }
