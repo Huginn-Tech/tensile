@@ -42,9 +42,8 @@ shadow.querySelector("#page").innerHTML = `<main class="page">
   </section>
 
 <section class="sec" id="cost" aria-label="What a blob costs">
+    <div class="sec-h"><h2>What a blob costs</h2><p class="key"></p></div>
     <article class="card">
-      <h3>What a blob costs</h3>
-      <p class="key"></p>
       <p class="fig" data-f="head"></p>
       <svg class="plot" role="img" tabindex="0"></svg>
       <div class="ctab"></div>
@@ -568,6 +567,9 @@ function drawRate() {
     el("text", { x: right, y: y + 4, "text-anchor": "end" }, svg).textContent = tiaN(v, 2);
   }
   dayEnds(svg, g);
+  // The period's average, the tile's figure, as the cost chart draws it: a dashed level the days read against.
+  const avg = market().paid_per_mib_utia;
+  if (avg) { const y = Math.round(Y(clamp(avg, lo, hi))) + .5; el("line", { class: "level", x1: g.L, x2: g.R, y1: y, y2: y }, svg); }
   let d = "";
   for (const s of days) d += `${s.joined ? "L" : "M"}${cx(s)} ${Y(s.rate)}`;
   if (d.includes("L")) el("path", { class: "rate", d }, svg);
@@ -1336,10 +1338,10 @@ const SHORT = { "Hong Kong SAR China": "Hong Kong", "United Arab Emirates": "UAE
 const prov = () => S.by === "provider";
 const keyFn = { provider: (v) => v.company, country: (v) => v.cc, city: (v) => v.city + "|" + v.cc };
 const keyOf = (g) => (prov() ? g.name : S.by === "country" ? g.cc : g.name + "|" + g.cc);
-// The key's tone: the ramp's own step up to five; a longer key cuts the same ramp finer, and its leaders and seams tell neighbours apart.
+// The key's tone: the ramp's own step up to five. A longer key cuts the same ramp finer, its widest steps between the first and largest slices, and its leaders and seams tell neighbours apart.
 function keyTone(i, n) {
   if (n <= RANKS) return `var(--p${i + 1})`;
-  const at = i * (RANKS - 1) / (n - 1), lo = Math.floor(at), part = at - lo;
+  const at = (RANKS - 1) * (i / (n - 1)) ** .7, lo = Math.floor(at), part = at - lo;
   return part ? `color-mix(in oklab, var(--p${lo + 1}) ${Math.round((1 - part) * 100)}%, var(--p${lo + 2}))` : `var(--p${lo + 1})`;
 }
 const srcOf = () => (prov() ? N().providers : S.by === "country" ? N().countries : N().cities);
@@ -1596,6 +1598,13 @@ function placeNames() {
       const x = cx + out * Math.sin(it.a), y = cy - out * Math.cos(it.a), flat = Math.abs(y - it.y) < SNAP;
       it.anchor = { x, y: flat ? it.y : y, ex, lx: lx - 5, ly: it.y };
       it.line = el("path", { d: `M${x.toFixed(1)} ${(flat ? it.y : y).toFixed(1)}${flat ? "" : `L${lane.toFixed(1)} ${y.toFixed(1)}L${ex.toFixed(1)} ${it.y.toFixed(1)}`}L${(lx - 5).toFixed(1)} ${it.y.toFixed(1)}` }, ldrs);
+    } else if (it === items[0] && !tight && !it.rest) {
+      // The largest slice, the one the head names, left of twelve o'clock: its leader leaves the slice's upper end, rises clear of the ring and runs over it to the top row, so it crosses no other.
+      const a0 = wrapAngle(parts[0][0] + turn), a1 = wrapAngle(parts[0][1] + turn), t = Math.min(a1 > a0 ? a1 : 0, 0) - Math.min((a1 - a0) / 4, SEAM_OFF / out);
+      if (a1 > a0 && a0 < 0 && t > a0 && t >= -90 * DEG) {
+        const x = cx + out * Math.sin(t), y = cy - out * Math.cos(t), up = Math.min(it.y, cy - out - 2 * LANE);
+        it.line = el("path", { d: `M${x.toFixed(1)} ${y.toFixed(1)}V${up.toFixed(1)}H${ex.toFixed(1)}V${it.y.toFixed(1)}H${(lx - 5).toFixed(1)}` }, ldrs);
+      }
     }
     const focus = () => (it.rest ? restFocus() : groupFocus(it.g, "ring"));
     row.addEventListener("mouseenter", () => setHot(focus()));
@@ -1781,13 +1790,13 @@ function paintRows() {
 }
 
 /* ---------- head to head ---------- */
-const VS_ROW = 54, VS_ROW_MAX = 104, VS_NAMES_PHONE = 3;
+const VS_ROW = 54, VS_NAMES_PHONE = 3;
 // The table's own heads, so one figure never has two names.
 const METRIC = () => [["vp", "Voting power"], ["hosts", "Fibre hosts"], ["geo", ""], ["ready", "Hosts ready now"]];
 const label = (m) => m[1] || (prov() ? "Countries" : "Providers");
-// Value and its mark.
+// Value and its mark. Voting power is on the list's scale, its largest group's, and as long as the list's bars (fitVs): one share is one length on the screen.
 function vsCell(k, g, ps) {
-  if (k === "vp") return [sharePct(shareOf(g)), bar(shareOf(g) / Math.max(...ps.map(shareOf)))];
+  if (k === "vp") return [sharePct(shareOf(g)), bar(shareOf(g) / Math.max(...V.src.map(shareOf)))];
   if (k === "hosts") return [g.hosts, `<small class="vn" data-t="list">${vsNames(g)}</small>`];
   if (k === "geo") return [geoOf(g).length, prov() ? `<span class="chips">${g.countries.map((x) => `<code>${x}</code>`).join("")}</span>` : `<span class="mk dots">${g.companies.map(() => `<u class="c"></u>`).join("")}</span>`];
   return [`${g.ready_hosts} of ${g.hosts}`, `<small>${unheard(g) ? "Voting power not reported" : `${readyText(g)} of its voting power`}</small>`];
@@ -1803,7 +1812,7 @@ function renderVs(keys) {
   vs.innerHTML = `<div class="vs-g" style="--n:${ps.length}">${labels}${cols}</div>`;
 }
 
-// The panel ends on the list's last line, unless an open tail makes that line far off.
+// The panel is no taller than the list beside it, unless an open tail makes the list far longer.
 function fitVs() {
   // A sub line names as many validators as fit; one that still clips gives up its second part.
   $$(".sub", list).forEach((e) => {
@@ -1816,8 +1825,11 @@ function fitVs() {
   const names = (k) => $$(".vn", vs).forEach((e) => { e.innerHTML = vsNames(V.byKey.get(e.closest(".vs-col").dataset.k), k); });
   const rows = METRIC().map(([k]) => $$(`.vs-m.${k}`, vs)), head = $(".vs-hd", vs)?.offsetHeight ?? 0;
   // On a phone every figure has a line of its own, so there is nothing to line up.
-  if (M.phone()) { names(VS_NAMES_PHONE); rows.flat().forEach((e) => { e.style.height = ""; }); return; }
-  // Each row is as tall as its tallest cell, the names most of all; what is left of the list's height goes evenly to all.
+  if (M.phone()) { names(VS_NAMES_PHONE); rows.flat().forEach((e) => { e.style.height = ""; }); vs.style.removeProperty("--lbw"); return; }
+  // The list's bar track: the largest group's bar is the whole of it.
+  const lb = $('.rw[data-k="' + CSS.escape(V.ranked[0].key) + '"] .lb', list);
+  if (lb) vs.style.setProperty("--lbw", lb.offsetWidth + "px"); else vs.style.removeProperty("--lbw");
+  // Each row is as tall as its tallest cell, the names most of all, and no taller.
   const tall = (floor = VS_ROW) => { rows.flat().forEach((e) => { e.style.height = "auto"; }); return rows.map((a) => Math.max(floor, ...a.map((e) => Math.ceil(e.offsetHeight)))); };
   names(VS_NAMES);
   let need = tall();
@@ -1826,8 +1838,7 @@ function fitVs() {
   for (let k = VS_NAMES - 1; k > 0 && beside && head + sum(need, (x) => x) > list.offsetHeight; k--) { names(k); need = tall(); }
   // Still too tall: a row with room to spare gives it up.
   if (beside && head + sum(need, (x) => x) > list.offsetHeight) need = tall(0);
-  const add = beside ? Math.max(0, Math.min(VS_ROW_MAX - VS_ROW, (list.offsetHeight - head - sum(need, (x) => x)) / rows.length)) : 0;
-  rows.forEach((a, i) => a.forEach((e) => { e.style.height = need[i] + add + "px"; }));
+  rows.forEach((a, i) => a.forEach((e) => { e.style.height = need[i] + "px"; }));
 }
 
 /* ---------- table tooltips ---------- */
