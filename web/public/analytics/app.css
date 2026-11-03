@@ -167,7 +167,12 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 .bar h1 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-page); font-weight: 600; line-height: 36px; letter-spacing: -.028em; cursor: default; transition: font-size .14s; }
 .bar.stuck h1 { font-size: 18px; letter-spacing: -.012em; cursor: pointer; }
 .bar .ctl { position: relative; align-self: baseline; }
+/* Period is the row's one help term; the time keeps its tooltip without the mark, so two dotted words never stand side by side */
 .bar .ctl-l .dt { text-decoration: underline dotted var(--rule4); text-decoration-thickness: 1px; text-underline-offset: 4px; cursor: help; }
+/* when the data was read: in the bar where it has the room, else a line of its own under the title */
+.upd { font: 400 var(--fs-note)/16px "IBM Plex Sans", var(--f); color: var(--ink3); white-space: nowrap; }
+.bar .upd { display: none; margin-right: 10px; }
+#top .upd { margin: 4px 0 var(--g); }
 .bar .hold { display: none; position: absolute; top: 0; right: 0; bottom: 0; align-items: center; font-size: var(--fs-note); color: var(--ink2); white-space: nowrap; }
 .bar.hs .ctl > :not(.hold) { visibility: hidden; }
 .bar.hs .hold { display: flex; }
@@ -178,6 +183,11 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 .jump button { padding: 0 12px; color: var(--ink2); }
 .jump button:hover, .jump button.on { color: var(--ink); }
 .bar + .sec { margin-top: 0; }
+/* a desktop has the room for the time in the bar, beside the period */
+@media (min-width: 1024px) {
+  .bar .upd { display: block; }
+  #top .upd { display: none; }
+}
 
 /* segmented control, built by seg() */
 .seg { position: relative; display: inline-flex; height: 34px; padding: 3px; border: 1px solid var(--line); border-radius: 999px; }
@@ -261,11 +271,12 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #top .part { transition: opacity .12s; }
 #top .paid { fill: var(--acc); }
 #top .held { fill: var(--u5); }
-#top .withdrawn { fill: var(--tail); }
+#top .withdrawn { fill: var(--rest); }
 #top .dim .part:not(.on) { opacity: .4; }
 
 #top text { font-size: var(--fs-tick); fill: var(--ink3); }
-#top text.val { fill: var(--ink2); font-weight: 500; }
+#top text.lab { fill: var(--ink2); }
+#top text.val { font-size: var(--fs-note); font-weight: 500; fill: var(--ink); }
 
 /* cost */
 #cost .card { position: relative; display: flex; flex-direction: column; height: 344px; padding: 18px var(--pad) var(--pad); }
@@ -304,7 +315,6 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #publishers { --th: 30px; }
 #publishers .pb-share { padding: 18px var(--pad); }
 #publishers .pb-top { position: relative; height: 34px; }
-#publishers .pb-of { position: absolute; right: 0; bottom: 0; z-index: 1; }
 #publishers .pb-labels { position: absolute; inset: 0; }
 #publishers .pb-lab { position: absolute; left: 0; bottom: 0; display: flex; align-items: baseline; gap: 7px; white-space: nowrap; pointer-events: none; transition: opacity .12s; }
 #publishers .pb-lab b { font-size: var(--fs-fig); font-weight: 600; line-height: 32px; letter-spacing: -.025em; font-variant-numeric: proportional-nums; }
@@ -322,8 +332,9 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #publishers .pb-wrap { position: relative; padding: 0 8px 6px; border-top: 1px solid var(--line); }
 #publishers .pb-wrap::before { content: ""; position: absolute; left: 0; right: 0; top: var(--th); height: 1px; background: var(--line); }
 #publishers .pb-t { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
-#publishers tbody::before { content: ""; display: block; height: 7px; }
-#publishers .c-who { width: 150px; }
+/* room for the strips' dates, which stand under the heads' line as an axis over the rows */
+#publishers tbody::before { content: ""; display: block; height: 26px; }
+#publishers .c-who { width: 176px; }
 #publishers .c-data { width: 158px; }
 #publishers .c-mib { width: 80px; }
 #publishers .c-avg { width: 92px; }
@@ -351,8 +362,8 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 /* the cell holds two sorts: only the one in force shows */
 #publishers th.a:not(.by-first) .pb-first, #publishers th.by-first > .pb-h > button:not(.pb-first) { color: var(--ink2); }
 #publishers th.a:not(.by-first) .pb-first::after, #publishers th.by-first > .pb-h > button:not(.pb-first)::after { opacity: 0; }
-/* the dates share the column name's line, as every head sits on one line, each over the line that marks its day */
-#publishers .pb-ticks { grid-area: 1 / 1; position: relative; height: 14px; font-size: var(--fs-tick); color: var(--ink3); }
+/* the dates sit under the heads' line, each over the line that marks its day, so the window's first day has the strip's start to itself */
+#publishers .pb-ticks { position: absolute; left: 18px; right: 0; top: calc(100% + 6px); height: 14px; font-size: var(--fs-tick); color: var(--ink3); cursor: default; }
 #publishers .pb-ticks span { position: absolute; top: 0; line-height: 14px; white-space: nowrap; }
 
 #publishers tbody tr { transition: opacity .12s; }
@@ -365,7 +376,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #publishers tbody td[data-c="left"].z { color: var(--ink3); }
 
 /* sort shows in the column's figures */
-#publishers [data-sort="bytes"] td.d .pb-d b, #publishers [data-sort="paid_per_mib_utia"] [data-c="mib"], #publishers [data-sort="avg_blob_bytes"] [data-c="avg"] .pb-d b, #publishers [data-sort="left"] [data-c="left"] { color: var(--ink); }
+#publishers [data-sort="bytes"] td.d .pb-d :is(b, span), #publishers [data-sort="paid_per_mib_utia"] [data-c="mib"], #publishers [data-sort="avg_blob_bytes"] [data-c="avg"] .pb-d :is(b, span), #publishers [data-sort="left"] [data-c="left"] { color: var(--ink); }
 
 /* publisher: rank, name; the same slots as Hosting's rows */
 #publishers tbody td.w { text-align: left; }
@@ -373,15 +384,17 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #publishers .pb-who { align-items: baseline; }
 #publishers .pb-who em { font-style: normal; font-size: var(--fs-tick); text-align: right; color: var(--ink2); }
 #publishers .pb-who b { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-weight: 500; font-size: var(--fs-row); line-height: 18px; color: var(--ink); }
-#publishers .pb-who b span:first-child { overflow: hidden; text-overflow: ellipsis; }
-#publishers .pb-who small { grid-column: 2; font-size: var(--fs-tick); font-weight: 400; line-height: 14px; color: var(--ink3); }
+#publishers .pb-who b span { overflow: hidden; text-overflow: ellipsis; }
+/* a shared name says which of its accounts this is, after the name */
+#publishers .pb-who small { flex: none; font-size: var(--fs-note); font-weight: 400; color: var(--ink3); }
+/* the row's dot: the colour of its segment in the share bar */
+#publishers :is(.pb-who b, .pb-more span) i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--c); transform: translateY(-1px); }
 #publishers .pb-who code { grid-column: 2; font: 500 var(--fs-tick)/14px var(--m); color: var(--ink3); letter-spacing: -.01em; }
 
-/* data: digits, a fixed slot for the unit, the share */
+/* data: the figure in its column's unit, then the share; the whole size with its unit is for a narrow page's cards */
 #publishers .pb-d { display: flex; justify-content: flex-end; align-items: baseline; }
 #publishers .pb-d b { font-weight: 400; }
-/* the unit ends flush, so a column's head and its last glyph share an edge */
-#publishers .pb-d u { flex: none; width: 26px; margin-left: 4px; text-decoration: none; text-align: right; color: var(--ink3); }
+#publishers .pb-d span { display: none; }
 #publishers .pb-d em { flex: none; width: 54px; font-style: normal; text-align: right; color: var(--ink3); }
 
 /* activity */
@@ -397,7 +410,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #publishers .pb-key td.a { position: relative; }
 #publishers .pb-rule { position: absolute; inset: 6px 0 0 18px; display: flex; align-items: center; gap: 16px; pointer-events: none; }
 #publishers .pb-rule span { display: flex; align-items: center; gap: 6px; font-size: var(--fs-tick); line-height: 16px; color: var(--ink2); white-space: nowrap; }
-#publishers .pb-rule i { flex: none; width: 2px; background: var(--mark); }
+#publishers .pb-rule i { flex: none; background: var(--acc); }
 /* the sample of empty time: four dots of the trace's own centre line */
 #publishers .pb-rule u { flex: none; width: calc(var(--s) * 3 + var(--d)); height: var(--h); background: repeating-linear-gradient(90deg, var(--rule4) 0 var(--d), transparent var(--d) var(--s)); }
 
@@ -405,6 +418,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #publishers tr.o td { background: var(--wash2); cursor: pointer; }
 #publishers tr.o:hover td { background: var(--wash3); }
 #publishers .pb-more { width: 100%; align-items: center; font-size: var(--fs-row); font-weight: 500; line-height: 18px; color: var(--ink); text-align: left; }
+#publishers .pb-more span { display: flex; align-items: baseline; gap: 6px; }
 #publishers .pb-more svg { align-self: center; justify-self: center; color: var(--ink3); transition: transform .18s; }
 #publishers tr.o:hover .pb-more svg { color: var(--ink); }
 #publishers .pb-more[aria-expanded="true"] svg { transform: rotate(180deg); }
@@ -485,7 +499,11 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting .lab.t1 { font-size: var(--fs-lab); fill: var(--ink); }
 #hosting .lab.t3 { font-size: var(--fs-tick); fill: var(--ink3); }
 #hosting .lab.t3 .v { font-weight: 500; fill: var(--ink2); }
+/* a small map has one size of label, the smallest, so its names find room at sea */
+#hosting .mp svg.sm .lab { font-size: var(--fs-tick); }
 #hosting .ldr { stroke: var(--rule4); stroke-width: 1; pointer-events: none; }
+/* the card's colour each side of the ink, so a leader over land reads as a pointer laid on it, not as a border drawn in it */
+#hosting .ldr.ldk { stroke: var(--card); stroke-width: 3; }
 /* the map's own rail: a titled list on the left edge, in the names' rhythm, ending on their last line */
 #hosting .mside { position: absolute; left: 0; top: 0; z-index: 2; width: 140px; font-size: var(--fs-note); line-height: 16px; color: var(--ink2); pointer-events: none; }
 #hosting .mhd { display: flex; align-items: center; height: var(--pitch, 32px); color: var(--ink2); white-space: nowrap; }
@@ -545,6 +563,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting .k-a > .nm { grid-column: 2; grid-row: 1; }
 #hosting .k-a > code { grid-column: 3; grid-row: 1; }
 #hosting .k-a > .sub { grid-column: 2 / -1; grid-row: 2; min-width: 0; font-size: var(--fs-tick); line-height: 14px; color: var(--ink3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#hosting .sub b { font-weight: 500; color: var(--ink); }
 #hosting .sub.tight .mr { display: none; }
 #hosting .k-a em { font-style: normal; font-size: var(--fs-tick); text-align: right; color: var(--ink2); pointer-events: none; transition: opacity .12s; }
 #hosting .rw:hover .k-a em, #hosting .rw.on .k-a em { opacity: 0; }
@@ -578,6 +597,21 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting :is(.ask3, .next)[hidden] { display: none; }
 #hosting .tb.focus .rw:not(.lit):not(.on) .lb { opacity: .45; }
 
+/* find: in the head over the bars, --fd-gap past the weighing's figures, centred on the heads' line, its outline only while the pointer is on it, it has focus or it holds a search, so the head stays one light line */
+#hosting .th { --fd-gap: 32px; }
+#hosting .th > .fd { grid-area: 1 / 2; justify-self: start; align-self: end; width: 240px; max-width: calc(100% - var(--slot) - var(--fd-gap)); margin: 0 0 1px calc(var(--slot) + var(--fd-gap)); }
+#hosting .fd { position: relative; display: flex; align-items: center; min-width: 0; height: 28px; border: 1px solid transparent; border-radius: 6px; background: var(--card); color: var(--ink3); cursor: text; transition: border-color .12s; }
+#hosting .fd:hover, #hosting .tb.q .fd { border-color: var(--line); }
+#hosting .fd:focus-within { border-color: var(--rule4); }
+#hosting .fd > svg { position: absolute; left: 8px; top: 6px; pointer-events: none; }
+#hosting .fd input { flex: 1 1 auto; min-width: 0; height: 100%; padding: 0 6px 0 28px; text-overflow: ellipsis; border: 0; outline: 0; background: none; font: 400 var(--fs-note) var(--f); color: var(--ink); }
+#hosting .fd input::placeholder { color: var(--ink3); opacity: 1; }
+#hosting .fd:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+#hosting .fd-no { flex: none; padding-right: 4px; font-size: var(--fs-note); color: var(--ink3); white-space: nowrap; }
+#hosting .fd-x { flex: none; display: grid; place-items: center; width: 16px; height: 16px; margin-right: 8px; border-radius: 50%; color: var(--ink3); }
+#hosting .fd-x:hover { color: var(--ink); background: var(--wash3); }
+#hosting :is(.fd-no, .fd-x)[hidden] { display: none; }
+
 /* columns */
 #hosting .k-n { min-width: 0; font-size: var(--fs-row); text-align: right; color: var(--ink2); white-space: nowrap; }
 /* digits of one width, so points and percent signs stand in line down a column */
@@ -602,9 +636,18 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting .tb.vs .k-n { display: none; }
 #hosting .tb.vs .th .h:not(.wt) { display: none; }
 /* a sort still in force names the order, in the first head's place: the list has no room for the column */
+/* a typed query keeps the field in sight, and the order then shows in the figures alone */
 #hosting .tb.vs .th .h.on:not(.wt) { display: flex; grid-column: 1; grid-row: 1; justify-self: start; padding-left: 22px; }
 #hosting .tb.vs .th .h.on:not(.wt) .h1::after { right: auto; left: calc(100% + 4px); }
 #hosting .tb.vs .th:has(.h.on:not(.wt)) .fh { visibility: hidden; }
+/* beside Compare the list has room for its heads and no more, so the field is its magnifier until it is used; then it opens over the head from the names' edge, whole placeholder and all. Out of the grid there, since a grid area would be its frame */
+@media (min-width: 980px) {
+  #hosting .tb.vs .th { --fd-gap: 16px; position: relative; }
+  #hosting .tb.vs .th > .fd { width: 28px; }
+  #hosting .tb.vs .fd input::placeholder { color: transparent; }
+  #hosting .tb.vs .th > .fd:focus-within, #hosting .tb.vs.q .th > .fd { position: absolute; grid-area: auto; left: 30px; bottom: 0; z-index: 2; width: 240px; max-width: none; margin: 0 0 1px; }
+  #hosting .tb.vs .fd:focus-within input::placeholder { color: var(--ink3); }
+}
 #hosting .tb.vs .th .k-a { grid-column: 1; grid-row: 1; }
 #hosting .tb.vs .tb-vs { display: block; min-width: 0; position: sticky; top: calc(var(--stick) + 12px); align-self: start; }
 #hosting .vs-g { display: grid; grid-template-columns: 116px repeat(var(--n), minmax(0, 1fr)); gap: 0 8px; }
@@ -738,13 +781,14 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #top .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: 300px repeat(2, 144px); }
   #top .main { grid-row: auto; grid-column: 1 / -1; }
 
-  /* cost: its sentence under the heading, where it can wrap */
-  #cost .card { height: 330px; }
-
-  /* publishers: a row per account, the trace the width of the card */
+  /* publishers: a row per account, the trace the width of the card; the bar's switch on its own row under the heading */
+  #publishers .sec-h .ctl { flex: 1 1 100%; margin-left: 0; }
   #publishers .pb-wrap { padding: 0 var(--pad) 6px; }
   #publishers .pb-wrap::before, #publishers .pb-x { display: none; }
-  #publishers :is(.pb-t, thead, tbody, tfoot, thead tr, tfoot tr) { display: block; }
+  #publishers :is(thead, tbody, tfoot, thead tr, tfoot tr) { display: block; }
+  /* the key stands over the cards, under the sort, so the first strip already has its meaning */
+  #publishers .pb-t { display: flex; flex-direction: column; }
+  #publishers tfoot { order: -1; }
   #publishers tbody::before { display: none; }
   #publishers colgroup { display: none; }
   #publishers th:not(.a) { display: none; }
@@ -752,10 +796,12 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   /* the days stay over the cards as they scroll, so every card's trace has its dates */
   #publishers thead { position: sticky; top: var(--stick); z-index: 3; background: var(--card); }
   #publishers .pb-h > button:not(.pb-first) { display: none; }
-  #publishers .pb-first { cursor: help; }
-  #publishers .pb-first::after { display: none; }
+  /* the dates alone on the pinned line, so the first day has the strip's start; tapping them says what the strips are */
+  #publishers .pb-first { display: none; }
+  #publishers .pb-ticks { grid-area: 1 / 1; position: relative; left: auto; right: auto; top: auto; cursor: help; }
 
-  #publishers tbody tr[data-i] { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-areas: "w w d d" "c c c c" "n m v l"; gap: 8px; align-items: end; padding: 12px 0; border-top: 1px solid var(--line); }
+  /* the last figure's name, Blobs left in escrow, is the longest, so its column keeps it whole and the other three share the rest */
+  #publishers tbody tr[data-i] { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; grid-template-areas: "w w d d" "c c c c" "n m v l"; gap: 8px; align-items: end; padding: 12px 0; border-top: 1px solid var(--line); }
   #publishers tbody tr:hover td, #publishers tbody tr.on td { background: none; }
   #publishers tbody td, #publishers tbody td:first-child, #publishers tbody td:last-child { height: auto; padding: 0; border-radius: 0; text-align: left; white-space: normal; }
   #publishers tbody td.w { grid-area: w; align-self: start; }
@@ -767,18 +813,18 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #publishers tbody td[data-c="avg"] { grid-area: v; }
   #publishers tbody td[data-c="left"] { grid-area: l; }
   #publishers tbody td[data-c="avg"] .pb-d { justify-content: flex-start; }
-  #publishers tbody td[data-c="avg"] .pb-d u { width: auto; }
+  #publishers .pb-d b { display: none; }
+  #publishers .pb-d span { display: inline; }
   #publishers .pb-d em { width: auto; margin-left: 6px; }
-  #publishers .pb-d u { width: auto; }
 
   /* the fold, a row to tap */
   #publishers tbody tr.o { margin: 2px -8px 0; padding: 12px 8px; border: 0; border-radius: var(--r3); background: var(--wash2); cursor: pointer; }
   #publishers tr.o td, #publishers tr.o:hover td { background: none; }
   #publishers tbody td.pb-none { height: 88px; text-align: center; }
 
-  #publishers .pb-key td, #publishers .pb-key td:first-child { display: block; height: auto; padding: 10px 0 0; }
+  #publishers .pb-key td, #publishers .pb-key td:first-child { display: block; height: auto; padding: 2px 0 0; }
   #publishers .pb-key td:last-child { display: none; }
-  #publishers .pb-rule { position: static; flex-wrap: wrap; gap: 4px 14px; min-height: 40px; margin-top: 2px; }
+  #publishers .pb-rule { position: static; flex-wrap: wrap; gap: 4px 14px; min-height: 30px; margin: 4px 0 6px; }
 
   /* hosting: the ring and its key, then the map the width of the card, then the regions */
   #hosting .sec-h p { flex: 1 1 100%; overflow: visible; }
@@ -789,9 +835,10 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #hosting .say-who small:empty { display: none; }
   #hosting .whobox { max-width: 384px; }
   #hosting .mkey { position: static; flex-wrap: wrap; height: auto; margin-top: 4px; }
-  #hosting .mp { height: auto; overflow: visible; }
-  #hosting .mp canvas { position: relative; inset: auto; height: auto; aspect-ratio: 2.27; }
-  #hosting .mp > svg { inset: 0 0 auto; height: auto; aspect-ratio: 2.27; }
+  /* the land's own shape, and over its north a lane of open sea a label high, where Europe's names stand clear of every coast */
+  #hosting .mp { height: auto; overflow: visible; container-type: inline-size; }
+  #hosting .mp canvas { position: relative; inset: auto; height: calc(100cqw / 2.27 + 26px); }
+  #hosting .mp > svg { inset: 0 0 auto; height: calc(100cqw / 2.27 + 26px); }
   #hosting .mside { position: static; width: auto; margin-top: 8px; padding: 8px 12px; pointer-events: auto; }
   #hosting .mhd { height: 20px; line-height: 20px; }
   #hosting .mreg { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 24px; background: none; }
@@ -800,7 +847,14 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   /* the rows: name and validators; the weighing with its bar; the other figure. Each figure says its own name */
   #hosting .tb { padding: 0 var(--pad); }
   #hosting .tb-list > .top { position: static; }
-  #hosting .th, #hosting .tb.vs .tr.th { display: none; }
+  /* the head keeps only the find field, the list's width, over the sort */
+  #hosting .tb .tr.th, #hosting .tb.vs .tr.th { display: block; height: auto; margin: 0; padding: 10px 0 2px; border: 0; }
+  #hosting .tb .tr.th > :not(.fd) { display: none; }
+  #hosting .th > .fd, #hosting .tb.vs .th > .fd { grid-area: auto; width: 100%; max-width: none; height: 40px; margin: 0; border-color: var(--line); }
+  #hosting .fd > svg { top: 12px; }
+  #hosting .fd input { font-size: 16px; }
+  #hosting .fd-x { position: relative; }
+  #hosting .fd-x::after { content: ""; position: absolute; inset: -14px; }
   #hosting .sorter { padding: 6px 0; }
   #hosting .rw, #hosting .tb.vs .tr { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "a" "v" "n"; gap: 6px; align-items: end; }
   #hosting .rw { height: auto; padding: 8px; }
@@ -873,6 +927,8 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   .bar + .sec { margin-top: 12px; }
   /* the pinned bar sits under the site's header and the parts hang under it: the days stand under the parts, and move with them */
   #publishers thead { top: calc(var(--hdr, 0px) + 44px); transition: top 220ms cubic-bezier(.2, .7, .2, 1); }
+  /* the title's line is 48 px tall on a phone, so the time steps up to sit 4 px under it */
+  #top .upd { margin-top: -8px; }
 
   /* top: one tile to a line where two would clip */
   #top .grid { grid-template-rows: auto repeat(2, 144px); }
@@ -898,10 +954,8 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #cost tr.lit td, #cost tbody tr:hover td { background: var(--wash2); }
   #cost .dt { text-decoration: underline dotted var(--rule4); text-decoration-thickness: 1px; text-underline-offset: 3px; }
 
-  /* publishers */
-  #publishers .pb-top { display: flex; flex-direction: column-reverse; height: auto; }
-  #publishers .pb-of { position: static; justify-content: space-between; margin: 0 0 6px; }
-  #publishers .pb-labels { position: relative; inset: auto; height: 34px; }
+  /* publishers: the switch's row as Hosting's, its label then the pill */
+  #publishers .sec-h .ctl { gap: 10px; margin-block: 4px 8px; }
 
   /* hosting */
   #hosting .sec-h .ctl { flex: 1 1 100%; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 10px; align-items: center; margin-block: 4px 8px; }
@@ -939,10 +993,16 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 @media (max-width: 520px) {
   #top .grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-auto-rows: 144px; }
   #top .main { grid-column: auto; }
-  /* four to a row, a long name takes two lines: every name ends on the same line, over its figure */
-  #publishers :is(.pb-n, td[data-c])[data-l]::before { display: flex; align-items: flex-end; min-height: 28px; }
-  /* the key three to a line, so its last step never stands alone */
-  #publishers .pb-rule { display: grid; grid-template-columns: repeat(3, max-content); gap: 4px 16px; }
+}
+
+/* a phone's cards: a shorter strip, the four figure names on one line, the key's five marks in one row across the card */
+@media (max-width: 599px) {
+  #publishers td.a canvas { height: 28px; }
+  #publishers tbody [data-l]::before { overflow: hidden; line-height: 12px; text-overflow: ellipsis; white-space: nowrap; }
+  #publishers .pb-who code { line-height: 12px; }
+  #publishers .pb-who b span { white-space: nowrap; }
+  #publishers .pb-rule { flex-wrap: nowrap; justify-content: space-between; gap: 0 8px; min-height: 26px; }
+  #publishers .pb-rule span { gap: 5px; }
 }
 
 /* four periods beside the title leave no room for their label */
@@ -954,7 +1014,6 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 @media (max-width: 359px) {
   :host { --fs-page: 22px; --pad: 14px; }
   #publishers tbody tr[data-i] { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "w w" "c c" "d d" "n m" "v l"; }
-  #publishers :is(.pb-n, td[data-c])[data-l]::before { min-height: 0; }
   #publishers tbody td.d { text-align: left; }
   #publishers tbody td.d .pb-d { justify-content: flex-start; }
   .seg button { min-width: 40px; padding: 0 7px; }
