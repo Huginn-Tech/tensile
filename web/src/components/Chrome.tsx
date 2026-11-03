@@ -117,7 +117,7 @@ function NetworkChip({ meta, error, theme, flip }: { meta: Meta | null; error: s
   // a click elsewhere or Escape closes the menu, as a menu is expected to
   useEffect(() => {
     const close = (e: Event) => { const el = box.current; if (el?.open && !(e instanceof KeyboardEvent ? false : el.contains(e.target as Node))) el.open = false; };
-    const key = (e: KeyboardEvent) => { if (e.key === "Escape" && box.current?.open) box.current.open = false; };
+    const key = (e: KeyboardEvent) => { const el = box.current; if (e.key === "Escape" && el?.open) { const inside = el.contains(document.activeElement); el.open = false; if (inside) el.querySelector("summary")?.focus(); } };
     document.addEventListener("click", close);
     document.addEventListener("keydown", key);
     return () => { document.removeEventListener("click", close); document.removeEventListener("keydown", key); };
@@ -145,7 +145,7 @@ function NetworkChip({ meta, error, theme, flip }: { meta: Meta | null; error: s
         {!mainnetHere && !mainnetLinked && (
           <span className="soon" aria-disabled="true" title="Fibre is not on mainnet yet. This observer will follow it there.">Mainnet<i className="tagx">soon</i></span>
         )}
-        <button type="button" className="theme-row" role="menuitem" onClick={() => { flip(); if (box.current) box.current.open = false; }}>
+        <button type="button" className="theme-row" role="menuitem" onClick={() => { flip(); const el = box.current; if (el) { el.open = false; el.querySelector("summary")?.focus(); } }}>
           {theme === "dark" ? SUN : MOON}{theme === "dark" ? "Light theme" : "Dark theme"}
         </button>
       </div>

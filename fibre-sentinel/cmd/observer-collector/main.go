@@ -384,6 +384,8 @@ func main() {
 		}
 		markErr = msg
 	}
+	// A blob the pass stores, not the fast tick, is told the same way.
+	coll.Landed = fast.landed
 	if *fastEvery > 0 {
 		ft := time.NewTicker(*fastEvery)
 		defer ft.Stop()

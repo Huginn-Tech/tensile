@@ -183,6 +183,21 @@ for unit in "fibre-backup@$instance.service" "fibre-archive@$instance.service"; 
   if unit_failed "$unit"; then fail_check "${unit%.service}" "$unit failed (journalctl -u $unit)"; fi
 done
 
+# The Analytics page's data file is rewritten every quarter hour
+# (fibre-analytics@, deploy/analytics-data.mjs), and a run that fails keeps
+# the last one: a job that keeps failing leaves the page an ever older file,
+# which only its foot shows. Only a host whose site has the page has the
+# file. Over an hour old, four runs missed, is a failing check; one failed
+# run is not. ANALYTICS_FILE is where the site serves it (the selftest
+# points it elsewhere).
+analytics_file="${ANALYTICS_FILE:-/srv/fibre-site/$instance/analytics/data.json}"
+if [ -f "$analytics_file" ]; then
+  written=$(stat -c %Y "$analytics_file" 2>/dev/null || true)
+  if [ -n "$written" ] && [ $((epoch - written)) -gt 3600 ]; then
+    fail_check analytics "the Analytics data file was last written $(hours $((epoch - written))) ago (journalctl -u fibre-analytics@$instance)"
+  fi
+fi
+
 # A unit that never failed is not a job that ran: a timer never enabled on
 # a new host leaves nothing failed. So the outcomes are checked too. The
 # backup records each copy that finished in exports/remote-copy.json; with

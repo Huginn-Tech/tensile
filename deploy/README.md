@@ -1162,8 +1162,8 @@ none, and exits within 5 s whatever is left.
 ### The Analytics page
 
 A build that names its network (`NEXT_PUBLIC_NETWORK_LABEL`, Mocha's) has an
-Analytics page at `/analytics/`; the mainnet build leaves it out of the
-header and shows nothing there. The page draws every settlement and every
+Analytics page at `/analytics/`; a build with the label empty, as mainnet's,
+leaves it out of the header and shows nothing there. The page draws every settlement and every
 validator's host, so it does not call the API: `fibre-analytics@<network>`
 reads the API on this host every quarter hour (`deploy/analytics-data.mjs`)
 and the page fetches the one file that makes. A later run reads only the
@@ -1183,8 +1183,18 @@ The file lives in the unit's state directory and root copies it into the
 site after each run, since a deploy replaces the site's directory whole. The
 drop-in puts it back when the site restarts, so a deploy needs no step of its
 own. A run that fails leaves the last file, and the page's foot says when it
-was read. The script itself is installed like site-server: a site deploy does
-not replace it.
+was read; healthwatch fails a check named `analytics` once the served file is
+over an hour old. The script itself is installed like site-server: a site
+deploy does not replace it.
+
+The unit and the drop-in are for a site that `fibre-site@` serves from
+`/srv/fibre-site/<network>`. A site served as files by Caddy or nginx, or by
+the compose stack, has no unit for the page: run the script on a timer of
+your own with `API_LISTEN`, `NETWORK` and `STATE_DIRECTORY` set, as the unit
+sets them, and copy its `data.json` into the site's `analytics/` directory
+after each run; or build with `NEXT_PUBLIC_NETWORK_LABEL` empty, which leaves
+the page out. A build with the page and no file says the page could not be
+loaded.
 
 ### The tip stream through a front proxy
 

@@ -226,7 +226,7 @@ const pubs = () => once("pubs", () => { const named = new Map(U().publishers.all
 const settled = () => once("settled", () => {
   const u = U(), [t0, t1] = span(), by = new Map(pubs().map((p) => [p.address, p])), out = [];
   // A settlement on the window's first second can fall outside the list the API made a moment later.
-  for (const [t, size, i, fee, share, status, ns] of u.settlements) { const pub = by.get(u.addresses[i]); if (pub && t >= t0 && t <= t1) out.push({ t, size, fee, share, status, ns, pub }); }
+  for (const r of u.settlements) { const [t, size, i, fee, share] = r, ns = r[r.length - 1], pub = by.get(u.addresses[i]); if (pub && t >= t0 && t <= t1) out.push({ t, size, fee, share, ns, pub }); }
   return out;
 });
 const fee = (size) => { const f = U().params.price_formula; return (f.base_gas + f.gas_per_chunk * Math.ceil(size / f.chunk_bytes)) * f.utia_per_gas; };
@@ -1212,7 +1212,7 @@ const markAt = (p, x) => { const gap = (m) => Math.abs(m.x + m.cw / 2 - (x + .5)
 
 function dotTip(s) {
   return tipHead(s.pub.display, s.pub.colour) + tipRow("Time", stamp(s.t * 1e3)) + tipRow("Size", size(s.size)) + tipRow("Fee", tia(s.fee))
-    + tipRow("Endorsed", `${pct(s.share)} of voting power`) + (s.ns ? tipRow("Namespace", s.ns) : "");
+    + (s.share == null ? "" : tipRow("Endorsed", `${pct(s.share)} of voting power`)) + (s.ns ? tipRow("Namespace", s.ns) : "");
 }
 
 // A stroke with several settlements is never shown as one: a few are listed, more are a range.
@@ -1382,16 +1382,18 @@ function model() {
   const src = srcOf().map((g) => { const k = keyOf(g), vs = mem.get(k) || []; return { ...g, key: k, rep: sum(vs.filter((v) => v.readiness !== "not_reported"), (v) => v.vp) }; });
   // The weighing ranks the ring's groups. The table is one list, largest first in whatever column it is sorted by.
   // The list and the key run to the two thirds of all voting power a settlement needs; a third is what can hold one back.
-  const byPower = [...src].sort((a, b) => b.vp - a.vp), past = (part) => { let held = 0, i = 0; while (i < byPower.length && held <= n.totals.voting_power * part) held += byPower[i++].vp; return i; };
-  const cut = Math.max(1, past(2 / 3)), onKey = Math.min(cut, KEY_NAMES);
+  // Validators with no Fibre host hold part of that power, so the hosted groups may never pass a limit: then no line says they do, and the list holds them all.
+  const byPower = [...src].sort((a, b) => b.vp - a.vp), past = (part) => { const limit = n.totals.voting_power * part; let held = 0, i = 0; while (i < byPower.length && held <= limit) held += byPower[i++].vp; return held > limit ? i : null; };
+  const cut = Math.max(1, past(2 / 3) ?? byPower.length), onKey = Math.min(cut, KEY_NAMES);
   const ranked = [...src].sort((a, b) => weight(b) - weight(a) || b.vp - a.vp), named = ranked.slice(0, onKey), unnamed = ranked.slice(onKey);
-  const resting = S.sort === S.weigh && S.dir < 0, top = ordered(src).slice(0, cut), shown = new Set(top.map((g) => g.key));
+  // The rows above the fold are the weighing's largest whatever the sort, as on Publishers; the sort orders them and the tail.
+  const resting = S.sort === S.weigh && S.dir < 0, top = ordered(ranked.slice(0, cut)), shown = new Set(top.map((g) => g.key));
   const tail = src.filter((g) => !shown.has(g.key));
   const rest = { ...agg(tail, "__rest", `${tail.length} more`), sum: true, rep: sum(tail, (g) => g.rep) };
   // The scale is the weighing's, so a bar keeps its length through every sort. The others are a figure, or their bar would halve every other.
   const scale = weight(ranked[0]);
   // The lines say so only while the rows run down voting power.
-  const limits = new Map(S.sort === "vp" && S.dir < 0 ? [[past(1 / 3), "&gt;33%"], [past(2 / 3), "&gt;66%"]] : []);
+  const limits = new Map(S.sort === "vp" && S.dir < 0 ? [[past(1 / 3), "&gt;33%"], [past(2 / 3), "&gt;66%"]].filter(([at]) => at != null) : []);
   V = { src, ranked, named, unnamed, top, tail, rest, scale, resting, limits, tailKeys: new Set(tail.map((g) => g.key)), step: new Map(named.map((g, i) => [g.key, keyTone(i, named.length)])), mem, byKey: new Map() };
   [...src, rest].forEach((g) => V.byKey.set(g.key, g));
 }

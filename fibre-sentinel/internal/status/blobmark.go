@@ -11,7 +11,8 @@ import (
 // The two share nothing but the database and the data directory, and the API
 // read the store for a new blob four times a second, so a row the collector
 // stored waited up to a quarter of a second to reach the pages. The collector
-// now rewrites this file when a read stored a new blob, and the API, which
+// now rewrites this file when its fast tick or a pass stored a new blob, after
+// that read's payments, and the API, which
 // watches the file's directory while a tip stream is open, reads the tip at
 // once (observer/api/tipblobs.go).
 //

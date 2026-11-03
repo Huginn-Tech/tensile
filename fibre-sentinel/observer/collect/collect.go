@@ -82,6 +82,10 @@ type Collector struct {
 	// Work is the collector's list of failing work (work.go), which may be
 	// nil: the stages after the ingest report to it.
 	Work *WorkErrors
+	// Landed, when set, is told when a pass stored a new blob, after its
+	// payment: the API then reads the tip at once (internal/status,
+	// MarkBlob). The fast tick tells it of the blobs it stores.
+	Landed func()
 
 	lastRetention time.Time
 	// registryReplayed: the last pass read registry.jsonl to its end.
@@ -221,9 +225,11 @@ func (c *Collector) Pass(ctx context.Context, now time.Time) []string {
 			}
 		}
 	}
+	stored := false
 	if r, err := ingest.Publications(st, c.Paths.Publications, now); err != nil {
 		fail("publications", err)
 	} else {
+		stored = r.Inserted > 0
 		if r.Inserted > 0 {
 			c.logf("publications: +%d (read %d, line %d)", r.Inserted, r.Read, r.Line)
 		}
@@ -350,6 +356,9 @@ func (c *Collector) Pass(ctx context.Context, now time.Time) []string {
 		if r.Skipped > 0 {
 			c.logf("payments: WARNING skipped %d undecodable line(s); last: %s", r.Skipped, r.LastSkipped)
 		}
+	}
+	if stored && c.Landed != nil {
+		c.Landed()
 	}
 	if r, err := ingest.Runs(st, c.Paths.Runs, now); err != nil {
 		fail("runs", err)

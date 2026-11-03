@@ -1,5 +1,5 @@
 import { Legend } from "@/components/Verdict";
-import { API_URL, DISPUTE_URL, SITE_NAME, SOURCE_URL } from "@/lib/site";
+import { ANALYTICS, API_URL, DISPUTE_URL, SITE_NAME, SOURCE_URL } from "@/lib/site";
 import ProtocolParams from "@/components/ProtocolParams";
 import OnThisPage, { type Section } from "@/components/OnThisPage";
 import { H2, H3 } from "@/components/RefHeading";
@@ -37,6 +37,8 @@ const SECTIONS: Section[] = [
   { id: "hosting", label: "Hosting" },
   { id: "publishers", label: "Publishers and escrow" },
   { id: "params", label: "Protocol parameters" },
+  // only on a site with the Analytics page
+  ...(ANALYTICS ? [{ id: "analytics", label: "Analytics" }] : []),
   { id: "evidence", label: "Evidence and corrections" },
 ];
 
@@ -352,6 +354,22 @@ export default function Methodology() {
           <p>Chain parameters are read from chain state and every <code>EventUpdateFibreParams</code>. Protocol constants are exposed by no RPC, so they are read from the celestia-app build the observer runs.</p>
           <ProtocolParams />
         </section>
+
+        {/* --------------------------------------------------------- analytics */}
+        {ANALYTICS && (
+          <section className="ref-sec">
+            <H2 id="analytics">Analytics</H2>
+            <p className="ref-lead">The <a href="/analytics/">Analytics</a> page is read from the API every quarter hour into one file; its foot says when. The period moves usage, cost and publishers; hosting is the validator set as it stands.</p>
+            <dl className="ref-terms">
+              <Term id="a-data" term="Data settled">The size paid for, summed over the period&rsquo;s settlements: a blob settled twice counts twice.</Term>
+              <Term id="a-rate" term="TIA per MiB">Fees paid divided by data over the period, an average weighted by data. What each size pays is under What a blob costs, by the <a href="#fees">fee formula</a> at the current parameters.</Term>
+              <Term id="a-escrow" term="Escrow used">Since launch, whatever the period: the fees and timeouts charged, of all TIA deposited into escrow. The rest is unspent or withdrawn.</Term>
+              <Term id="a-days" term="Active days">Days in the period with a settlement; over 24 hours, hours.</Term>
+              <Term id="a-new" term="New publishers">Accounts whose first settlement falls in the period.</Term>
+              <Term id="a-hosting" term="Hosting shares">Of the voting power of every bonded validator, those with no Fibre host included: they are in no row, so the rows add up to less than all of it. Sized by voting power, the list runs to the rows that together pass two thirds of it, and while it runs down voting power, thin lines mark where the rows pass a third and two thirds.</Term>
+            </dl>
+          </section>
+        )}
 
         {/* ---------------------------------------------------------- evidence */}
         <section className="ref-sec">

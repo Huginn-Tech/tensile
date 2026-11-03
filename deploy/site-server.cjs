@@ -307,24 +307,28 @@ async function resolveFile(pathname) {
 // their best levels, since a file is compressed once per deploy rather than once per request. A copy is keyed by the
 // file's path, size and modification time, so the files a deploy swaps in are compressed afresh; the oldest copies go
 // first past PACKED_MAX bytes. Requests that arrive while a file is being compressed wait for that one compression.
+// Analytics' data.json is rewritten every quarter hour, not once per deploy: its first reader after each run would wait
+// for the best levels of the whole file, so it takes quick ones, and its last copy goes when a new one is made.
 const PACKED_MAX = 64 * 1024 * 1024;
+const rewritten = (file) => path.basename(file) === "data.json";
 const packed = new Map();     // key -> { br, gz, bytes }, oldest first
 const packing = new Map();    // key -> the compression in progress
 let packedBytes = 0;
-const brotli = (buf) => new Promise((ok, no) => zlib.brotliCompress(buf, { params: {
-  [zlib.constants.BROTLI_PARAM_QUALITY]: zlib.constants.BROTLI_MAX_QUALITY,
+const brotli = (buf, quick) => new Promise((ok, no) => zlib.brotliCompress(buf, { params: {
+  [zlib.constants.BROTLI_PARAM_QUALITY]: quick ? 5 : zlib.constants.BROTLI_MAX_QUALITY,
   [zlib.constants.BROTLI_PARAM_SIZE_HINT]: buf.length,
 } }, (e, out) => (e ? no(e) : ok(out))));
-const gzipped = (buf) => new Promise((ok, no) => zlib.gzip(buf, { level: zlib.constants.Z_BEST_COMPRESSION }, (e, out) => (e ? no(e) : ok(out))));
+const gzipped = (buf, quick) => new Promise((ok, no) => zlib.gzip(buf, { level: quick ? 6 : zlib.constants.Z_BEST_COMPRESSION }, (e, out) => (e ? no(e) : ok(out))));
 function packedOf(found) {
   const key = `${found.file}|${found.size}|${found.mtime.getTime()}`;
   const have = packed.get(key);
   if (have) { packed.delete(key); packed.set(key, have); return Promise.resolve(have); }
   if (packing.has(key)) return packing.get(key);
   const job = (async () => {
-    const raw = await fs.promises.readFile(found.file);
-    const [br, gz] = await Promise.all([brotli(raw), gzipped(raw)]);
+    const raw = await fs.promises.readFile(found.file), quick = rewritten(found.file);
+    const [br, gz] = await Promise.all([brotli(raw, quick), gzipped(raw, quick)]);
     const p = { br, gz, bytes: br.length + gz.length };
+    if (quick) for (const [k, v] of packed) if (k.startsWith(found.file + "|")) { packed.delete(k); packedBytes -= v.bytes; }
     packed.set(key, p);
     packedBytes += p.bytes;
     for (const [k, v] of packed) {

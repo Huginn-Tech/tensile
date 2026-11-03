@@ -657,7 +657,7 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
     const top = a.blobs.reduce((m, b) => Math.max(m, b.settlement_height), 0);
     const block = a.blobs.filter((b) => b.settlement_height === top);
     const nb = block.reduce((m, b) => ((b.settlement_tx_index ?? 0) > (m.settlement_tx_index ?? 0) ? b : m));
-    const beat: PillBeat = { key: nb.promise_hash, at: nb.settlement_time ?? "", height: top, blobs: block.length, endorsers: unionOf(block), live: a.live, heard: a.live ? Date.now() + skew.current : undefined };
+    const beat: PillBeat = { key: nb.promise_hash, at: nb.settlement_time ?? "", height: top, blobs: block.length, endorsers: unionOf(block), live: a.live, heard: a.live ? (a.came ?? Date.now()) + skew.current : undefined };
     setBeatNow(beat);
     // what the grid opened with was read without its endorsers: its newest block's, once
     if (a.id === 0 && beat.endorsers === null) {

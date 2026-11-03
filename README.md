@@ -60,7 +60,8 @@ compose), see the deployment guide, [`deploy/README.md`](deploy/README.md).
 | [`fibre-devnet`](fibre-devnet/) | a multi-validator local devnet with retention at the 10-minute protocol floor, for end-to-end tests | shell and a celestia-app build |
 | [`web`](web/) | the explorer: a static Next.js export that reads the API | Node 22 |
 
-`fibre-tlsverify` and `fibre-assign` are importable as libraries on their own.
+`fibre-tlsverify` and `fibre-assign` are modules of their own, which other Go
+code can use from a checkout of this repository through a `replace` directive.
 
 The observer runs as five processes over one data directory:
 
@@ -74,7 +75,7 @@ The scanner reads each block as it arrives. The prober reads every blob before
 its window ends, and the heartbeat checks every endpoint; both talk to the
 validators' Fibre servers. All three append to record files, which the
 collector loads into SQLite, rolls up by day and exports; it also places each
-Fibre host by provider, country and AS from local IP databases that a monthly
+Fibre host by provider, country and AS from local IP databases that a daily
 job refreshes, so no lookup leaves the host. The API serves that
 database read-only, and the site is a static export that calls it. Record
 files, schema, invariants and the path from a block to a figure are in
