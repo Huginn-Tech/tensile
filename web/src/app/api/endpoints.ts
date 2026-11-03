@@ -603,7 +603,7 @@ const EX_PUBKEY = `{
 }`;
 
 const EX_META = `{
-  "methodology_version": "2026-10-08",
+  "methodology_version": "2026-10-20",
   "chain_id": "mocha-5",
   "vantages": [
     {"name": "de-1", "newest_at": "2026-10-08T11:38:34.687949213Z", "primary": false},
