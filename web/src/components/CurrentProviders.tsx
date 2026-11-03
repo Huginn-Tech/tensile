@@ -53,7 +53,8 @@ function ring(R: number) {
  * round an open ring, one stretch per validator, as long as its voting power,
  * those with a Fibre provider first and lit, largest first, the ones a
  * publisher would not upload to at this observer's latest check (no answer,
- * or a certificate it rejects) after them in amber, then the others. The ⅔ a
+ * or a certificate it rejects) and the ones whose server reports itself not
+ * ready for uploads after them in amber, then the others. The ⅔ a
  * blob needs to settle is a needle across it. Every validator with a Fibre
  * provider is a stretch of its own, however short, cut from the next by a
  * thin cut taken from its own end, so the lengths stay true.
@@ -77,23 +78,30 @@ export default function CurrentProviders({ rows }: { rows: Validator[] | null })
 
   const byPower = (a: Validator, b: Validator) => (b.voting_power || 0) - (a.voting_power || 0);
   const reg = new Set(ready ? r!.registered.map((v) => v.address) : []);
-  const up = ready ? r!.registered.filter((v) => !isDown(endpointState(v))).sort(byPower) : [];
-  const down = ready ? r!.registered.filter((v) => isDown(endpointState(v))).sort(byPower) : [];
+  // not ready, as the list's Not ready now: reachable with its certificate accepted, and its server reported itself not
+  // ready for uploads at its last two checks. Amber with the unreachable and the wrong certificates.
+  const notReady = (v: Validator) => endpointState(v) === "reachable" && v.readiness === "not_ready";
+  const held = (v: Validator) => isDown(endpointState(v)) || notReady(v);
+  const up = ready ? r!.registered.filter((v) => !held(v)).sort(byPower) : [];
+  const down = ready ? r!.registered.filter(held).sort(byPower) : [];
   const unreach = down.filter((v) => endpointState(v) === "unreachable"), cert = down.filter((v) => endpointState(v) === "cert");
+  const notready = down.filter(notReady);
   const unchecked = up.filter((v) => endpointState(v) === "none");
   const off = ready ? r!.bonded.filter((v) => !reg.has(v.address)).sort(byPower) : [];
 
   // as large a ring as the window holds without growing, with up to two lines under it; three lines take a smaller
-  // ring, so the window keeps its height. Not checked yet, which lasts only until a new endpoint's first check (half a
-  // minute), gives way to two amber lines, so there are never four; its stretches still say so when pointed at.
-  const amberLines = [unreach, cert].filter((vs) => vs.length > 0).length;
+  // ring, so the window keeps its height, and four a smaller one again with the lines a little closer. Not checked yet,
+  // which lasts only until a new endpoint's first check (half a minute), gives way to two amber lines; its stretches
+  // still say so when pointed at. Four lines come only with all three amber parts at once.
+  const amberLines = [unreach, cert, notready].filter((vs) => vs.length > 0).length;
   const showUnchecked = unchecked.length > 0 && amberLines < 2;
-  const g = ring(ready && 1 + amberLines + (showUnchecked ? 1 : 0) > 2 ? 94 : 109);
+  const lines = ready ? 1 + amberLines + (showUnchecked ? 1 : 0) : 1;
+  const g = ring(lines > 3 ? 78 : lines > 2 ? 94 : 109);
   let at = 0;
   const segs: Seg[] = ready ? [...up, ...down, ...off].map((v) => {
     const l0 = at;
     at += ((v.voting_power || 0) * g.len) / total;
-    const tone: Tone = !reg.has(v.address) ? "off" : isDown(endpointState(v)) ? "hold" : "on";
+    const tone: Tone = !reg.has(v.address) ? "off" : held(v) ? "hold" : "on";
     return { v, tone, l0, l1: at, own: tone !== "off" || at - l0 >= TILE };
   }) : [];
   // what is drawn: a stretch per Fibre provider and per other validator long enough to read, one per run of the
@@ -114,7 +122,7 @@ export default function CurrentProviders({ rows }: { rows: Validator[] | null })
   const [qx, qy] = g.at(g.deg(lq), g.R - SW - 8);
   const capTone = (s?: Seg) => `cp-cap ${s?.tone ?? "off"}${p && s && p === s ? " lit" : ""}`;
   const name = (v: Validator) => v.moniker || shortMid(v.operator_address || v.address, 18, 4);
-  const standing = (s: Seg) => s.tone === "off" ? "no Fibre provider" : s.tone === "hold" ? (endpointState(s.v) === "cert" ? "wrong certificate" : "unreachable")
+  const standing = (s: Seg) => s.tone === "off" ? "no Fibre provider" : s.tone === "hold" ? (endpointState(s.v) === "cert" ? "wrong certificate" : notReady(s.v) ? "not ready" : "unreachable")
     : endpointState(s.v) === "none" ? "not checked yet" : "Fibre provider";
   // the pointer names the validator under it; a touch keeps it named until the next touch elsewhere on the dial
   const onOver = (e: React.PointerEvent<SVGSVGElement>) => setPick((e.target as Element).getAttribute("data-a"));
@@ -146,10 +154,10 @@ export default function CurrentProviders({ rows }: { rows: Validator[] | null })
     <div className="cp" aria-busy={!ready || undefined}>
       <h2 id="readiness-h" className="ov-eyebrow">
         Current Fibre providers
-        <Info label="Current Fibre providers"><p>Share of the stake held by validators with a Fibre provider. A blob needs signatures from ⅔ of the stake to settle.</p><p>The ring is the whole bonded stake. Each stretch is one validator, as long as its voting power: those with a Fibre provider first, largest first; point at one to see its name and share. Amber: at Tensile&rsquo;s latest check its host did not answer (unreachable), or answered with a certificate a publisher rejects (wrong certificate).</p></Info>
+        <Info label="Current Fibre providers"><p>Share of the stake held by validators with a Fibre provider. A blob needs signatures from ⅔ of the stake to settle.</p><p>The ring is the whole bonded stake. Each stretch is one validator, as long as its voting power: those with a Fibre provider first, largest first; point at one to see its name and share. Amber: at Tensile&rsquo;s latest check its host did not answer (unreachable), or answered with a certificate a publisher rejects (wrong certificate), or its server reported itself not ready for uploads at its last two checks (not ready).</p></Info>
       </h2>
       <div className={`cp-dial${p ? " pick" : ""}`} style={{ width: g.w, height: g.h }} role="img"
-        aria-label={ready ? `${pct!(regPower)} of voting power with a Fibre provider, ${int(r!.registered.length)} of ${int(r!.bonded.length)} validators${unreach.length ? `, ${int(unreach.length)} of them unreachable` : ""}${cert.length ? `, ${int(cert.length)} with a wrong certificate` : ""}; ${pct!(quorum)} needed` : "Loading"}>
+        aria-label={ready ? `${pct!(regPower)} of voting power with a Fibre provider, ${int(r!.registered.length)} of ${int(r!.bonded.length)} validators${unreach.length ? `, ${int(unreach.length)} of them unreachable` : ""}${cert.length ? `, ${int(cert.length)} with a wrong certificate` : ""}${notready.length ? `, ${int(notready.length)} not ready` : ""}; ${pct!(quorum)} needed` : "Loading"}>
         {/* drawn anew when the rows arrive, so the ring sweeps in once */}
         <svg key={ready ? "on" : "wait"} className={`cp-ring${ready ? " on" : ""}`} width={g.w} height={g.h} viewBox={`0 0 ${g.w} ${g.h}`} aria-hidden="true" focusable="false"
           style={{ "--cy": `${g.cy}px` } as React.CSSProperties}
@@ -176,12 +184,13 @@ export default function CurrentProviders({ rows }: { rows: Validator[] | null })
           <span>{p ? standing(p) : ready ? <><b>{int(r!.registered.length)}</b> of {int(r!.bonded.length)} validators</> : ""}</span>
         </p>
       </div>
-      {/* the parts of the stake that are not a working provider, one line each, the unreachable and the wrong
-          certificates first: each opens the names of its validators, each a link to its page */}
-      <ul className="cp-rest">
+      {/* the parts of the stake that are not a working provider, one line each, the unreachable, the wrong
+          certificates and the not ready first: each opens the names of its validators, each a link to its page */}
+      <ul className={`cp-rest${lines > 3 ? " four" : ""}`}>
         {ready ? <>
           {amber("Unreachable", "Show the unreachable validators", unreach)}
           {amber("Wrong certificate", "Show the validators with a wrong certificate", cert)}
+          {amber("Not ready", "Show the validators not ready", notready)}
           <li><span className="cp-it">{part("", "no Fibre provider", off)}</span></li>
           {showUnchecked && <li><span className="cp-it">{part("none", "not checked yet", unchecked)}</span></li>}
         </> : <li className="cp-none" />}
