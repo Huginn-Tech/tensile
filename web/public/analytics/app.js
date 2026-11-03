@@ -9,9 +9,10 @@ const stop = new AbortController();
 const siteTheme = () => (document.documentElement.dataset.theme === "light" ? "light" : "dark");
 shadow.host.dataset.theme = siteTheme();
 shadow.querySelector("#page").innerHTML = `<main class="page">
-<div class="bar"><h1>Analytics</h1><nav class="jump seg" aria-label="On this page"><i></i><button type="button" data-to="cost">What a blob costs</button><button type="button" data-to="publishers">Publishers</button><button type="button" data-to="hosting">Hosting</button></nav><div class="ctl"><span class="ctl-l"><span class="dt">Period</span></span><div class="seg" id="seg-win" role="group" aria-label="Period for usage, cost and publishers"></div><span class="hold"></span></div></div>
+<div class="bar"><h1>Analytics</h1><nav class="jump seg" aria-label="On this page"><i></i><button type="button" data-to="cost">What a blob costs</button><button type="button" data-to="publishers">Publishers</button><button type="button" data-to="hosting">Hosting</button></nav><div class="ctl"><span class="upd"><span class="dt"></span></span><span class="ctl-l"><span class="dt">Period</span></span><div class="seg" id="seg-win" role="group" aria-label="Period for usage, cost and publishers"></div><span class="hold"></span></div></div>
 
 <section class="sec" id="top" aria-label="Usage">
+    <p class="upd"><span class="dt"></span></p>
     <div class="grid">
       <article class="card tile main" data-tile="data">
         <h3>Data settled<span data-f="sub"></span></h3>
@@ -42,7 +43,7 @@ shadow.querySelector("#page").innerHTML = `<main class="page">
   </section>
 
 <section class="sec" id="cost" aria-label="What a blob costs">
-    <div class="sec-h"><h2>What a blob costs</h2><p class="key"></p></div>
+    <div class="sec-h"><h2>What a blob costs</h2></div>
     <article class="card">
       <p class="fig" data-f="head"></p>
       <svg class="plot" role="img" tabindex="0"></svg>
@@ -51,10 +52,10 @@ shadow.querySelector("#page").innerHTML = `<main class="page">
   </section>
 
 <section class="sec" id="publishers" aria-label="Publishers">
-    <div class="sec-h"><h2>Publishers</h2></div>
+    <div class="sec-h"><h2>Publishers</h2><div class="ctl pb-of"><span class="ctl-l">Bar shows</span><div class="seg" role="group" aria-label="Bar shows"></div></div></div>
     <div class="card pb-card">
       <div class="pb-share">
-        <div class="pb-top"><div class="pb-labels"></div><div class="ctl pb-of"><span class="ctl-l">Bar shows</span><div class="seg" role="group" aria-label="Bar shows"></div></div></div>
+        <div class="pb-top"><div class="pb-labels"></div></div>
         <div class="pb-bar" role="img"></div>
       </div>
       <div class="pb-wrap">
@@ -350,9 +351,16 @@ const ARROW = `<svg viewBox="0 0 12 12" width="12" height="12" fill="none" strok
 const sorter = (opts, key, dir) => `<label class="ctl-l">Sort by<span class="sel"><select>${opts.map(([k, t]) => `<option value="${k}"${k === key ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></span></label><button type="button" class="dir${dir > 0 ? " asc" : ""}" aria-label="Reverse the order">${ARROW}</button>`;
 
 /* ---------- header and foot: nobody's area ---------- */
+// The page is as fresh as the older of its two reads; a reader who left the tab open sees the day too.
+function updated() {
+  const t = Math.min(Date.parse(U().read_at), Date.parse(N().read_at)), d = new Date(t).toISOString();
+  return `Updated ${d.slice(0, 10) === new Date().toISOString().slice(0, 10) ? "" : day(d.slice(0, 10)) + " "}${d.slice(11, 16)} UTC`;
+}
 function chrome() {
   const how = touch() ? ["Tap a circle", "Tap a figure"] : ["Click rows", "Hover a heading or figure"];
-  $("#foot").innerHTML = `<span>${esc(`Data as of ${stamp(U().read_at)}`)}</span><span class="how"><span>${how[0]} to compare, up to ${MAX_PINS}</span><span>${how[1]} for what it means</span></span>`;
+  // The foot gives the header's time again, the older of the two reads, so the page never shows two different times.
+  $("#foot").innerHTML = `<span class="upd"><span class="dt"></span></span><span class="how"><span>${how[0]} to compare, up to ${MAX_PINS}</span><span>${how[1]} for what it means</span></span>`;
+  $$(".upd .dt").forEach((n) => { n.textContent = updated(); });
   $('#seg-win [data-v="30d"]').hidden = young(state.net);
   $('#seg-win [data-v="24h"]').hidden = !U().market["24h"];
   $(".hold").textContent = "Hosts now";
@@ -395,6 +403,8 @@ function boot() {
   h1.addEventListener("click", () => { if ($(".bar").classList.contains("stuck")) scrollTo({ top: 0, behavior: calm ? "auto" : "smooth" }); });
   h1.addEventListener("mousemove", (e) => showTip(tipHead("Analytics") + tipRow("What goes through Fibre, what it costs, who pays and who hosts it"), e.clientX, e.clientY));
   period.addEventListener("mousemove", (e) => showTip(tipHead("Period") + tipRow("Moves usage, cost and publishers. Hosting keeps its own periods"), e.clientX, e.clientY));
+  const fresh = () => tipHead("Updated") + tipRow("Settlements", stamp(U().read_at)) + tipRow("Hosting", stamp(N().read_at));
+  $$(".upd .dt").forEach((n) => { n.addEventListener("mousemove", (e) => showTip(fresh(), e.clientX, e.clientY)); n.addEventListener("mouseleave", hideTip); });
   for (const n of [h1, period]) n.addEventListener("mouseleave", hideTip);
   // A tap is a touch screen's hover: the tooltip it opened goes with the next touch, wherever that lands.
   addEventListener("pointerdown", (e) => { if (e.pointerType === "touch") hideTip(); }, { capture: true, passive: true, signal: stop.signal });
@@ -613,31 +623,32 @@ function daysTip(t) {
 }
 
 /* ---------- escrow: deposited = paid + held + withdrawn, whatever the window ---------- */
-const PARTS = [["paid", "Paid"], ["held", "Unspent"], ["withdrawn", "Withdrawn"]], SWATCH = 8, BAR_Y = 3, KEY_Y = 27;
+const PARTS = [["paid", "Paid"], ["held", "Unspent"], ["withdrawn", "Withdrawn"]], SWATCH = 8, BAR_Y = 3, KEY_Y = 27, LAST_MIN = 3, KEY_COLS_MIN = 160, KEY_ROW = 15;
 
 function drawEscrow() {
   const svg = wipe(c("escrow")), F = escrowFlow(), { L, R } = frame(svg), snap = snapper(svg), W = R - L, used = PARTS.filter(([k]) => F[k]);
   const clip = el("clipPath", { id: "top-escrow-bar" }, el("defs", {}, svg));
   el("rect", { x: L, y: BAR_Y, width: W, height: BAR, rx: 3 }, clip);
   const bar = el("g", { "clip-path": "url(#top-escrow-bar)" }, svg);
-  // The 2px gap straddles each boundary, so a boundary lands on the true share.
+  // The 2px gap straddles each boundary, so a boundary lands on the true share. The last part is never thinner than LAST_MIN, so a small withdrawal still shows.
   let run = 0;
   used.forEach(([k], i) => {
-    const a = snap(L + (W * run) / F.deposited) + (i ? 1 : 0);
+    const end = i === used.length - 1;
+    let a = snap(L + (W * run) / F.deposited) + (i ? 1 : 0);
     run += F[k];
-    const b = snap(L + (W * run) / F.deposited) - (i < used.length - 1 ? 1 : 0);
+    const b = snap(L + (W * run) / F.deposited) - (end ? 0 : 1);
+    if (end && i) a = Math.min(a, b - LAST_MIN);
     el("rect", { class: `part ${k}`, x: a, y: BAR_Y, width: Math.max(2, b - a), height: BAR }, bar);
   });
-  const texts = PARTS.map(([k, name]) => {
-    const g = el("g", {}, svg), key = el("rect", { class: `part ${k}`, y: KEY_Y - SWATCH + 1, width: SWATCH, height: SWATCH, rx: 2 }, g);
-    const a = el("text", { y: KEY_Y }, g), b = el("text", { class: "val", y: KEY_Y + 14 }, g);
-    a.textContent = name; b.textContent = tiaN(F[k]);
-    return { key, a, b, w: Math.max(SWATCH + 4 + a.getComputedTextLength(), b.getComputedTextLength()) };
+  // Three equal columns under the bar, each a name over its swatch and value: the longest name alone fits a third of a small tile, a swatch beside it would not.
+  // A tile too narrow for three has the key in three rows, swatch and name on the left and the value flush right.
+  const rows = W < KEY_COLS_MIN;
+  PARTS.forEach(([k, name], i) => {
+    const x = rows ? L : Math.round(L + (W * i) / PARTS.length), y = rows ? KEY_Y + 2 + i * KEY_ROW : KEY_Y + 15, g = el("g", {}, svg);
+    el("rect", { class: `part ${k}`, x, y: y - SWATCH, width: SWATCH, height: SWATCH, rx: 2 }, g);
+    el("text", { class: "lab", x: rows ? x + SWATCH + 5 : x, y: rows ? y : KEY_Y }, g).textContent = name;
+    el("text", { class: "val", x: rows ? R : x + SWATCH + 4, y, "text-anchor": rows ? "end" : "start" }, g).textContent = tiaN(F[k]);
   });
-  // Name and value stay together; the last column ends on the bar's end.
-  const xs = [L, 0, R - texts[2].w];
-  xs[1] = Math.round((xs[0] + texts[0].w + xs[2] - texts[1].w) / 2);
-  texts.forEach((t, i) => { t.key.setAttribute("x", xs[i]); t.a.setAttribute("x", xs[i] + SWATCH + 4); t.b.setAttribute("x", xs[i]); });
   axisEnd(svg, L, `Of ${tia(F.deposited)} deposited`, "start");
 }
 
@@ -673,8 +684,6 @@ function draw() {
 
 area("top", draw);
 on("resize", draw);
-// Escrow's columns are measured from the text, so they wait for the real font.
-on("boot", () => document.fonts?.ready.then(drawEscrow));
 hoverTime("data", dataTip);
 hoverTime("new", newTip, () => light(null));
 hoverTime("rate", rateTip);
@@ -724,7 +733,6 @@ const top = (a, z, y, h) => { const r = Math.min(3, h, (z - a) / 2); return `M${
 function draw() {
   const u = U(), f = u.params.price_formula, lo = f.chunk_bytes, hi = u.params.max_blob_size_bytes, m = market();
   q('[data-f="head"]').innerHTML = `<span class="pair">${esc(tiaN(perMib(lo), 2))}<em class="at">TIA per MiB at ${esc(bytes(lo))}</em></span><span class="pair"><em>to</em>${esc(tiaN(perMib(hi), 2))}<em class="at">at ${esc(bytes(hi))}</em></span>`;
-  q(".key").textContent = `A blob of up to ${bytes(hi)} pays a base fee plus a fee per started ${bytes(lo)}, even if it times out.`;
 
   const svg = wipe(q(".plot")), W = svg.clientWidth, H = svg.clientHeight, list = bands(), n = list.length, small = M.phone(), gut = small ? GUT_PHONE : GUT, roof = small ? KEY_BAND : T;
 
@@ -919,12 +927,17 @@ const { $, $$, esc, sum, area, on, seg, token, hourly, pubs, settled, market, sp
 
 const TOP = 8, HOUR = 3600, MIB = 2 ** 20;
 // Activity. Strokes stand on one lattice for every row: PITCH css px apart, GAP px between them, so a busy row stays a trace at any width and screen scale.
+// Under LOW_DPR a one-pixel stroke reads grey rather than teal, so there the lattice is PITCH_1X px and every stroke two pixels wide, as the key's are.
 // FEW settlements in quiet time stand as their own strokes, APART lattice steps from each other.
-const TICKS = 6, TICK_W = 58, INSET = 18, SLOT = 82, H = 40, MID = H / 2, RULE_WIDE = 300;
-const PITCH = 2, GAP = 1, DOT_EVERY = 3, FLOOR = 8, CEIL = 36, APART = 3, FEW = 3, REACH = 6, OVER = .03;
+// FLOOR and CEIL are the lowest and highest stroke as parts of the strip's height, which app.css sets (shorter on a phone).
+// A strip under THREE_W px dates only its ends and its middle; START_GAP keeps a date off the first one.
+const TICKS = 6, TICK_W = 58, INSET = 18, SLOT = 82, THREE_W = 360, START_GAP = 12;
+const PITCH = 2, GAP = 1, LOW_DPR = 1.5, PITCH_1X = 3, DOT_EVERY = 3, FLOOR = .2, CEIL = .9, APART = 3, FEW = 3, REACH = 6, OVER = .03;
+// A clipped hour keeps CAP device px over a BREAK px gap at its top, so it reads broken off in the same teal.
+const CAP = 2, BREAK = 1;
 // The height scale's possible tops; the first is the largest blob allowed.
 const TOPS = [2 ** 27, 2 ** 29, 2 ** 31, 2 ** 33, 2 ** 35];
-const S = { metric: "bytes", sort: "bytes", dir: -1, open: false, slices: [], seg: null };
+const S = { metric: "bytes", sort: "bytes", dir: -1, open: false, slices: [], seg: null, units: null };
 const COLS = [
   ["name", "Publisher", "w"], ["settlements", "Settlements", "a"], ["bytes", "Data · share", "d"],
   ["paid_per_mib_utia", "TIA per MiB", "n"], ["avg_blob_bytes", "Avg blob", "n"], ["left", "Blobs left in escrow", "n"],
@@ -940,9 +953,11 @@ const HEAD = {
 };
 // What the narrow list's sort offers, in the columns' words.
 const SORTS = [["bytes", "Data · share"], ["name", "Publisher"], ["settlements", "Settlements"], ["since", "First settlement"], ["paid_per_mib_utia", "TIA per MiB"], ["avg_blob_bytes", "Avg blob"], ["left", "Blobs left in escrow"]];
-let R = [], C = null, T = null, IN = INSET, SL = SLOT;
+let R = [], C = null, T = null, IN = INSET, SL = SLOT, H = 40;
 
 const keyOf = (p) => (p.colour === TAIL ? "tail" : p.address);
+// The colour of the bar segment a publisher or a folded row falls in; the row's dot repeats it.
+const segColour = (p) => (keyOf(p) === "tail" ? "var(--rest)" : p.colour);
 const shareOf = (x) => (S.metric === "fees" ? x.fees_share : x.bytes_share);
 const ofWhat = () => (S.metric === "fees" ? "of fees" : "of data");
 
@@ -951,7 +966,7 @@ function slices() {
   const groups = new Map();
   for (const p of pubs()) {
     const k = keyOf(p);
-    if (!groups.has(k)) groups.set(k, { key: k, colour: k === "tail" ? "var(--rest)" : p.colour, list: [], name: nameFor(p) });
+    if (!groups.has(k)) groups.set(k, { key: k, colour: segColour(p), list: [], name: nameFor(p) });
     groups.get(k).list.push(p);
   }
   // Publishers first, then the tail.
@@ -959,7 +974,7 @@ function slices() {
   return [...groups.values()].map((g) => ({
     ...g, bytes: sum(g.list, (p) => p.bytes), fees_utia: sum(g.list, (p) => p.fees_utia),
     bytes_share: sum(g.list, (p) => p.bytes_share), fees_share: sum(g.list, (p) => p.fees_share),
-    name: g.key === "tail" ? count(g.list.length, "other") : g.name,
+    name: g.key === "tail" ? `${int(g.list.length)} more` : g.name,
   })).sort((a, b) => order(a) - order(b));
 }
 
@@ -976,8 +991,7 @@ function drawBar() {
   placeLabels();
 }
 
-// The switch shares the labels' row, so they stop short of it.
-const labelRoom = () => $("#publishers .pb-top").clientWidth - (M.phone() ? 0 : $("#publishers .pb-of").offsetWidth + 16);
+const labelRoom = () => $("#publishers .pb-top").clientWidth;
 // Labels read their slice's real place: gaps and minimum widths move a slice off its share.
 function placeLabels() {
   const nodes = $$("#publishers .pb-bar i"), room = labelRoom(); let said = false;
@@ -1041,38 +1055,52 @@ function rows() {
   return [...ordered(all.slice(0, cut)), ...(rest.length && S.open ? ordered(rest) : []), ...(rest.length ? [others(rest)] : [])];
 }
 
+// A size column is scanned down, so it holds one unit, the one its largest figure needs, and says it in its head.
+const UNITS = [[2 ** 30, "GiB"], [2 ** 20, "MiB"], [2 ** 10, "KiB"]];
+const unitFor = (list) => UNITS.find(([b]) => Math.max(...list) >= b) ?? UNITS.at(-1);
+// Two decimals, none in KiB as size() has it; a figure too small to show says so rather than 0.
+const inUnit = (b, [per, name]) => { const d = name === "KiB" ? 0 : 2, v = b / per; return v > 0 && v < .5 / 10 ** d ? "<" + (1 / 10 ** d).toFixed(d) : v.toFixed(d); };
+const TITLE = { bytes: () => `Data, ${S.units.d[1]} · share`, avg_blob_bytes: () => `Avg blob, ${S.units.avg[1]}` };
+
 function head() {
   $("#publishers .pb-t").dataset.sort = S.sort;
-  $("#publishers thead tr").innerHTML = COLS.map(([k, t, cls]) => {
+  // The rows on show, the folded one too, so opening the fold can change a unit.
+  const list = rows();
+  S.units = { d: unitFor(list.map((p) => p.bytes)), avg: unitFor(list.map((p) => p.avg_blob_bytes)) };
+  $("#publishers thead tr").innerHTML = COLS.map(([k, label, cls]) => {
+    const t = TITLE[k] ? TITLE[k]() : label;
     // The trace's cell holds two sorts: settlements by its figure, first settlement by the word Activity, since the trace shows where each account starts.
     const first = cls === "a" && S.sort === "since", sort = S.sort === k || first ? ` aria-sort="${S.dir < 0 ? "descending" : "ascending"}"` : "";
     const b = `<button type="button" data-k="${k}">${HEAD[k] ? `<span class="dt">${t}</span>` : t}</button>`;
-    return `<th class="${cls}${first ? " by-first" : ""}"${sort} scope="col">${cls === "a" ? `<div class="pb-h"><button type="button" class="pb-first" data-k="since"><span class="dt" data-k="activity">Activity</span></button><div class="pb-ticks"></div>${b}</div>` : b}</th>`;
+    return `<th class="${cls}${first ? " by-first" : ""}"${sort} scope="col">${cls === "a" ? `<div class="pb-h"><button type="button" class="pb-first" data-k="since"><span class="dt" data-k="activity">Activity</span></button><div class="pb-ticks" data-k="activity"></div>${b}</div>` : b}</th>`;
   }).join("");
   $("#publishers .sorter").innerHTML = M.sorter(SORTS, S.sort, S.dir);
 }
 
 // Accounts that share a name say which of them this is.
 const named = (p) => (p.name ? U().publishers.all.filter((a) => a.name === p.name) : []);
-const nth = (p) => { const same = named(p); return same.length > 1 ? `account ${same.findIndex((a) => a.address === p.address) + 1} of ${same.length}` : ""; };
-const nameFor = (p) => (nth(p) ? `${p.display}, ${nth(p)}` : p.display);
+const nth = (p) => { const same = named(p); return same.length > 1 ? `${same.findIndex((a) => a.address === p.address) + 1} of ${same.length}` : ""; };
+const nameFor = (p) => (nth(p) ? `${p.display} · ${nth(p)}` : p.display);
 // A shared name is one row each, so the tooltip gives the sum of those active in this window.
 function nameTotal(p) {
   const same = p.name ? pubs().filter((a) => a.name === p.name) : [];
   return same.length > 1 ? tipRow(`All ${same.length} active as ${p.name}`, `${size(sum(same, (a) => a.bytes))} · ${sharePct(sum(same, (a) => a.bytes_share))}`) : "";
 }
+// The folded row's escrow adds up its accounts' own figures, each at its own average blob; none known leaves it empty.
+const tailLeft = (p) => { const v = p.list.map(blobsLeft).filter((x) => x != null); return v.length ? sum(v, (x) => x) : null; };
 function rowHtml(p, i) {
-  const left = blobsLeft(p), [num, unit] = size(p.bytes).split(" "), [avg, avgUnit] = size(p.avg_blob_bytes).split(" ");
+  const left = p.others ? tailLeft(p) : blobsLeft(p), dot = `<i style="--c:${segColour(p)}"></i>`;
   const name = p.others
-    ? `<button type="button" class="pb-more" aria-expanded="${S.open}"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${esc(p.display)}</span></button>`
-    : `<div class="pb-who"><em>${p.rank ?? ""}</em><b><span>${esc(p.display)}</span></b>${nth(p) ? `<small>${nth(p)}</small>` : p.name ? `<code>${esc(p.short)}</code>` : ""}</div>`;
+    ? `<button type="button" class="pb-more" aria-expanded="${S.open}"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${dot}${esc(p.display)}</span></button>`
+    : `<div class="pb-who"><em>${p.rank ?? ""}</em><b>${dot}<span>${esc(p.display)}</span>${nth(p) ? `<small>· ${nth(p)}</small>` : ""}</b>${p.name ? `<code>${esc(p.short)}</code>` : ""}</div>`;
+  // A card on a narrow page stands alone, so it keeps each size whole with its unit; the table's columns print theirs in the head.
   return `<tr data-i="${i}" class="${p.others ? "o" : ""}">
     <td class="w">${name}</td>
     <td class="a"><canvas role="img" aria-label="${esc(count(p.settlements, "settlement"))}"></canvas><span class="pb-n" data-l="Settlements">${int(p.settlements)}</span></td>
-    <td class="d" data-l="Data · share"><div class="pb-d"><b>${num}</b><u>${unit}</u><em>${sharePct(p.bytes_share)}</em></div></td>
+    <td class="d" data-l="Data · share"><div class="pb-d"><b>${inUnit(p.bytes, S.units.d)}</b><span>${size(p.bytes)}</span><em>${sharePct(p.bytes_share)}</em></div></td>
     <td data-c="mib" data-l="TIA per MiB">${tiaN(p.paid_per_mib_utia, 2)}</td>
-    <td data-c="avg" data-l="Avg blob"><div class="pb-d"><b>${avg}</b><u>${avgUnit}</u></div></td>
-    <td data-c="left"${p.others ? "" : ' data-l="Blobs left in escrow"'}${(left === 0 || left == null) && !p.others ? ' class="z"' : ""}>${p.others ? "" : left == null ? "not known" : int(left)}</td>
+    <td data-c="avg" data-l="Avg blob"><div class="pb-d"><b>${inUnit(p.avg_blob_bytes, S.units.avg)}</b><span>${size(p.avg_blob_bytes)}</span></div></td>
+    <td data-c="left" data-l="Blobs left in escrow"${left === 0 || left == null ? ' class="z"' : ""}>${left == null ? (p.others ? "" : "not known") : int(left)}</td>
   </tr>`;
 }
 
@@ -1089,7 +1117,7 @@ function drawTable() {
 
 /* ---------- activity: a seismogram. Time on one axis, one lattice of strokes for all rows, height the data settled in an hour ---------- */
 function axis(W) {
-  const [t0, t1] = span(), dp = devicePixelRatio || 1, pitch = Math.max(2, Math.round(PITCH * dp)), start = Math.round(IN * dp), w = W - IN - SL, last = Math.floor((w * dp) / pitch) - 1;
+  const [t0, t1] = span(), dp = devicePixelRatio || 1, pitch = dp < LOW_DPR ? PITCH_1X : Math.max(2, Math.round(PITCH * dp)), start = Math.round(IN * dp), w = W - IN - SL, last = Math.floor((w * dp) / pitch) - 1;
   return { dp, W, w, t0, t1, pitch, start, last, stroke: pitch - Math.max(1, Math.round(GAP * dp)), x(t) { return IN + ((t - t0) / (t1 - t0)) * this.w; }, time(px) { return t0 + ((px - IN) / this.w) * (t1 - t0); },
     cell(t) { return Math.max(0, Math.min(last, Math.floor((this.x(t) * dp - start) / pitch))); }, px(c) { return start + c * pitch; } };
 }
@@ -1106,7 +1134,7 @@ function scale(by) {
   T = { lo, top, clipped: seen.some((v) => v > top) };
 }
 // Square root: a steady publisher sits low and its swings show, and 256 KiB stays visible beside 128 MiB.
-const tall = (b) => FLOOR + (CEIL - FLOOR) * Math.sqrt(Math.min(b, T.top) / T.top);
+const tall = (b) => H * (FLOOR + (CEIL - FLOOR) * Math.sqrt(Math.min(b, T.top) / T.top));
 const evenPx = (h) => 2 * Math.round((h * C.dp) / 2);
 
 // A few settlements close together, each on its own step, centred on where they truly fell.
@@ -1128,8 +1156,8 @@ function lay(p) {
     if (list.length <= FEW) for (const [s, c] of fan(list)) put(c, [s], s.size);
     else for (const i of r) put(C.cell(hours.get(i)[0].t), hours.get(i), sum(hours.get(i), (x) => x.size));
   }
-  // A stroke with no neighbour has the whole step: on a quiet row it is all there is to see.
-  p.marks = [...slots.values()].sort((a, b) => a.c - b.c).map((m) => { const w = slots.has(m.c - 1) || slots.has(m.c + 1) ? C.stroke : C.pitch; return { ...m, px: C.px(m.c), w, h: evenPx(tall(m.peak)), x: C.px(m.c) / C.dp, cw: w / C.dp }; });
+  // Every stroke has one width, so ink follows data; height alone carries the size, and cut marks an hour past the scale's top.
+  p.marks = [...slots.values()].sort((a, b) => a.c - b.c).map((m) => ({ ...m, px: C.px(m.c), w: C.stroke, h: evenPx(tall(m.peak)), cut: m.peak > T.top, x: C.px(m.c) / C.dp, cw: C.stroke / C.dp }));
 }
 
 // The dated days: on the page's one step, starting on the first day when a step allows it.
@@ -1140,54 +1168,73 @@ function tickDays() {
 // A rule stands at the day's first moment, so a mark right of it belongs to that day. Launch day starts at launch.
 const dayX = (d) => C.x(Math.max(C.t0, d.s));
 
-function track(g, W, dated) {
-  const { dp } = C, px = (v) => Math.round(v * dp), mid = px(MID), w = Math.max(1, px(1)), h = evenPx(1);
+function track(g, W, dated, marks) {
+  const { dp } = C, px = (v) => Math.round(v * dp), mid = px(H / 2), w = Math.max(1, px(1)), h = evenPx(1), under = new Set(marks.map((m) => m.c));
   g.canvas.width = px(W); g.canvas.height = px(H);
   g.canvas.style.width = g.canvas.width / dp + "px";
   // Empty time is drawn: a dotted centre line from launch, a faint line where each dated day starts.
   g.fillStyle = token("--rule1");
   for (const x of dated) g.fillRect(x, 0, w, g.canvas.height);
   g.fillStyle = token("--rule4");
-  for (let c = 0; c <= C.last; c += DOT_EVERY) g.fillRect(C.px(c), mid - h / 2, w, h);
+  // A dot under a stroke would show through a clipped hour's break.
+  for (let c = 0; c <= C.last; c += DOT_EVERY) if (!under.has(c)) g.fillRect(C.px(c), mid - h / 2, w, h);
   return mid;
 }
 
 function paint() {
   // A narrow row gives the trace the row's whole width: the count has gone to the figures under it.
   [IN, SL] = M.narrow() ? [0, 0] : [INSET, SLOT];
+  H = $("#publishers tbody td.a canvas")?.clientHeight || 40;
   const W = $("#publishers th.a").clientWidth;
   C = axis(W);
   R.forEach(lay);
-  const list = tickDays(), dated = list.map((d) => Math.round(dayX(d) * C.dp));
+  // A day's rule stands only under a date the axis shows, so every rule has its date and every date its rule.
+  const dated = ticks(tickDays()).map((d) => Math.round(dayX(d) * C.dp));
   $$("#publishers tbody td.a canvas").forEach((cv) => {
-    const p = R[+cv.closest("tr").dataset.i], g = cv.getContext("2d"), mid = track(g, W, dated);
+    const p = R[+cv.closest("tr").dataset.i], g = cv.getContext("2d"), mid = track(g, W, dated, p.marks);
     // One teal: a rank's step on these strokes read as a rating.
     g.fillStyle = token("--acc");
-    for (const m of p.marks) g.fillRect(m.px, mid - m.h / 2, m.w, m.h);
+    for (const m of p.marks) {
+      const y = mid - m.h / 2;
+      if (!m.cut) { g.fillRect(m.px, y, m.w, m.h); continue; }
+      g.fillRect(m.px, y, m.w, CAP);
+      g.fillRect(m.px, y + CAP + BREAK, m.w, m.h - CAP - BREAK);
+    }
   });
   $("#publishers .pb-x").style.height = $("#publishers tbody").getBoundingClientRect().height - 8 + "px";
-  ruler(W);
-  ticks(list);
+  ruler();
 }
 
-// A key, not a row: the same strokes at true height, in a neutral ink, free of the time axis.
-function ruler(W) {
-  const box = $("#publishers .pb-rule"), wide = W >= RULE_WIDE, stops = [T.lo, ...(wide ? [T.top / 16] : []), T.top / 4, T.top];
+// A key, not a row: the same strokes at true height and width, in the strips' teal, free of the time axis. The top stop wears the clipped hours' break when any hour is past it.
+// The same four stops at every width, so the key reads alike on every screen.
+function ruler() {
+  const box = $("#publishers .pb-rule"), stops = [T.lo, T.top / 16, T.top / 4, T.top], d = C.dp;
   // The dotted line of empty time, in track()'s own ink and step.
-  const empty = `<span><u style="--d:${Math.max(1, Math.round(C.dp)) / C.dp}px;--s:${(DOT_EVERY * C.pitch) / C.dp}px;--h:${evenPx(1) / C.dp}px"></u>none</span>`;
-  box.innerHTML = empty + stops.map((b, i) => `<span><i style="height:${evenPx(tall(b)) / C.dp}px"></i>${esc(bytes(b))}${i === stops.length - 1 && T.clipped ? " or more" : ""}</span>`).join("");
+  const empty = `<span><u style="--d:${Math.max(1, Math.round(d)) / d}px;--s:${(DOT_EVERY * C.pitch) / d}px;--h:${evenPx(1) / d}px"></u>none</span>`;
+  const brk = `;background:linear-gradient(var(--acc) 0 ${CAP / d}px, transparent ${CAP / d}px ${(CAP + BREAK) / d}px, var(--acc) ${(CAP + BREAK) / d}px)`;
+  box.innerHTML = empty + stops.map((b, i) => {
+    const cut = i === stops.length - 1 && T.clipped;
+    return `<span><i style="height:${evenPx(tall(b)) / d}px;width:${C.stroke / d}px${cut ? brk : ""}"></i>${esc(bytes(b))}${cut ? "+" : ""}</span>`;
+  }).join("");
 }
 
-// A date is centred on its day's rule; the last one ends with the plot when it would run past it. One that would touch the column's name starts on its rule instead, or stays out, and so does one that would touch the date before.
+// The window's first day starts flush with the strip and its last ends with it, as the top cards date theirs. Between them a date is centred on its day's rule
+// and stays out when it would touch a neighbour. A narrow strip keeps only the date nearest its middle between the two ends. Returns the days dated.
 function ticks(list) {
-  const box = $("#publishers .pb-ticks"), name = $("#publishers .pb-first").offsetWidth + 8;
-  box.innerHTML = list.map((d, k) => `<span>${esc(day(d.day))}${hourly() && k === list.length - 1 ? " UTC" : ""}</span>`).join("");
-  let end = name;
-  $$("span", box).forEach((e, k) => {
-    const x = dayX(list[k]) - IN, w = e.offsetWidth, mid = Math.min(x - w / 2, C.w - w), at = mid < name ? x : mid;
-    e.style.left = at + "px"; e.hidden = at < end;
-    if (!e.hidden) end = at + w + 8;
+  const box = $("#publishers .pb-ticks"), first = activeDays().days[0], last = list.at(-1);
+  let inner = list.filter((d) => d.day !== first.day && d.day !== last.day);
+  if (C.w < THREE_W && inner.length) { const mid = (d) => Math.abs(dayX(d) - IN - C.w / 2); inner = [inner.reduce((a, b) => (mid(b) < mid(a) ? b : a))]; }
+  const days = first.day === last.day ? [last] : [first, ...inner, last];
+  box.innerHTML = days.map((d, k) => `<span>${esc(day(d.day))}${hourly() && k === days.length - 1 ? " UTC" : ""}</span>`).join("");
+  const spans = $$("span", box), lastSpan = spans.at(-1), lastAt = Math.max(0, C.w - lastSpan.offsetWidth);
+  let end = 0;
+  spans.forEach((e, k) => {
+    const w = e.offsetWidth, at = k === 0 ? 0 : e === lastSpan ? lastAt : dayX(days[k]) - IN - w / 2;
+    e.style.left = at + "px";
+    e.hidden = k > 0 && e !== lastSpan && (at < end || at + w + 8 > lastAt);
+    if (!e.hidden) end = at + w + (k === 0 ? START_GAP : 8);
   });
+  return days.filter((d, k) => !spans[k].hidden);
 }
 
 /* ---------- hover ---------- */
@@ -1197,12 +1244,12 @@ const inSlice = (p, k) => (p.others ? p.list.some((q) => keyOf(q) === k) : keyOf
 
 function cellTip(p, c) {
   const h = tipHead(p.display, p.colour), D = activeDays(p), days = runway(p);
-  if (c === "w") return h + (p.list ? tipRow("Accounts", int(p.list.length)) : "") + tipRow("Settlements", int(p.settlements)) + (p.list ? "" : tipRow("Namespaces", int(p.namespaces_total))) + tipRow("Fees paid", tia(p.fees_utia)) + (p.timeouts ? tipRow("Timeouts", int(p.timeouts)) : "") + (p.others ? "" : tipRow("First settlement", stamp(p.first_settlement_at)) + tipRow("Active", `${int(D.active)} of ${count(D.total, hourly() ? "hour" : "day")}`)) + (nth(p) ? tipRow(p.short) + tipRow(`One of ${named(p).length} accounts named ${p.name}`) + nameTotal(p) : "");
-  if (c === "d") return h + tipRow("Share of data", sharePct(p.bytes_share)) + tipRow("Fees paid", `${tia(p.fees_utia)} · ${sharePct(p.fees_share)}`) + tipRow("Largest blob", size(p.largest_blob_bytes));
+  if (c === "w") return h + (p.list ? tipRow("Accounts", int(p.list.length)) : "") + tipRow("Settlements", int(p.settlements)) + (p.list ? "" : tipRow("Namespaces", int(p.namespaces_total))) + tipRow("Fees paid", tia(p.fees_utia)) + (p.timeouts ? tipRow("Timeouts", int(p.timeouts)) : "") + (p.others ? "" : tipRow("First settlement", stamp(p.first_settlement_at)) + tipRow("Active", `${int(D.active)} of ${count(D.total, hourly() ? "hour" : "day")}`)) + (nth(p) ? tipRow(`One of ${named(p).length} accounts named ${p.name}`) + nameTotal(p) : "");
+  if (c === "d") return h + tipRow("Data", size(p.bytes)) + tipRow("Share of data", sharePct(p.bytes_share)) + tipRow("Fees paid", `${tia(p.fees_utia)} · ${sharePct(p.fees_share)}`) + tipRow("Largest blob", size(p.largest_blob_bytes));
   if (c === "mib") return h + tipRow("Fees paid", tia(p.fees_utia)) + tipRow("Data", size(p.bytes));
-  if (c === "avg") return h + tipRow("Largest blob", size(p.largest_blob_bytes)) + tipRow("Settlements", int(p.settlements));
+  if (c === "avg") return h + tipRow("Avg blob", size(p.avg_blob_bytes)) + tipRow("Largest blob", size(p.largest_blob_bytes)) + tipRow("Settlements", int(p.settlements));
   if (c === "n") return h + tipRow("Settlements", int(p.settlements));
-  if (p.others && c === "left") return "";
+  if (p.others && c === "left") return tailLeft(p) == null ? "" : h + tipRow("Balance", tia(p.escrow_available_utia)) + tipRow("Each account at its own average blob, added up");
   // A pace needs a few active days behind it, and a balance that can pay for a blob at all.
   if (c === "left") return h + tipRow("Balance", tia(p.escrow_available_utia)) + tipRow("Average blob since launch", size(blobEver(p) ?? 0))
     + (blobsLeft(p) === 0 ? tipRow("Not enough for one blob") : days == null || D.active < 3 ? "" : tipRow(days < 1 ? "Under a day at this pace" : `About ${count(Math.floor(days), "day")} at this pace`));
@@ -1237,7 +1284,7 @@ function hoverActivity(e, p, cell) {
   ring.style.display = "none";
   if (m) {
     const w = m.cw + 6, h = m.h / C.dp + 6;
-    ring.style.cssText = `display:block;width:${w}px;height:${h}px;transform:translate(${Math.round(b.left - o.left + m.x + m.cw / 2 - w / 2)}px,${b.top - o.top - wrap.clientTop + MID - h / 2}px)`;
+    ring.style.cssText = `display:block;width:${w}px;height:${h}px;transform:translate(${Math.round(b.left - o.left + m.x + m.cw / 2 - w / 2)}px,${b.top - o.top - wrap.clientTop + H / 2 - h / 2}px)`;
     showTip(m.list.length > 1 ? pileTip(p, m.list, m.peak) : dotTip(m.list[0]), e.clientX, e.clientY);
     return;
   }
@@ -1300,7 +1347,7 @@ function wire() {
   body.addEventListener("mouseleave", () => { row = null; light(null); clearHover(); });
   body.addEventListener("click", (e) => {
     if (!e.target.closest("tr.o")) return;
-    S.open = !S.open; row = null; light(null); clearHover(); drawTable();
+    S.open = !S.open; row = null; light(null); clearHover(); head(); drawTable();
   });
 
   const box = $("#publishers .sorter"), sort = () => { head(); drawTable(); };
@@ -1331,7 +1378,8 @@ const SUB_NAMES = 3, KEY_NAMES = 11, VS_NAMES = 8, TAU = Math.PI * 2, DEG = Math
 // Under this share ready, with hosts that do not report, a row has no reading worth printing.
 const READY_MIN = .001;
 // hot is what the pointer lights: { key, vs, name, share, hosts, colour, from }.
-const S = { by: "provider", weigh: "vp", sort: "vp", dir: -1, open: false, picks: [], hot: null, city: null, region: null, sig: "", kbd: false, width: 0 };
+// q is what the find field holds; found is what it lights, held like a pick until the field is cleared.
+const S = { by: "provider", weigh: "vp", sort: "vp", dir: -1, open: false, picks: [], hot: null, city: null, region: null, sig: "", kbd: false, width: 0, q: "", found: null };
 const SHORT = { "Hong Kong SAR China": "Hong Kong", "United Arab Emirates": "UAE", "Melbicom Eu": "Melbicom", "Ultahost Ap": "Ultahost", "Int 5gn As Ap": "5GN" };
 
 /* ---------- model ---------- */
@@ -1405,6 +1453,7 @@ function model() {
 const picks = () => (prov() ? state.pinned.filter((k) => V.byKey.has(k)) : S.picks);
 const groupFocus = (g, from) => ({ key: g.key, vs: members(g), name: g.key === "__rest" ? g.name : nameOf(g), share: shareOf(g), hosts: g.hosts, colour: tint(g), from });
 function held() {
+  if (S.found) return S.found;
   const gs = picks().map((k) => V.byKey.get(k)).filter(Boolean);
   if (!gs.length) return null;
   return gs.length === 1 ? groupFocus(gs[0], "pick") : { vs: gs.flatMap(members), name: `${gs.length} picked`, share: sum(gs, shareOf), hosts: sum(gs, (g) => g.hosts), from: "pick" };
@@ -1681,10 +1730,10 @@ const CHEV = `<svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke
 const CROSS = `<svg viewBox="0 0 10 10" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M2 2l6 6M8 2l-6 6"/></svg>`;
 
 const bar = (f) => `<span class="lb" data-t="list" style="--f:${f.toFixed(4)}"></span>`;
-// Under a name: the validators on it, by voting power.
+// Under a name: the validators on it, by voting power; one the find field names by itself comes first, in full ink.
 function subOf(g, k = SUB_NAMES) {
-  const all = [...members(g)].sort((a, b) => b.share - a.share), more = all.length - Math.min(k, all.length);
-  const names = all.slice(0, k).map((v) => esc(v.moniker)).join(", ");
+  const own = S.found ? S.found.own : new Set(), all = [...members(g)].sort((a, b) => own.has(b) - own.has(a) || b.share - a.share), more = all.length - Math.min(k, all.length);
+  const names = all.slice(0, k).map((v) => (own.has(v) ? `<b>${esc(v.moniker)}</b>` : esc(v.moniker))).join(", ");
   return names + (more ? `<span class="mr"> and <span class="dt">${more} more</span></span>` : "");
 }
 // Compare answers which validators run on it, as far as a column holds; the row's tip lists all.
@@ -1720,11 +1769,17 @@ const HINT = () => `<span class="hint"><span class="ask3" hidden>Pick one more</
 // A narrow list is long and Compare stands under it, so the picks ride along at the foot of the screen.
 const TRAY = `<div class="tray"><span class="tray-n"></span><button type="button" class="go">Compare</button><button type="button" class="clear">Clear picks</button></div>`;
 const firstHead = () => (prov() ? "Provider" : S.by === "country" ? "Country" : "City");
+const LOOP = `<svg viewBox="0 0 14 14" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="6" r="4.3"/><path d="m9.3 9.3 3.2 3.2"/></svg>`;
+// The field names the grouping first, as the column beside it does.
+const FIND = () => `Find ${noun1()}, validator or ${prov() ? "city" : "provider"}`;
+// The field stands in the head over the bars, past the weighing's name, outlined only while in use, so the head reads as a head.
+// The first column has no room for it beside its name: the weighing's name overhangs that column, and "Find country, validator or provider" would not fit.
+const field = () => `<label class="fd">${LOOP}<input type="text" enterkeyhint="search" autocomplete="off" spellcheck="false" aria-label="${FIND()}" placeholder="${FIND()}" value="${esc(S.q)}"><span class="fd-no" hidden>No match</span><button type="button" class="fd-x" aria-label="Clear the field" hidden>${CROSS}</button></label>`;
 function head() {
   const th = (k, name, cls = "") =>
     `<button type="button" class="h${cls}${S.sort === k ? " on" : ""}${S.sort === k && S.dir > 0 ? " asc" : ""}" data-s="${k}" aria-pressed="${S.sort === k}" aria-label="Sort by ${name}"><span class="h1"><span${HEAD[k] ? ' class="dt"' : ""}>${name}</span></span></button>`;
   const vp = S.weigh === "vp", L = labelOf(), sorts = [[S.weigh, L.own], [vp ? "hosts" : "vp", L.other]];
-  return `<div class="tr th"><span class="k-a"><span class="fh">${firstHead()}</span></span>${th(S.weigh, vp ? "Voting power" : "Fibre hosts", " wt")}${vp ? th("hosts", "Fibre hosts") : th("vp", "Voting power")}${HINT()}</div><div class="sorter">${M.sorter(sorts, S.sort, S.dir)}</div>`;
+  return `<div class="tr th"><span class="k-a"><span class="fh">${firstHead()}</span></span>${th(S.weigh, vp ? "Voting power" : "Fibre hosts", " wt")}${vp ? th("hosts", "Fibre hosts") : th("vp", "Voting power")}${field()}${HINT()}</div><div class="sorter">${M.sorter(sorts, S.sort, S.dir)}</div>`;
 }
 function render() {
   model();
@@ -1739,7 +1794,54 @@ function render() {
     const d = y - r.getBoundingClientRect().top;
     if (Math.abs(d) > 1) r.animate([{ transform: `translateY(${d}px)` }, { transform: "none" }], { duration: 240, easing: "cubic-bezier(.3,.7,.2,1)" });
   });
+  // A new grouping or sort keeps what the field holds; the next paint lights it again.
+  match();
   syncPicks();
+}
+
+/* ---------- find: it lights rows, arcs and dots and filters nothing, so the >33% and >66% lines keep their meaning ---------- */
+// Case and accents fall away, so "siauliai" finds Šiauliai.
+const plain = (s) => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+// Two letters at least: one would light nearly every row.
+const FIND_MIN = 2;
+function match() {
+  const q = plain(S.q.trim()), fd = $(".fd", list), has = (v, keys) => keys.some((k) => plain(v[k]).includes(q));
+  S.found = null;
+  let none = [];
+  if (q.length >= FIND_MIN) {
+    const hit = N().validators.filter((v) => v.has_host && has(v, ["moniker", "valoper", "company", "city", "country"]));
+    if (hit.length) S.found = { vs: hit, own: new Set(hit.filter((v) => has(v, ["moniker", "valoper"]))), name: hit.length === 1 ? hit[0].moniker : `${hit.length} validators`, share: sum(hit, (v) => v.share), hosts: hit.length, colour: "var(--acc)", from: "find" };
+    // A validator with no Fibre host is on no row, but it is known: the field says so rather than "No match".
+    else none = N().validators.filter((v) => !v.has_host && has(v, ["moniker", "valoper"]));
+  }
+  box.classList.toggle("q", !!S.q);
+  const no = $(".fd-no", fd);
+  no.textContent = none.length ? "No Fibre host" : "No match";
+  no.title = none.map((v) => v.moniker).join(", ");
+  no.hidden = q.length < FIND_MIN || !!S.found;
+  $(".fd-x", fd).hidden = !S.q;
+}
+function find() {
+  match();
+  paint(); syncRest(); fitVs();
+  if (!S.found) return;
+  // A match only in the folded tail opens it and comes up under the pinned head; one in the rows above is already in sight, and the folded row counts the rest (syncRest).
+  const k = keyFn[S.by];
+  if (S.found.vs.some((v) => !V.tailKeys.has(k(v)))) return;
+  const go = () => {
+    const r = $(".tail.lit", list);
+    if (!r) return;
+    // A narrow list's head scrolls away, so the page's pinned bar and its tabs are what the row comes up under.
+    const pin = $(".top", list), under = M.narrow() ? Math.max(...[".bar", ".jump"].map((s) => $(s).getBoundingClientRect().bottom)) : parseFloat(getComputedStyle(pin).top) + pin.offsetHeight, y = r.getBoundingClientRect().top;
+    if (y < under || y + r.offsetHeight > innerHeight) scrollTo({ top: scrollY + y - under - 8, behavior: calm ? "auto" : "smooth" });
+  };
+  // The scroll waits for the tail to finish opening: a page still growing under it would cut a smooth scroll short.
+  if (S.open) go(); else { toggleRest($(".rest", list)); setTimeout(go, calm ? 0 : 280); }
+}
+function clearFind() {
+  S.q = "";
+  $(".fd input", list).value = "";
+  find();
 }
 
 /* ---------- picks ---------- */
@@ -1754,11 +1856,11 @@ function clearPicks() {
   if (state.pinned.length) M.set("pinned", []);
   syncPicks(); paint();
 }
-// A folded row still says what it holds.
+// A folded row still says what it holds: picks, and validators the field found, so the ring's count and the rows in sight agree.
 function syncRest() {
   const nm = $(".rest .nm", list); if (!nm) return;
-  const inTail = S.open ? 0 : picks().filter((k) => V.tailKeys.has(k)).length;
-  nm.innerHTML = esc(V.rest.name) + (inTail ? `<small>${inTail} picked</small>` : "");
+  const k = keyFn[S.by], inTail = S.open ? 0 : picks().filter((p) => V.tailKeys.has(p)).length, found = S.open || !S.found ? 0 : S.found.vs.filter((v) => V.tailKeys.has(k(v))).length;
+  nm.innerHTML = esc(V.rest.name) + (inTail ? `<small>${inTail} picked</small>` : "") + (found ? `<small>${found} found</small>` : "");
 }
 function syncPicks() {
   const p = picks(), open = p.length > 1, was = box.classList.contains("vs");
@@ -1777,9 +1879,9 @@ function syncPicks() {
   fitVs();
   if (open !== was && !calm) box.animate({ opacity: [.5, 1] }, { duration: 200, easing: "ease-out" });
 }
-// Only a hover dims: a pick must not grey out the rows still to choose from.
+// Only a hover or a find dims: a pick must not grey out the rows still to choose from.
 function paintRows() {
-  const h = S.hot, set = h && new Set(h.vs); let n = 0;
+  const h = S.hot || S.found, set = h && new Set(h.vs); let n = 0;
   $$(".tr.rw", list).forEach((r) => {
     const g = V.byKey.get(r.dataset.k), on = !!h && (h.key === r.dataset.k || (h.key !== "__rest" && !!g && h.from !== "row" && members(g).some((v) => set.has(v))));
     n += on; r.classList.toggle("lit", on);
@@ -1901,16 +2003,17 @@ list.addEventListener("change", (e) => {
   const k = e.target.closest(".sorter select")?.value;
   if (!k) return;
   S.sort = k; S.dir = -1;
-  render(); if (S.hot) paint();
+  render(); if (S.hot || S.found) paint();
 });
 list.addEventListener("click", (e) => {
-  if (e.target.closest(".dir")) { S.dir *= -1; render(); if (S.hot) paint(); return; }
+  if (e.target.closest(".dir")) { S.dir *= -1; render(); if (S.hot || S.found) paint(); return; }
+  if (e.target.closest(".fd-x")) { clearFind(); return $(".fd input", list).focus(); }
   if (e.target.closest(".go")) return vs.scrollIntoView({ behavior: calm ? "auto" : "smooth" });
   const h = e.target.closest("[data-s]");
   if (h) {
     const k = h.dataset.s;
     if (S.sort === k) S.dir *= -1; else { S.sort = k; S.dir = -1; }
-    render(); if (S.hot) paint();
+    render(); if (S.hot || S.found) paint();
     if (e.detail === 0) $(`[data-s="${k}"]`, list).focus({ preventScroll: true });
     return;
   }
@@ -1920,6 +2023,8 @@ list.addEventListener("click", (e) => {
   // On touch a tap on a row reads it; the circle picks.
   if (r.hasAttribute("data-p") && (!M.touch() || e.target.closest(".pk"))) togglePick(r.dataset.k);
 });
+list.addEventListener("input", (e) => { if (e.target.closest(".fd")) { S.q = e.target.value; find(); } });
+list.addEventListener("keydown", (e) => { if (e.key === "Escape" && e.target.closest(".fd") && S.q) { e.preventDefault(); clearFind(); } });
 list.addEventListener("mouseover", (e) => { const r = e.target.closest(".tr.rw"); rowHover(r ? r.dataset.k : null); });
 list.addEventListener("mousemove", (e) => {
   const h = e.target.closest("[data-s]"), tip = h && HEAD[h.dataset.s];
@@ -1936,14 +2041,16 @@ vs.addEventListener("mouseleave", () => { rowHover(null); hideTip(); });
 root.addEventListener("click", (e) => { if (e.target.closest(".clear")) clearPicks(); });
 /* ---------- map ---------- */
 // World units: all the land. The band has a sentence above it now, so a crop would read as a cut across the card.
-// EDGE: land stops this far from the card's text edge. RAIL_GAP: what the westmost mark keeps from the rail, past RAIL_R, the room its disc takes.
-const LANDS = { x0: 14, y0: 5, x1: 4777, y1: 2100 }, EDGE = 4, RAIL_GAP = 12, RAIL_R = 8, KEY_GAP = 4, SMALL = 640;
+// EDGE: land stops this far from the card's text edge. RAIL_GAP: what the westmost mark keeps from the rail, past RAIL_R, the room its disc takes. FRAME_GAP: what the land keeps from the frame.
+// LANE_H: the lane app.css adds over a narrow map's land. LANE_DESK: the least lane a wide map keeps over its land, two label rows, so Europe's crowd has room to be named.
+const LANDS = { x0: 14, y0: 5, x1: 4777, y1: 2100 }, LANE_H = 26, LANE_DESK = 44, EDGE = 4, RAIL_GAP = 12, RAIL_R = 8, FRAME_GAP = 12, KEY_GAP = 4, SMALL = 640;
 // SAME: how close two cities must sit to be one point on the map. Anything further apart stays two discs, overlapping if it must.
 // HIT: how far past its edge a mark answers, HIT_MIN how near its centre at least.
-const K = 23, RMIN = 2.6, SAME = 16, HIT = 3, HIT_MIN = 6, LABEL_MIN = .03, LABEL_TOP = 4, LABEL_TOP_NARROW = 3, NARROW = 800, BIG = .045;
+// NARROW: a map this narrow (a phone's) names LABEL_TOP_NARROW places; every wider one LABEL_TOP.
+const K = 23, RMIN = 2.6, SAME = 16, HIT = 3, HIT_MIN = 6, LABEL_MIN = .03, LABEL_TOP = 6, LABEL_TOP_NARROW = 3, NARROW = 480, TINY = 480, BIG = .045;
 const LAND = new Path2D(WORLD.countries.map((c) => c[1]).join(""));
 const mp = $(".mp", root), canvas = $("canvas", mp), svg = $("svg", mp), side = $(".mside", root), keyBox = $(".mkey", root), regBox = $(".mreg", root), regHead = $(".mhd", root);
-const P = { w: 0, h: 0, cam: { s: 1, x: 0, y: 0 }, layers: null, marks: [], iso: [], boxes: [], isoBoxes: [], over: null, mask: null };
+const P = { w: 0, h: 0, lane: 0, cam: { s: 1, x: 0, y: 0 }, layers: null, marks: [], iso: [], boxes: [], isoBoxes: [], over: null, mask: null };
 const rOf = (s) => Math.max(RMIN, K * Math.sqrt(s));
 // A mark weighs what the table weighs.
 const vShare = (v) => (S.weigh === "vp" ? shareOf(v) : 1 / N().totals.hosts);
@@ -1960,12 +2067,34 @@ function buildGeo() {
 }
 function frameCam() {
   P.w = canvas.clientWidth; P.h = canvas.clientHeight;
-  // The land hangs from the right edge, at the scale that keeps every mark off the rail: the rail then has the Pacific in any weighing. A narrow page has it under the map.
-  // It starts under the key, which stands in the top corner.
+  // The land hangs from the right edge and stands on the map's foot, at the scale that keeps every mark off the rail: the rail then has the Pacific in any weighing. A narrow page has it under the map.
+  // Above the land, under the key in the top corner, or LANE_H on a narrow page, whatever height is left is a lane of open sea for the labels.
   const bh = LANDS.y1 - LANDS.y0, west = Math.min(...geo.cities.filter((g) => g.vs.length).map((g) => g.wx));
-  const top = M.narrow() ? 0 : keyBox.getBoundingClientRect().bottom - mp.getBoundingClientRect().top + KEY_GAP;
-  const s = Math.min((P.h - top) / bh, (P.w - EDGE - (M.narrow() ? 0 : side.offsetWidth + RAIL_GAP) - RAIL_R) / (LANDS.x1 - west));
-  P.cam = { s, x: LANDS.x1 - (P.w - EDGE) / s, y: LANDS.y0 - (top + (P.h - top - bh * s) / 2) / s };
+  const fit = (P.w - EDGE - (M.narrow() ? 0 : side.offsetWidth + RAIL_GAP) - RAIL_R) / (LANDS.x1 - west);
+  const top = M.narrow() ? LANE_H : Math.max(LANE_DESK, keyBox.getBoundingClientRect().bottom - mp.getBoundingClientRect().top + KEY_GAP);
+  const cam = (s) => ({ s, x: LANDS.x1 - (P.w - EDGE) / s, y: LANDS.y0 - (P.h - bh * s) / s });
+  let s = Math.min((P.h - top) / bh, fit);
+  // The count and the frame under it stand in the map's top corner, beside the land's north: no land may show under them or within FRAME_GAP of them, so a scale that puts some there gives way to a smaller one.
+  if (!M.narrow() && landByFrame(cam(s))) {
+    let lo = s * .5, hi = s;
+    for (let i = 0; i < 9; i++) { const mid = (lo + hi) / 2; if (landByFrame(cam(mid))) hi = mid; else lo = mid; }
+    s = lo;
+  }
+  P.cam = cam(s); P.lane = P.h - bh * s;
+}
+// Whether land a reader would see falls in the corner the count and the frame take, from the map's top to the frame's foot, widened by FRAME_GAP, drawn at the scale being tried;
+// a speck of an island that draws fainter than half tone does not count.
+const byFrame = document.createElement("canvas");
+// The count's own box: its line is as wide as the strip, the pill only as wide as its words.
+const pillBox = () => (sayWhere.firstElementChild ?? sayWhere).getBoundingClientRect();
+function landByFrame(c) {
+  const m = mp.getBoundingClientRect(), n = pillBox(), b = side.getBoundingClientRect(), x = byFrame.getContext("2d", { willReadFrequently: true });
+  const w = Math.max(b.right, n.right) - m.left + FRAME_GAP, h = b.bottom - m.top;
+  byFrame.width = Math.ceil(w); byFrame.height = Math.ceil(h);
+  x.setTransform(c.s, 0, 0, c.s, -c.x * c.s, -c.y * c.s); x.fill(LAND);
+  const d = x.getImageData(0, 0, byFrame.width, byFrame.height).data;
+  for (let i = 3; i < d.length; i += 4) if (d[i] > 127) return true;
+  return false;
 }
 const at = (wx, wy) => ({ x: (wx - P.cam.x) * P.cam.s, y: (wy - P.cam.y) * P.cam.s });
 function drawLand() {
@@ -1982,13 +2111,16 @@ function marksOf(list) {
   const ms = [];
   for (const { g, vs, share } of [...list].sort((a, b) => b.share - a.share)) {
     const host = ms.find((m) => Math.hypot(m.wx - g.wx, m.wy - g.wy) < SAME);
-    if (host) { host.share += share; host.vs.push(...vs); host.cities.push({ g, share }); host.r = rOf(host.share); }
-    else ms.push({ wx: g.wx, wy: g.wy, share, vs: [...vs], cities: [{ g, share }], r: rOf(share) });
+    if (host) { host.share += share; host.vs.push(...vs); host.cities.push({ g, share, vs }); host.r = rOf(host.share); }
+    else ms.push({ wx: g.wx, wy: g.wy, share, vs: [...vs], cities: [{ g, share, vs }], r: rOf(share) });
   }
   return ms.sort((a, b) => b.share - a.share).map((m) => {
     m.cities.sort((a, b) => b.share - a.share);
     const head = m.cities[0].g, more = m.cities.length - 1, named = more ? `${head.c.name} and ${more} more` : head.c.name;
-    return { ...m, ...at(head.wx, head.wy), head, vp: sum(m.vs, shareOf), name: named };
+    // A merged mark's label, longest first: both names, then the count in words where it is shorter, then the head city alone where room is short, with its own figure, never the merged one (the tooltip names them all).
+    // Never "+1": run into the share it reads as one number.
+    const both = more === 1 && `${head.c.name} and ${m.cities[1].g.c.name}`, labs = !more ? [head.c.name] : both ? [both, ...(named.length < both.length ? [named] : []), head.c.name] : [named, head.c.name];
+    return { ...m, ...at(head.wx, head.wy), head, vp: sum(m.vs, shareOf), name: named, labs };
   });
 }
 function drawMark(host, m, colour, i) {
@@ -2003,24 +2135,28 @@ function drawBase() {
   P.iso = []; P.boxes = []; P.isoBoxes = []; P.over = null;
   // Biggest first, so a small city is never under a bigger neighbour.
   P.marks.forEach((m, i) => drawMark(P.layers.base, m, "var(--acc)", i));
-  placeLabels(P.marks.filter((m) => m.share >= LABEL_MIN).slice(0, P.w < NARROW ? LABEL_TOP_NARROW : LABEL_TOP), P.layers.labs, P.boxes, P.marks, true);
+  svg.classList.toggle("sm", P.w < TINY);
+  placeLabels(P.marks.filter((m) => m.share >= LABEL_MIN).slice(0, P.w < NARROW ? LABEL_TOP_NARROW : LABEL_TOP), P.layers.labs, P.boxes, P.marks);
 }
 
 /* ---------- labels: marks never move, a label finds room around its mark ---------- */
 function reserved() {
   if (M.narrow()) return [];
-  // The rail's whole column, top to bottom: a label above it would read as its heading. The key stands over the land's top corner.
-  const m = mp.getBoundingClientRect(), b = side.getBoundingClientRect(), k = keyBox.getBoundingClientRect();
-  return [{ x0: b.left - m.left, x1: b.right - m.left + RAIL_CLEAR, y0: 0, y1: m.height }, { x0: k.left - m.left, x1: k.right - m.left, y0: k.top - m.top, y1: k.bottom - m.top }];
+  // The rail's whole column, top to bottom, as wide as the count over it: a label above it would read as its heading. The key stands over the land's top corner, KEY_CLEAR apart, so a name in its line never reads as one of its steps.
+  const m = mp.getBoundingClientRect(), b = side.getBoundingClientRect(), n = pillBox(), k = keyBox.getBoundingClientRect();
+  return [{ x0: b.left - m.left, x1: Math.max(b.right, n.right) - m.left + RAIL_CLEAR, y0: 0, y1: m.height }, { x0: k.left - m.left - KEY_CLEAR, x1: k.right - m.left, y0: k.top - m.top, y1: k.bottom - m.top }];
 }
 const ANGLES = [0, 180, -90, 90, -45, 45, -135, 135, 60, 120, -60, -120, 30, 150, -30, -150, 75, 105, -75, -105, 15, 165, -15, -165], GAPS = [5, 14, 24, 36, 50, 66], NO_LINE = 6, LINE_CLEAR = 24;
+// FAR: longer leaders, to the west on any map, so a west coast city can sit in the Pacific, and every way on a small one, where the open sea lies further off.
+const FAR = [84, 104], WEST = [180, 165, -165, 150, -150];
 // The big cities take the top, so the crowd around them keeps its sides.
 const ANGLES_BIG = [-90, -135, ...ANGLES.filter((a) => a !== -90 && a !== -135)];
-// COAST: text across a coast loses both edges, so a clean spot is worth this many px. LEAD: a leader at all costs this many.
+// LEAD: a leader at all costs this many. LINE_FAR: how long a FAR leader may run. SEA: the open sea a label keeps around its box.
 // ORDER: a price on two column labels read against their size.
-const LINE_T = Array.from({ length: 17 }, (_, i) => i / 16), LABEL_H = 16, COAST = 8, LEAD = 12, SPOTS = 40, BUDGET = 40000, LINE_MAX = 60, RAIL_CLEAR = 12, ORDER = 30;
+// STEP_COST: what one step shorter on a merged place's label is worth, in leader pixels.
+const STEP_COST = 40, LINE_T = Array.from({ length: 17 }, (_, i) => i / 16), LABEL_H = 16, SEA = 2, LEAD = 12, SPOTS = 80, BUDGET = 40000, LINE_MAX = 60, LINE_FAR = 120, RAIL_CLEAR = 12, KEY_CLEAR = 24, ORDER = 30;
 // Europe's labels have the North Atlantic: a right-aligned column off Ireland, on rows ATL_Y apart.
-const ATL_LON = -24, ATL_LAT = 50, ATL_Y = 6, ATL_TOP = 14, ATL_ROWS = 22, ATL_PULL = 30;
+const ATL_LON = -24, ATL_LAT = 50, ATL_Y = 6, ATL_TOP = 14, ATL_ROWS = 22, LANE_STEP = 6;
 const along = (l, t) => [l.x1 + (l.x2 - l.x1) * t, l.y1 + (l.y2 - l.y1) * t];
 const inBox = (x, y, b) => x > b.x0 - 3 && x < b.x1 + 3 && y > b.y0 - 2 && y < b.y1 + 2;
 const lineOnBox = (l, b) => LINE_T.some((t) => inBox(...along(l, t), b));
@@ -2028,92 +2164,174 @@ const boxesMeet = (a, b) => a.x0 < b.x1 + 10 && a.x1 > b.x0 - 10 && a.y0 < b.y1 
 const turn = (q, x, y) => Math.sign((q.x2 - q.x1) * (y - q.y1) - (q.y2 - q.y1) * (x - q.x1));
 const crosses = (l, q) => turn(l, q.x1, q.y1) !== turn(l, q.x2, q.y2) && turn(q, l.x1, l.y1) !== turn(q, l.x2, l.y2);
 const reach = (l) => (l ? LEAD + Math.hypot(l.x2 - l.x1, l.y2 - l.y1) : 0);
+// LAND_W: what a leader's pixel over land costs past one at sea, so the nearest seat at sea beats a far one whose leader crosses a continent.
+// LONG_W: what each pixel past LINE_MAX costs on top, so one long leader across the map loses to two short ones. GRID_X, GRID_Y: the steps of the search for open sea around a mark.
+const LAND_W = 3, LONG_W = 2, GRID_X = 8, GRID_Y = 6;
+function landOf(l) {
+  const n = Math.ceil(Math.hypot(l.x2 - l.x1, l.y2 - l.y1));
+  let k = 0;
+  for (let i = 0; i <= n; i++) k += onLand(l.x1 + (l.x2 - l.x1) * i / n, l.y1 + (l.y2 - l.y1) * i / n);
+  return k;
+}
+// GRAZE: what a leader passing within GRAZE_ROOM of another disc costs, so room clear of every disc comes first and a crowd may still graze one.
+const GRAZE = 24, GRAZE_ROOM = 2, graze = (rm) => (rm < GRAZE_ROOM ? GRAZE : 0);
+const price = (l) => (l ? reach(l) + LAND_W * landOf(l) + LONG_W * Math.max(0, reach(l) - LEAD - LINE_MAX) : 0);
 
 // Every place a label may stand, given the marks and the side list, cheapest first.
-function spotsFor({ d, w }, around, boxes, inland = false, clear = 2) {
+function spotsFor({ d, w }, around, boxes) {
   const hitMark = (a) => around.some((m) => {
     const cx = Math.max(a.x0, Math.min(m.x, a.x1)), cy = Math.max(a.y0, Math.min(m.y, a.y1));
     // A label that ends beside another mark reads as that mark's.
     return Math.hypot(m.x - cx, m.y - cy) < m.r + (m === d ? 2 : P.w < SMALL ? 4 : 6);
   });
-  // A leader through a disc says the label might be that disc's.
-  const lineOnMark = (l) => around.some((m) => m !== d && LINE_T.some((t) => { const [x, y] = along(l, t); return Math.hypot(x - m.x, y - m.y) < m.r + clear; }));
+  // A leader through a disc says the label might be that disc's. Only discs near the leader are measured.
+  const room = (l) => {
+    if (!l) return Infinity;
+    const x0 = Math.min(l.x1, l.x2), x1 = Math.max(l.x1, l.x2), y0 = Math.min(l.y1, l.y2), y1 = Math.max(l.y1, l.y2);
+    let r = Infinity;
+    for (const m of around) {
+      if (m === d || m.x < x0 - m.r - 4 || m.x > x1 + m.r + 4 || m.y < y0 - m.r - 4 || m.y > y1 + m.r + 4) continue;
+      for (const t of LINE_T) { const [x, y] = along(l, t); r = Math.min(r, Math.hypot(x - m.x, y - m.y) - m.r); }
+    }
+    return r;
+  };
   // A mark in the label's line reads as part of the sentence.
   const inLine = (a) => around.some((m) => m !== d && Math.abs(m.y - (a.y0 + a.y1) / 2) < m.r + LABEL_H / 2 && m.x > a.x0 - LINE_CLEAR && m.x < a.x1 + LINE_CLEAR);
   const boxDist = (a, m) => Math.hypot(m.x - Math.max(a.x0, Math.min(m.x, a.x1)), m.y - Math.max(a.y0, Math.min(m.y, a.y1))) - m.r;
   const nearestIs = (a) => around.every((m) => boxDist(a, m) >= boxDist(a, d));
-  const wet = (a) => { const y = (a.y0 + a.y1) / 2; let sea = 0, n = 0; for (let x = a.x0; x <= a.x1; x += 6) { sea += !onLand(x, y); n++; } return sea / n; };
-  const onCoast = (a) => { const f = wet(a); return f > 0 && f < 1; };
-  const out = [];
-  for (const gap of GAPS) for (const deg of d.share >= BIG ? ANGLES_BIG : ANGLES) {
+  // Text on land reads as that land's name, so a label stands only in open sea: its box, and a margin past it that holds an accent's height, all clear of the land.
+  const dry = (a) => { for (const y of [a.y0 - SEA, a.y0 + 3, (a.y0 + a.y1) / 2, a.y1 - 3, a.y1 + SEA]) for (let x = a.x0 - SEA; x < a.x1 + SEA + 2; x += 2) if (onLand(Math.min(x, a.x1 + SEA), y)) return true; return false; };
+  const small = P.w < SMALL, angles = d.share >= BIG ? ANGLES_BIG : ANGLES, out = [];
+  const tries = [...GAPS.flatMap((gap) => angles.map((deg) => [gap, deg])), ...FAR.flatMap((gap) => (small ? angles : WEST).map((deg) => [gap, deg]))];
+  for (const [gap, deg] of tries) {
     const c = Math.cos(deg * Math.PI / 180), s = Math.sin(deg * Math.PI / 180), ex = d.x + (d.r + gap) * c, ey = d.y + (d.r + gap) * s;
     const a = Math.abs(c) < .2 ? "middle" : c > 0 ? "start" : "end", wanted = a === "start" ? ex : a === "end" ? ex - w : ex - w / 2;
     // By the map's edge a label slides in along its side instead of giving the side up.
-    const x0 = Math.max(8, Math.min(wanted, P.w - 8 - w)), cy = a === "middle" ? ey + Math.sign(s) * LABEL_H / 2 : ey, box = { x0, x1: x0 + w, y0: cy - LABEL_H / 2, y1: cy + LABEL_H / 2 };
-    if (box.y0 < 6 || box.y1 > P.h - 6 || boxes.some((b) => boxesMeet(box, b)) || hitMark(box) || inLine(box)) continue;
+    const x0 = Math.max(8, Math.min(wanted, P.w - 8 - w));
+    // A label slid along the edge would sit over its own leader's end.
+    if (gap > NO_LINE && a !== "middle" && x0 !== wanted) continue;
+    const cy = a === "middle" ? ey + Math.sign(s) * LABEL_H / 2 : ey, box = { x0, x1: x0 + w, y0: cy - LABEL_H / 2, y1: cy + LABEL_H / 2 };
+    if (box.y0 < 6 || box.y1 > P.h - 6 || boxes.some((b) => boxesMeet(box, b)) || hitMark(box) || inLine(box) || dry(box)) continue;
     if (gap <= NO_LINE && !nearestIs(box)) continue;
-    const line = gap > NO_LINE ? { x1: d.x + (d.r + 1) * c, y1: d.y + (d.r + 1) * s, x2: ex - 2 * c, y2: ey - 2 * s } : null;
-    if (line && (boxes.some((b) => lineOnBox(line, b)) || lineOnMark(line) || reach(line) - LEAD > LINE_MAX)) continue;
-    // Far from its mark a label over land reads as that land's.
-    if (line && !inland && wet(box) < .5) continue;
-    out.push({ box, x: x0 + (a === "end" ? 4 : a === "middle" ? 2 : 0), y: cy, line, cost: reach(line) + (onCoast(box) ? COAST : 0) });
+    const line = gap > NO_LINE ? { x1: d.x + (d.r + 1) * c, y1: d.y + (d.r + 1) * s, x2: ex - 2 * c, y2: ey - 2 * s } : null, rm = room(line);
+    if (line && (boxes.some((b) => lineOnBox(line, b)) || rm < 0 || reach(line) - LEAD > (small || gap > GAPS.at(-1) ? LINE_FAR : LINE_MAX))) continue;
+    out.push({ box, x: x0 + (a === "end" ? 4 : a === "middle" ? 2 : 0), y: cy, line, cost: price(line) + graze(rm) });
+  }
+  // Open sea anywhere a leader can reach, its leader to the label's side that faces the mark: a coast city finds the water beside it, a crowd the nearest open sea.
+  for (let gy = -LINE_FAR; gy <= LINE_FAR; gy += GRID_Y) for (let gx = -LINE_FAR - w; gx <= LINE_FAR; gx += GRID_X) {
+    const x0 = Math.round(d.x + gx), y = Math.round(d.y + gy), box = { x0, x1: x0 + w, y0: y - LABEL_H / 2, y1: y + LABEL_H / 2 };
+    // Most of the search lies on land: one look at the box's centre settles those before any measuring.
+    if (onLand(x0 + w / 2, y) || x0 < 8 || box.x1 > P.w - 8 || box.y0 < 6 || box.y1 > P.h - 6) continue;
+    const side = d.x < x0 || d.x > box.x1, fx = d.x < x0 ? x0 - 2 : d.x > box.x1 ? box.x1 + 2 : d.x, fy = side ? y : d.y < box.y0 ? box.y0 - 1 : box.y1 + 1;
+    const len = Math.hypot(fx - d.x, fy - d.y);
+    if (len <= d.r + NO_LINE || len - d.r + LEAD > LINE_FAR || boxes.some((b) => boxesMeet(box, b)) || hitMark(box) || inLine(box)) continue;
+    const line = { x1: d.x + (d.r + 1) * (fx - d.x) / len, y1: d.y + (d.r + 1) * (fy - d.y) / len, x2: fx, y2: fy };
+    if (dry(box) || boxes.some((b) => lineOnBox(line, b))) continue;
+    const rm = room(line);
+    if (rm >= 0) out.push({ box, x: x0 + 2, y, line, cost: price(line) + graze(rm) });
   }
   const [ax] = WORLD.project(ATL_LON, ATL_LAT), right = at(ax, 0).x;
   for (let k = 0; k < ATL_ROWS; k++) {
     // A nearly level leader is drawn level.
     const row = ATL_TOP + k * ATL_Y, y = Math.abs(row - d.y) < ATL_Y ? d.y : row, x0 = right - w, box = { x0, x1: right, y0: y - LABEL_H / 2, y1: y + LABEL_H / 2 }, dx = right + 2 - d.x, dy = y - d.y, len = Math.hypot(dx, dy);
     if (dx >= 0 || x0 < 8 || box.y1 > P.h - 6 || len <= d.r + 2) continue;
-    if (boxes.some((b) => boxesMeet(box, b)) || hitMark(box)) continue;
+    if (boxes.some((b) => boxesMeet(box, b)) || hitMark(box) || dry(box)) continue;
     const line = { x1: d.x + (d.r + 1) * dx / len, y1: d.y + (d.r + 1) * dy / len, x2: right + 2, y2: y };
-    if (boxes.some((b) => lineOnBox(line, b)) || lineOnMark(line)) continue;
-    out.push({ box, x: x0 + 4, y, line, cost: reach(line) - ATL_PULL, atl: true });
+    const rm = room(line);
+    if (rm >= 0 && !boxes.some((b) => lineOnBox(line, b))) out.push({ box, x: x0 + 4, y, line, cost: price(line) + graze(rm), atl: true });
   }
-  return out.sort((a, b) => a.cost - b.cost).slice(0, SPOTS);
+  // The lane over the land's north, in as many rows as it holds: a label there, anywhere a leader can reach, its leader to the label's foot.
+  for (let y = P.lane - 4 - LABEL_H / 2; y - LABEL_H / 2 >= 6; y -= LABEL_H + 2) for (let dx = -LINE_FAR; dx <= LINE_FAR; dx += LANE_STEP) {
+    const x0 = Math.max(8, Math.min(d.x + dx - w / 2, P.w - 8 - w)), box = { x0, x1: x0 + w, y0: y - LABEL_H / 2, y1: y + LABEL_H / 2 };
+    const fx = Math.max(x0 + 6, Math.min(d.x, box.x1 - 6)), fy = box.y1 + 1, len = Math.hypot(fx - d.x, fy - d.y);
+    if (len <= d.r + 2 || boxes.some((b) => boxesMeet(box, b)) || hitMark(box) || dry(box)) continue;
+    const line = { x1: d.x + (d.r + 1) * (fx - d.x) / len, y1: d.y + (d.r + 1) * (fy - d.y) / len, x2: fx, y2: fy };
+    if (reach(line) - LEAD > LINE_FAR || boxes.some((b) => lineOnBox(line, b))) continue;
+    const rm = room(line);
+    if (rm >= 0) out.push({ box, x: x0 + 2, y, line, cost: price(line) + graze(rm) });
+  }
+  return out.sort((a, b) => a.cost - b.cost);
 }
-// The cheapest seating of every label; loose, a label may stay out at a price that grows with its size. Bounded, so a crowded focus never stalls a hover.
-function seat(items, strict) {
-  const clash = (a, b) => boxesMeet(a.box, b.box) || (a.line && lineOnBox(a.line, b.box)) || (b.line && lineOnBox(b.line, a.box)) || (a.line && b.line && crosses(a.line, b.line));
-  let best = null, bestCost = Infinity, steps = 0;
-  const go = (i, cost, taken) => {
-    if (cost >= bestCost || steps > BUDGET) return;
-    if (i === items.length) { best = new Map(taken); bestCost = cost; return; }
-    const it = items[i];
-    for (const s of it.spots) {
-      steps++;
-      if ([...taken.values()].some((o) => clash(s, o))) continue;
-      // The column reads top down, so a smaller place above a bigger one costs extra.
-      const out = s.atl && [...taken.values()].some((o) => o.atl && s.y < o.y);
-      taken.set(it, s); go(i + 1, cost + s.cost + (out ? ORDER : 0), taken); taken.delete(it);
+// The SPOTS cheapest, distinct places, not SPOTS nudges of one: a spot that mostly covers a cheaper one is the same choice to a neighbour.
+function spotsAt(all) {
+  const kept = [];
+  for (const s of all) {
+    if (kept.length === SPOTS) break;
+    if (!kept.some((k) => Math.abs(k.box.x0 - s.box.x0) < GRID_X - 2 && Math.abs(k.box.y0 - s.box.y0) < GRID_Y - 2)) kept.push(s);
+  }
+  return kept;
+}
+// The cheapest seating of every label, or none. Bounded, so a crowded focus never stalls a hover.
+function seat(items) {
+  // Spots are kept across seatings of one placement, so each pair is measured once.
+  const clash = (a, b) => {
+    let v = a.cl?.get(b);
+    if (v === undefined) {
+      v = boxesMeet(a.box, b.box) || !!(a.line && lineOnBox(a.line, b.box)) || !!(b.line && lineOnBox(b.line, a.box)) || !!(a.line && b.line && crosses(a.line, b.line));
+      (a.cl ??= new Map()).set(b, v); (b.cl ??= new Map()).set(a, v);
     }
-    if (!strict) go(i + 1, cost + 300 + it.d.share * 2000, taken);
+    return v;
   };
-  go(0, 0, new Map());
+  let best = null, bestCost = Infinity, steps = 0;
+  // The least the labels still to seat can add, each at its cheapest spot: a branch that cannot beat the best so far stops.
+  const least = [...items.map(() => 0), 0];
+  for (let j = items.length - 1; j >= 0; j--) least[j] = least[j + 1] + (items[j].now[0]?.cost ?? 0);
+  // taken[k] is items[k]'s spot on the branch being tried.
+  const taken = [], free = (s) => { for (const o of taken) if (clash(s, o)) return false; return true; };
+  const go = (i, cost) => {
+    if (cost + least[i] >= bestCost || steps > BUDGET) return;
+    if (i === items.length) { best = new Map(items.map((it, k) => [it, taken[k]])); bestCost = cost; return; }
+    // A label left with no free spot ends this branch now, so the budget goes on seatings that can finish.
+    for (let j = i + 1; j < items.length; j++) if (!items[j].now.some(free)) return;
+    for (const s of items[i].now) {
+      steps++;
+      if (!free(s)) continue;
+      // The column reads top down, so a smaller place above a bigger one costs extra.
+      const out = s.atl && taken.some((o) => o.atl && s.y < o.y);
+      taken.push(s); go(i + 1, cost + s.cost + (out ? ORDER : 0)); taken.pop();
+    }
+  };
+  go(0, 0);
+  if (best) best.cost = bestCost;
   return best;
 }
-// strict: the labels shown are always the k biggest, so a small place never speaks over a bigger one.
-function placeLabels(marks, layer, seats, around, strict = false) {
+// The labels shown are always the k biggest, so a small place never speaks over a bigger one.
+function placeLabels(marks, layer, seats, around) {
   const boxes = reserved();
   const items = marks.map((d) => {
     const t = el("text", { class: "lab " + (d.share >= BIG ? "t1" : d.share < .01 ? "t3" : "t2") }, layer), nm = el("tspan", {}, t), v = el("tspan", { class: "v", dx: 4 }, t);
-    t.mark = d; nm.textContent = d.name; v.textContent = S.weigh === "hosts" ? d.vs.length : sharePct(d.share);
-    const it = { d, t, w: t.getBBox().width + 4 };
-    it.spots = spotsFor(it, around, boxes);
-    return it;
+    t.mark = d; v.textContent = S.weigh === "hosts" ? d.vs.length : sharePct(d.share);
+    return { d, t, nm, v, spots: new Map() };
   });
-  const seatMost = () => { for (let k = items.length; k > 0; k--) { const b = seat(items.slice(0, k), strict); if (b) return b; } return null; };
-  // Room first at sea and clear of every disc; in a crowd a leader may graze one, and only then may it pass a disc that touches its own.
-  let best = null;
-  for (const [inland, clear] of [[false, 2], [false, 0], [true, 0], [true, -2.5]]) {
-    items.forEach((it) => { it.spots = spotsFor(it, around, boxes, inland, clear); });
+  // Each label at its text for this step, longest first; spots are kept per text, so a step only measures the labels it shortens.
+  const word = (it, step) => {
+    const lab = it.d.labs[Math.min(step, it.d.labs.length - 1)];
+    if (it.nm.textContent !== lab) {
+      // a merged mark named by its head city alone gives that city's own figure
+      const own = it.d.cities.length > 1 && lab === it.d.head.c.name, c = it.d.cities[0];
+      it.nm.textContent = lab;
+      it.v.textContent = S.weigh === "hosts" ? (own ? c.vs.length : it.d.vs.length) : sharePct(own ? c.share : it.d.share);
+      it.w = it.t.getBBox().width + 4;
+    }
+    return lab;
+  };
+  const seatMost = () => { for (let k = items.length; k > 0; k--) { const b = seat(items.slice(0, k)); if (b) return b; } return null; };
+  // Never on land: a label with no seat at sea stays out, and every smaller one with it.
+  // A merged place's label shortens when its full words leave a bigger place out, or push the others' leaders STEP_COST further for each step.
+  let best = null, bestStep = 0;
+  const steps = Math.max(...items.map((it) => it.d.labs.length), 1), better = (b, step) => !best || b.size > best.size || (b.size === best.size && b.cost + STEP_COST * step < best.cost + STEP_COST * bestStep);
+  for (let step = 0; step < steps; step++) {
+    items.forEach((it) => { const lab = word(it, step); if (!it.spots.has(lab)) it.spots.set(lab, spotsAt(spotsFor(it, around, boxes))); it.now = it.spots.get(lab); });
     const b = seatMost();
-    if (b && (!best || b.size > best.size)) best = b;
-    if (best?.size === items.length) break;
+    if (b && better(b, step)) { best = b; bestStep = step; }
   }
   items.forEach((it) => {
     const s = best?.get(it);
     if (!s) { it.t.remove(); return; }
+    word(it, bestStep);
     it.t.setAttribute("x", s.x.toFixed(1)); it.t.setAttribute("y", s.y.toFixed(1));
-    if (s.line) el("line", { class: "ldr", x1: s.line.x1.toFixed(1), y1: s.line.y1.toFixed(1), x2: s.line.x2.toFixed(1), y2: s.line.y2.toFixed(1) }, layer).mark = it.d;
+    // A knock-out in the card's colour under the ink, so a leader crossing land reads as a pointer, not a border.
+    if (s.line) for (const c of ["ldr ldk", "ldr"]) el("line", { class: c, x1: s.line.x1.toFixed(1), y1: s.line.y1.toFixed(1), x2: s.line.x2.toFixed(1), y2: s.line.y2.toFixed(1) }, layer).mark = it.d;
     // A label answers to the pointer as its mark does.
     seats.push({ box: s.box, mark: it.d });
   });
@@ -2246,7 +2464,7 @@ area("hosting", (why) => {
   if (why === "win") return;
   if (why === "theme") { drawLand(); paint(); return; }
   // A new network opens on the resting view, as Publishers does.
-  if (why === "net") { Object.assign(S, { by: "provider", weigh: "vp", sort: "vp", dir: -1, hot: null, open: false, picks: [], city: null, region: null }); segBy.sync(); segWeigh.sync(); }
+  if (why === "net") { Object.assign(S, { by: "provider", weigh: "vp", sort: "vp", dir: -1, hot: null, open: false, picks: [], city: null, region: null, q: "", found: null }); segBy.sync(); segWeigh.sync(); }
   paintLine(); render(); buildRing(); layoutRing(); buildGeo(); draw(); paint();
 });
 if (!calm) {
