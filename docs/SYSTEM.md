@@ -691,8 +691,8 @@ size and how to remove it.
 
 ```
 GET /v1/meta                  what the site's header, banners and footer read: chain, app
-                              versions, the upgrade signal, counts (the site's own; not on the
-                              API page; the observer's health is /v1/health's alone)
+                              versions, the upgrade signal, counts, the data licence and the
+                              credit line (the observer's health is /v1/health's alone)
 GET /v1/network               the window summary
 GET /v1/validators            one row per validator (last_served_at: the newest reading whose rows
                               came back verified, which the overview map names)
@@ -746,8 +746,10 @@ GET /v1/tip                   the newest block read, the newest blob stored (lat
                               gains a row (its highest rowid) or a minute on
 GET /v1/tip/stream            /v1/tip as server-sent events: "tip" (the same JSON) on connecting
                               and whenever a field but server_time changes, "blobs" in front of a
-                              tip that names a new blob (the block's rows, up to 16, as
-                              /v1/blobs?endorsers=1 gives them, and the total), "ping" every 15 s,
+                              tip that names a new blob (the rows settled since the newest blob
+                              it saw before, newest first, up to 50, as /v1/blobs?endorsers=1 gives them, and
+                              the total, in one snapshot; they can span blocks and repeat a row
+                              already sent), "ping" every 15 s,
                               "end" before the API closes it, within an hour; one producer reads
                               /v1/tip's cache while any stream is open, at once when the collector
                               says a new blob is stored (status/blob.mark, which the API watches),
@@ -853,9 +855,8 @@ with, so a feed reader never sees an entry twice.
 
 The public documentation is the site's API page (`web/src/app/api`, served at `/api/`):
 every documented route in order, with its parameters, a Try it and an
-example answer (`endpoints.ts`; `/v1/publishers/{addr}/txs`'s is taken from a
-real answer once the route is deployed), then what every route shares. `/v1/meta`
-and `/v1/avatars` are the site's own and are not on it. A
+example answer (`endpoints.ts`), then what every route shares. `/v1/avatars`
+is the site's own and is not on it. A
 response carries what some reader uses: a field nothing reads is dropped
 from the answer, never from the store (the snapshot rows keep their
 internal figures; `shapes.go` projects them).
@@ -1009,9 +1010,10 @@ Two things are fixed when it is built, so each network gets its own build
 (`deploy/README.md`, "5. The site"): `NEXT_PUBLIC_API_URL`, the public API
 the methodology page links the exports, the signing key and the recompute
 command to, and `NEXT_PUBLIC_SELF_VALIDATOR` (below). `NEXT_PUBLIC_NETWORK_LABEL`
-puts the network's name after "Tensile" in the titles ("Tensile Mocha · …")
-and picks the link preview's image (`public/og-mocha.png`; mainnet's build
-leaves it empty: "Tensile · …" and `og.png`).
+puts the network's name after "Tensile" in the titles ("Tensile Mocha · …"),
+picks the link preview's image (`public/og-mocha.png`; mainnet's build
+leaves it empty: "Tensile · …" and `og.png`) and turns on the Analytics
+page (`/analytics/`, in the table below).
 
 The other network's site (`NEXT_PUBLIC_OTHER_SITE_URL`, with
 `NEXT_PUBLIC_OTHER_NETWORK_LABEL`) is asked for a record this one does not
@@ -1050,7 +1052,7 @@ without that second request.
 
 | route | reads |
 |---|---|
-| `/` | `/v1/validators` (the table, the map, and the notice when the API does not answer; the map's places and counts), `/v1/tip`'s `latest_endpoint_event` (a validator's new or changed endpoint, which holds that pill for 12 s), `/v1/market?window=all` (Available: the network's reading totals, `readings`, available over available plus unavailable), `/v1/blobs` (the recent blobs: as soon as `/v1/tip`'s `latest_blob` names a blob the grid does not hold, and every 30 s besides; a block that comes in alone moves the grid at once, and blocks that come in together go on one at a time, half a second apart; the reads after the first with `endorsers=1`, whose endorsers' places on the map burst with the grid's move and whom the pill under the map names, one a second, the newest block of a read alone; and once, for the pill, the grid's newest block with its endorsers) |
+| `/` | `/v1/validators` (the table, the map, and the notice when the API does not answer; the map's places and counts), `/v1/tip`'s `latest_endpoint_event` (a validator's new or changed endpoint, which holds that pill for 12 s), `/v1/market?window=all` (Available: the network's reading totals, `readings`, available over available plus unavailable), `/v1/blobs` (the recent blobs: with the tip stream open, the rows of its `blobs` event go on the grid with no read, and `/v1/blobs` is read when the event's total shows a gap or the tip names a blob still missing, each after up to half a second of the page's own; with no stream, as soon as `/v1/tip`'s `latest_blob` names a blob the grid does not hold; and every 30 s besides; a block that comes in alone moves the grid at once, and blocks that come in together go on one at a time, half a second apart; the reads after the first with `endorsers=1`, whose endorsers' places on the map burst with the grid's move and whom the pill under the map names, one a second, the newest block of a read alone; and once, for the pill, the grid's newest block with its endorsers) |
 | `/validator/?addr=` | `/v1/validators/{addr}`; its history area is two tabs when the answer carries `endpoint_history`, Latest checks and Endpoint history (`?tab=endpoints`), each registration's row opening `/tx/` when its transaction is on record |
 | `/blobs/` | `/v1/blobs?include_failed=1` (the first page again as the chain moves; a failed payment's row opens `/tx/`), `/v1/namespaces`, `/v1/market` (the period), `/v1/publishers` (once its filter opens); its search (`?blob=`) asks 64 hex as `/v1/blobs/{hash}`, `?commitment=` and `?tx=`, and a blob ID as `?commitment=` |
 | `/blob/?hash=`, `?id=`, `?tx=` | `/v1/blobs/{hash}`; a blob ID (`?id=`) or a settlement transaction (`?tx=`) is found first with `/v1/blobs?commitment=` or `?tx=`, and several matches open the Blobs list of them; a blob not on record yet is asked for again each time `/v1/tip`'s `latest_blob` changes, and every 30 s. A `?tx=` answer with a `failed_tx` renders the transaction page (`/v1/txs/{hash}`, below; with an API before that route, the `failed_tx` itself) and stops asking: it is the answer, final or not. The blob's Gas and Transaction fee are its `tx_cost`, and the transaction hash in its mast opens `/tx/` |
@@ -1058,6 +1060,7 @@ without that second request.
 | `/publishers/` | `/v1/market`, `/v1/publishers` |
 | `/publisher/?addr=` | `/v1/publishers/{addr}` (the account's figures; none counts a failed transaction); its tabs: All and Escrow `/v1/publishers/{addr}/txs?view=all` and `?view=escrow` (a row opens `/tx/`; a withdrawal request's payout under its type; Escrow's statement under its last page, shown when it closes on the balance), Blobs `/v1/blobs?publisher=&include_failed=1` (the first page live, the namespace picker) |
 | `/methodology/` | `/v1/params` (the protocol-parameters section; the rest is static) |
+| `/analytics/` | `/analytics/data.json` alone, which `fibre-analytics@` writes every quarter hour from the API (`deploy/analytics-data.mjs`: `/v1/blobs`, `/v1/params`, `/v1/market` and `/v1/publishers` per period, `/v1/validators?window=30d`); only in a build with `NEXT_PUBLIC_NETWORK_LABEL` set |
 | `/api/` | `/v1/health` once a minute, only to say when the API does not answer (a 429 reads busy, not down; the observer's own checks are not shown), and each route when its Try it is sent; its example answers are fixed text (`endpoints.ts`) |
 
 Every link to a validator's page — the overview's table and map, the map's
@@ -1100,11 +1103,12 @@ Units: `fibre-scan@`, `fibre-probe@`, `fibre-heartbeat@`, `fibre-collector@`,
 then the remote proof of the exports), `fibre-archive@` (rotation, then
 retirement; `PrivateNetwork=true`), `fibre-vantage-pull@` (each other
 vantage's heartbeats, every minute), `fibre-healthwatch@` (polls
-`/v1/health` and checks what the nightly jobs left behind, posts to a
-webhook and Telegram) and `fibre-hosting-db@` (daily, the hosting
-lookup's IP files), and optional `fibre-litestream@` and `fibre-site@`
-(the site and its `/api` proxy, for a host whose front proxy cannot serve
-files).
+`/v1/health` and checks what the nightly jobs and the Analytics data file
+left behind, posts to a webhook and Telegram) and `fibre-hosting-db@`
+(daily, the hosting lookup's IP files), and optional `fibre-litestream@`,
+`fibre-site@` (the site and its `/api` proxy, for a host whose front proxy
+cannot serve files) and `fibre-analytics@` (every quarter hour, the
+Analytics page's data file, on a host whose site has the page).
 
 **The nightly order** (UTC). 03:00: the collector builds the previous day's
 export (`-export-hour`). 03:17 plus up to 20 minutes (by about 03:36):

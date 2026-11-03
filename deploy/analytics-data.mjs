@@ -89,30 +89,25 @@ async function usage(rows) {
   for (const w of WINDOWS) {
     const m = await get(`/market?window=${w}`);
     market[w] = {
-      window: m.window, settlements: m.settlements, blobs: m.blobs, bytes: m.bytes, fees_utia: m.fees_settled_utia,
-      publishers_active: m.publishers_active, paid_per_mib_utia: m.paid_per_mib_utia, timeouts: m.timeouts, timed_out_utia: m.timed_out_utia,
-      deposits: m.deposits, escrow_held_utia: m.escrow_held_utia, escrow_accounts: m.escrow_accounts, namespaces: m.namespaces,
-      withdrawn: m.withdrawal_queue?.executed, withdrawal_pending: m.withdrawal_queue?.pending, consumed: m.withdrawal_queue?.consumed, daily: m.daily || [],
+      window: m.window, settlements: m.settlements, bytes: m.bytes, fees_utia: m.fees_settled_utia, paid_per_mib_utia: m.paid_per_mib_utia,
+      timeouts: m.timeouts, timed_out_utia: m.timed_out_utia, deposits: m.deposits, escrow_held_utia: m.escrow_held_utia, withdrawn: m.withdrawal_queue?.executed,
     };
     const p = await get(`/publishers?window=${w}&limit=100`);
     publishers[w] = p.publishers.map((r) => ({
       address: r.publisher, short: short(r.publisher), name: r.label || nameOf(r), settlements: r.settlements, bytes: r.bytes, bytes_share: r.bytes_share,
       fees_utia: r.fees_utia, fees_share: r.fees_share, paid_per_mib_utia: r.paid_per_mib_utia, avg_blob_bytes: r.avg_blob_bytes, largest_blob_bytes: r.largest_blob_bytes,
       timeouts: r.timeouts, first_settlement_at: r.first_settlement_at, last_settlement_at: r.last_settlement_at, namespaces_total: r.namespaces_total,
-      namespaces: (r.namespaces || []).map((n) => nsName(n.namespace)).filter(Boolean).slice(0, 4),
       escrow_utia: r.escrow?.balance_utia ?? null, escrow_available_utia: r.escrow?.available_utia ?? null,
     }));
   }
   const addresses = [...new Set(rows.map((r) => r[2]))];
   const index = new Map(addresses.map((a, i) => [a, i]));
-  const sizes = {};
-  for (const r of rows) if (r[6]) (sizes[r[2]] ||= {})[r[6]] = (sizes[r[2]][r[6]] || 0) + r[1];
-  const largest = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
   return {
     read_at: new Date().toISOString(),
     params: { price_formula: params.price_formula, max_blob_size_bytes: params.protocol?.max_blob_size_bytes, withdrawal_delay_s: params.current?.withdrawal_delay_s, shard_retention_s: params.current?.shard_retention_s },
-    market, publishers, addresses, address_names: Object.fromEntries(addresses.map((a) => [a, largest(sizes[a])])),
-    settlements: rows.map(([t, size, pub, fee, share, status, ns]) => [t, size, index.get(pub), fee, share, status, ns]),
+    // Only what the page reads. Availability stays in the state file, where the day's re-read keeps it current.
+    market, publishers, addresses,
+    settlements: rows.map(([t, size, pub, fee, share, , ns]) => [t, size, index.get(pub), fee, share, ns]),
   };
 }
 
@@ -134,9 +129,9 @@ function hosting(listed, params) {
     const m = new Map();
     for (const r of hosted) {
       const k = keyf(r); if (k == null) continue;
-      if (!m.has(k)) m.set(k, { key: k, vp: 0, hosts: 0, validators: [], countries: new Set(), cities: new Set(), companies: new Set(), ready_vp: 0, ready: 0, not_ready: 0, not_reported: 0 });
+      if (!m.has(k)) m.set(k, { key: k, vp: 0, hosts: 0, countries: new Set(), cities: new Set(), companies: new Set(), ready_vp: 0, ready: 0, not_ready: 0, not_reported: 0 });
       const g = m.get(k);
-      g.vp += r.vp; g.hosts++; g.validators.push({ moniker: r.moniker, share: r.share });
+      g.vp += r.vp; g.hosts++;
       if (r.cc) g.countries.add(r.cc);
       if (r.city) g.cities.add(r.city);
       if (r.company) g.companies.add(r.company);
@@ -145,7 +140,6 @@ function hosting(listed, params) {
     return [...m.values()].sort((a, b) => b.vp - a.vp).map((g, i) => ({
       rank: i + 1, name: g.key, share: +(g.vp / T).toFixed(6), vp: g.vp, hosts: g.hosts, host_share: +(g.hosts / hosted.length).toFixed(6), countries: [...g.countries], cities: [...g.cities], companies: [...g.companies],
       ready_hosts: g.ready, not_ready_hosts: g.not_ready, not_reported_hosts: g.not_reported, ready_share: rate(g.ready_vp, g.vp),
-      validators: g.validators.sort((a, b) => b.share - a.share),
     }));
   };
   const providers = group((r) => r.company);

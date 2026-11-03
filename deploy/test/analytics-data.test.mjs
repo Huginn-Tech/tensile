@@ -65,7 +65,10 @@ test("a first run reads every page and writes one file", async () => {
   const d = data();
   assert.equal(d.net, "testnet");
   assert.equal(d.usage.settlements.length, 250);
-  assert.deepEqual(d.usage.settlements[0], [NOW, 1024, 0, 10, 0.6667, "recoverable", "krews"]);
+  assert.deepEqual(d.usage.settlements[0], [NOW, 1024, 0, 10, 0.6667, "krews"]);
+  assert.deepEqual(Object.keys(d.usage).sort(), ["addresses", "market", "params", "publishers", "read_at", "settlements"]);
+  for (const k of ["blobs", "publishers_active", "escrow_accounts", "namespaces", "withdrawal_pending", "consumed", "daily"]) assert.equal(k in d.usage.market["30d"], false, k);
+  assert.equal("namespaces" in d.usage.publishers["30d"][0], false);
   assert.deepEqual(d.usage.addresses.sort(), ["celestia1aaaaaaaaaaaaaaaa", "celestia1bbbbbbbbbbbbbbbb"]);
   assert.equal(asked.filter((p) => p.startsWith("/v1/blobs")).length, 3);
   assert.equal(d.data.totals.hosts, 1);
@@ -73,7 +76,7 @@ test("a first run reads every page and writes one file", async () => {
   assert.equal(d.data.providers[0].name, "Servers.com");
   assert.equal(d.data.fibre_live_at, "2026-09-24T00:00:00Z");
   assert.deepEqual(Object.keys(d.data.validators[0]).sort(), ["cc", "city", "company", "country", "has_host", "lat", "lon", "moniker", "readiness", "share", "valoper", "vp"]);
-  assert.deepEqual(Object.keys(d.data.providers[0]).sort(), ["cities", "companies", "countries", "host_share", "hosts", "name", "not_ready_hosts", "not_reported_hosts", "rank", "ready_hosts", "ready_share", "share", "validators", "vp"]);
+  assert.deepEqual(Object.keys(d.data.providers[0]).sort(), ["cities", "companies", "countries", "host_share", "hosts", "name", "not_ready_hosts", "not_reported_hosts", "rank", "ready_hosts", "ready_share", "share", "vp"]);
   assert.equal(asked.filter((p) => p.startsWith("/v1/validators/")).length, 0, "no validator's own page");
   rmSync(dir, { recursive: true, force: true });
 });
@@ -88,12 +91,12 @@ test("a later run reads the newest page", async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("a settlement's last day is read again, so an availability that moved does not stay old", async () => {
+test("a settlement's last day is read again, so an availability that moved does not stay old in the state", async () => {
   blobs = blobs.map((b) => ({ ...b, reconstructable: { status: "pending" } }));
   assert.equal(await run(), 0);
   blobs = blobs.map((b) => ({ ...b, reconstructable: { status: "recoverable" } }));
   assert.equal(await run(), 0);
-  const rows = data().usage.settlements;
+  const rows = JSON.parse(readFileSync(path.join(dir, "state.json"), "utf8")).rows;
   assert.equal(rows.length, 250);
   assert.equal(rows[0][5], "recoverable");
   assert.equal(rows[249][5], "pending");

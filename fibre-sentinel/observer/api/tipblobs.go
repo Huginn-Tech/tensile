@@ -7,15 +7,20 @@ package api
 // and one round trip per open page, per block with a blob, and most of the
 // wait between a block and its blob on the overview. The stream now carries
 // the row: as the producer finds a newest blob the last answer did not name,
-// it reads that block's rows once, however many pages are open, and sends
-// them in front of the tip that names them:
+// it reads the rows settled since the newest blob it saw before once, however
+// many pages are open, and sends them, newest first, in front of the tip that
+// names them.
+// After a pause, or two blocks stored in one tick, they span blocks; a block
+// stored in two reads is sent again whole, so a row can come twice:
 //
 //	event: blobs
 //	data: {"blobs":[<rows as /v1/blobs?endorsers=1 gives them>],"total":n}
 //
-// total is the settlements on record, /v1/blobs' total. The two events go out
-// as one write, and a slow reader's newer event replaces the pair (offer), so
-// a page can miss a block's rows. It finds out from total, or from a tip
+// total is the settlements on record, /v1/blobs' total, read in the same
+// snapshot as the rows. The two events go out as one write, and a slow
+// reader's newer event replaces the pair (offer), so a page can miss rows; a
+// read the store does not answer in time sends none. It finds out from
+// total, or from a tip
 // naming a blob it does not hold, and asks /v1/blobs as it did before; a page
 // with no stream never hears of this event.
 //
@@ -34,12 +39,15 @@ import (
 	"github.com/fsnotify/fsnotify"
 
 	"github.com/plsgiveup/fibre/fibre-sentinel/internal/status"
+	"github.com/plsgiveup/fibre/fibre-sentinel/observer/store"
 )
 
 const (
-	// tipBlobsMax is the most rows one event holds. A page told of more by
-	// the total reads /v1/blobs.
-	tipBlobsMax = 16
+	// tipBlobsMax is the most rows one event holds: as many as a page of
+	// /v1/blobs?endorsers=1, and more than the overview's grid shows, so a
+	// busy block does not send every open page to /v1/blobs at once. A page
+	// told of more by the total reads /v1/blobs.
+	tipBlobsMax = maxEndorsersPage
 	// tipBlobsTimeout bounds the reads of one event: the producer waits for
 	// them, and a tip that waits longer is worth more than the rows.
 	tipBlobsTimeout = time.Second
@@ -88,12 +96,39 @@ func (s *Server) tipBlobsFrame(sent *tipBlob, newest *tipBlob) []byte {
 // tipBlobRows is what the event holds: the rows above height from, or those
 // of the height when the newest blob is at the height last sent (a block
 // whose rows the collector stored in two reads), newest first, and the total.
+// The rows and the total are one snapshot of the store when a transaction
+// slot is free (readTx): a block stored between two separate reads would put
+// the total ahead of the rows, and every page would take that for rows it
+// missed. The transaction holds a connection while blobRows reads the
+// charges and the probe marks through the database, which is why it takes a
+// slot. With none free, or a store with one connection, it reads as before,
+// statement by statement, rather than keep the tip waiting: a total ahead of
+// the rows only sends the pages to /v1/blobs.
 func (s *Server) tipBlobRows(ctx context.Context, from, height int64) ([]blobRow, int64, error) {
 	where := `settlement_height > ?`
 	if height <= from {
 		where = `settlement_height = ?`
 	}
-	rows, err := s.blobRows(ctx, where, tipBlobsMax, from)
+	var rows []blobRow
+	var total int64
+	read := func(q store.Querier) (err error) {
+		if rows, err = s.blobRows(withQuerier(ctx, q), where, tipBlobsMax, from); err != nil {
+			return err
+		}
+		return q.QueryRowContext(ctx, `SELECT COUNT(*) FROM publications`).Scan(&total)
+	}
+	var err error
+	select {
+	case s.txSlots <- struct{}{}: // never, with no slots (a nil channel)
+		tx, e := s.st.DB().BeginTx(ctx, nil)
+		if err = e; err == nil {
+			err = read(tx)
+			_ = tx.Rollback()
+		}
+		<-s.txSlots
+	default:
+		err = read(s.st.DB())
+	}
 	if err != nil {
 		return nil, 0, err
 	}
@@ -104,9 +139,7 @@ func (s *Server) tipBlobRows(ctx context.Context, from, height int64) ([]blobRow
 	if err := s.blobEndorsers(ctx, rows); err != nil {
 		return nil, 0, err
 	}
-	var total int64
-	err = s.st.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM publications`).Scan(&total)
-	return rows, total, err
+	return rows, total, nil
 }
 
 // expireTip makes the next read of the tip a new one.

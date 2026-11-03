@@ -603,7 +603,7 @@ const EX_PUBKEY = `{
 }`;
 
 const EX_META = `{
-  "methodology_version": "2026-10-08",
+  "methodology_version": "2026-10-20",
   "chain_id": "mocha-5",
   "vantages": [
     {"name": "de-1", "newest_at": "2026-10-08T11:38:34.687949213Z", "primary": false},
@@ -978,7 +978,7 @@ export const GROUPS: Group[] = [
         id: "tip-stream",
         path: "/v1/tip/stream",
         summary: "/v1/tip as server-sent events, sent as soon as it changes.",
-        desc: "A `tip` event, its data the answer /v1/tip gives on one line, comes on connecting and whenever a field other than `server_time` changes. A `blobs` event comes in front of a tip that names a new blob: `blobs`, up to 16 of the block's rows as /v1/blobs?endorsers=1 gives them, and `total`, the settlements on record. A `ping` event comes every 15 seconds to keep the connection open, and an `end` event before the API closes it, within an hour: connect again.",
+        desc: "A `tip` event, its data the answer /v1/tip gives on one line, comes on connecting and whenever a field other than `server_time` changes. A `blobs` event comes in front of a tip that names a new blob: `blobs`, the rows settled since the newest blob the stream saw before, newest first and up to 50, as /v1/blobs?endorsers=1 gives them, and `total`, the settlements on record when they were read. The rows can span blocks and can repeat one already sent, so match them by `promise_hash`. A slow reader can miss an event, and a read the store does not answer in time sends none; `total` then runs ahead of the rows it holds, and /v1/blobs fills the gap. A `ping` event comes every 15 seconds to keep the connection open, and an `end` event before the API closes it, within an hour: connect again.",
         params: [],
         errors: "503 while as many streams are open as the API allows; ask /v1/tip instead.",
         format: "text",

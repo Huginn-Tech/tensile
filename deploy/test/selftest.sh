@@ -954,6 +954,18 @@ hwx() {
   echo "$st"
 }
 hwreset() { printf 'ok\n%s\n\n' "${1:-$(date +%s)}" > "$hwstate"; } # a state with nothing failing
+# the Analytics data file, on a host whose site has the page: written within
+# the hour is fine; older is a failing check of its own, since a job that
+# keeps failing leaves the page an ever older file
+hwreset
+touch "$T/analytics.json"
+hwx "$p200" ANALYTICS_FILE="$T/analytics.json" > /dev/null
+check eq "$(sed -n 3p "$hwstate")" ""
+touch -d "@$(($(date +%s) - 7200))" "$T/analytics.json"
+hwx "$p200" ANALYTICS_FILE="$T/analytics.json" > /dev/null
+check eq "$(sed -n 3p "$hwstate")" analytics
+check contains "$(lastpost)" "Analytics data file was last written 2h ago"
+rm -f "$T/analytics.json"
 # the observer's state is the alert's, not the watcher's: a run that
 # alerted about a degraded observer exits 0
 hwreset

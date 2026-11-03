@@ -76,19 +76,25 @@ export function onBlobs(fn: (b: TipBlobs) => void): () => void {
 
 /** how far past its block's stamp a blob may be heard of and still be news; older, the page caught up on it */
 const HEARD_MS = 15000;
+/** a block, by the last blob this page timed past its block; Celestia's six seconds until one has */
+let blockMs = 6000;
 
 /**
  * When a blob settled, in ms on the observer's clock. A blob settles when its block is committed, about a block after
  * the stamp its settlement_time carries, so the moment a page heard of it (heard, on the same clock) is the nearest
  * measure of it. A page that did not hear of it takes the stamp and one block, the average over the blocks since by the
- * page's tip; the stamp alone when the tip is at that block.
+ * page's tip. While the tip is still at that block it takes the stamp and the last block it measured, so the age does
+ * not step back by a block when the next one comes.
  */
 export function settledAt(stamp: string, height: number, heard?: number): number {
   const t = Date.parse(stamp);
   if (heard !== undefined && heard >= t && heard - t < HEARD_MS) return heard;
   const tip = tipFeed().last();
   const blocks = tip?.block_time ? tip.height - height : 0;
-  return blocks > 0 ? t + (Date.parse(tip!.block_time!) - t) / blocks : t;
+  if (blocks <= 0) return t + blockMs;
+  const per = (Date.parse(tip!.block_time!) - t) / blocks;
+  if (per > 0) blockMs = per;
+  return t + per;
 }
 
 /**

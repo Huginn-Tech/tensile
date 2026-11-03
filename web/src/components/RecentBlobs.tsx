@@ -253,14 +253,15 @@ function useBlobFeed(mark: string | undefined) {
   }, [read]);
   // a new block's rows from the tip stream, on the grid with no read. A block the stream did not bring (this page fell
   // behind it, or the block held more rows than an event) shows in the total, and a read fills it: rows laid over a
-  // gap would put newer squares under older ones
+  // gap would put newer squares under older ones. Every open page sees that gap in the same instant, so the read waits
+  // up to half a second of its own, as the mark's below does
   useEffect(() => onBlobs((p) => {
     const f = cur.current;
     if (!f.loaded || document.hidden) return;
     const known = new Set(f.cells.map((c) => c.b.promise_hash));
     const fresh = p.blobs.filter((b) => !known.has(b.promise_hash)).length;
     if (fresh === 0) return;
-    if (f.total === null || p.total - f.total !== fresh) { self.current(); return; }
+    if (f.total === null || p.total - f.total !== fresh) { window.clearTimeout(markT.current); markT.current = window.setTimeout(() => self.current(), Math.random() * 500); return; }
     apply(merge(f, p, Date.now()).feed);
   }), [apply]);
   // a read as soon as the tip names a newest blob the feed does not hold, within half a second at a time of the
@@ -509,10 +510,13 @@ export default function RecentBlobs() {
   useLayoutEffect(() => {
     const mv = shown.move;
     if (mv) {
-      const blobs = shown.cells.filter((c) => mv.fresh.has(c.b.promise_hash)).map((c) => c.b);
+      const moved = shown.cells.filter((c) => mv.fresh.has(c.b.promise_hash)), blobs = moved.map((c) => c.b);
       const live = blobs.some((b) => !quiet.current.has(b.promise_hash));
+      // when the page heard of the move's newest block, the one the map's pill names: the cells of a block stored in two reads came apart
+      const top = Math.max(0, ...blobs.map((b) => b.settlement_height));
+      const heard = moved.filter((c) => c.b.settlement_height === top).map((c) => c.came).filter((t): t is number => t !== undefined);
       for (const b of blobs) quiet.current.delete(b.promise_hash);
-      announce({ id: mv.id, blobs, live });
+      announce({ id: mv.id, blobs, live, came: heard.length ? Math.max(...heard) : undefined });
     }
     else if (!toldFirst.current && shown.cells.length) announce({ id: 0, blobs: [shown.cells[0].b], live: false });
     if (shown.cells.length) toldFirst.current = true;
