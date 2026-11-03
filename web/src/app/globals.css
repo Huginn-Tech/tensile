@@ -1462,6 +1462,8 @@ body { background: var(--canvas); }
   margin: auto 0 0; padding: 0; list-style: none; font-size: var(--t-small); color: var(--text-3); font-variant-numeric: tabular-nums lining-nums;
 }
 .cp-rest > li { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; }
+/* four lines, with all three amber parts at once: a little closer, so with the smallest ring the window keeps its height */
+.cp-rest.four { row-gap: 2px; }
 .cp-none { min-height: 18px; }
 /* a line keeps the small frame's box without its edge, drawn outside the line so nothing moves; the unreachable one
    opens the names of its validators, and its frame comes back on hover or while open */
@@ -3599,6 +3601,7 @@ a.lg-who, a.bd-ns, .lg-t .c-b a, .bd-meta a, .vd-own a, .cm-ev-t a { padding-top
 .cp-dial { margin: 4px 0 10px; }
 /* the dial's key on the panel's edge, as the latest blob and the recent blobs are: name at the left, figures at the right */
 .cp-rest { align-self: stretch; grid-template-columns: minmax(0, 1fr) max-content max-content max-content; row-gap: 0; margin-top: 2px; font-size: 13px; }
+.cp-rest.four { row-gap: 0; }
 .cp-rest > li { min-height: 36px; align-items: center; }
 .cp-it { min-height: 36px; margin-top: 0; margin-bottom: 0; }
 button.cp-it { min-height: 44px; margin-top: -4px; margin-bottom: -4px; }
