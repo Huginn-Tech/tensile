@@ -7,8 +7,9 @@ package api
 // and one round trip per open page, per block with a blob, and most of the
 // wait between a block and its blob on the overview. The stream now carries
 // the row: as the producer finds a newest blob the last answer did not name,
-// it reads the rows settled since the last event once, however many pages are
-// open, and sends them, newest first, in front of the tip that names them.
+// it reads the rows settled since the newest blob it saw before once, however
+// many pages are open, and sends them, newest first, in front of the tip that
+// names them.
 // After a pause, or two blocks stored in one tick, they span blocks; a block
 // stored in two reads is sent again whole, so a row can come twice:
 //
@@ -17,8 +18,9 @@ package api
 //
 // total is the settlements on record, /v1/blobs' total, read in the same
 // snapshot as the rows. The two events go out as one write, and a slow
-// reader's newer event replaces the pair (offer), so a page can miss rows. It
-// finds out from total, or from a tip
+// reader's newer event replaces the pair (offer), so a page can miss rows; a
+// read the store does not answer in time sends none. It finds out from
+// total, or from a tip
 // naming a blob it does not hold, and asks /v1/blobs as it did before; a page
 // with no stream never hears of this event.
 //
@@ -37,6 +39,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 
 	"github.com/plsgiveup/fibre/fibre-sentinel/internal/status"
+	"github.com/plsgiveup/fibre/fibre-sentinel/observer/store"
 )
 
 const (
@@ -93,26 +96,39 @@ func (s *Server) tipBlobsFrame(sent *tipBlob, newest *tipBlob) []byte {
 // tipBlobRows is what the event holds: the rows above height from, or those
 // of the height when the newest blob is at the height last sent (a block
 // whose rows the collector stored in two reads), newest first, and the total.
-// The rows and the total are one snapshot of the store, one transaction on
-// one connection as the separate reads took (no slot: nothing in it waits for
-// another connection): a block stored between two separate reads would put
+// The rows and the total are one snapshot of the store when a transaction
+// slot is free (readTx): a block stored between two separate reads would put
 // the total ahead of the rows, and every page would take that for rows it
-// missed.
+// missed. The transaction holds a connection while blobRows reads the
+// charges and the probe marks through the database, which is why it takes a
+// slot. With none free, or a store with one connection, it reads as before,
+// statement by statement, rather than keep the tip waiting: a total ahead of
+// the rows only sends the pages to /v1/blobs.
 func (s *Server) tipBlobRows(ctx context.Context, from, height int64) ([]blobRow, int64, error) {
 	where := `settlement_height > ?`
 	if height <= from {
 		where = `settlement_height = ?`
 	}
-	tx, err := s.st.DB().BeginTx(ctx, nil)
-	if err != nil {
-		return nil, 0, err
-	}
-	rows, err := s.blobRows(withQuerier(ctx, tx), where, tipBlobsMax, from)
+	var rows []blobRow
 	var total int64
-	if err == nil {
-		err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM publications`).Scan(&total)
+	read := func(q store.Querier) (err error) {
+		if rows, err = s.blobRows(withQuerier(ctx, q), where, tipBlobsMax, from); err != nil {
+			return err
+		}
+		return q.QueryRowContext(ctx, `SELECT COUNT(*) FROM publications`).Scan(&total)
 	}
-	_ = tx.Rollback()
+	var err error
+	select {
+	case s.txSlots <- struct{}{}: // never, with no slots (a nil channel)
+		tx, e := s.st.DB().BeginTx(ctx, nil)
+		if err = e; err == nil {
+			err = read(tx)
+			_ = tx.Rollback()
+		}
+		<-s.txSlots
+	default:
+		err = read(s.st.DB())
+	}
 	if err != nil {
 		return nil, 0, err
 	}

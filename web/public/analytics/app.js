@@ -1392,8 +1392,9 @@ function model() {
   const rest = { ...agg(tail, "__rest", `${tail.length} more`), sum: true, rep: sum(tail, (g) => g.rep) };
   // The scale is the weighing's, so a bar keeps its length through every sort. The others are a figure, or their bar would halve every other.
   const scale = weight(ranked[0]);
-  // The lines say so only while the rows run down voting power.
-  const limits = new Map(S.sort === "vp" && S.dir < 0 ? [[past(1 / 3), "&gt;33%"], [past(2 / 3), "&gt;66%"]].filter(([at]) => at != null) : []);
+  // A line says the rows above it hold more than a third, or two thirds, of voting power, only while they run down voting power, and counted down the rows shown: weighed by hosts, they are not voting power's largest.
+  const shownTop = ordered(top), passes = (part) => { const limit = n.totals.voting_power * part; let held = 0; for (let i = 0; i < shownTop.length; i++) if ((held += shownTop[i].vp) > limit) return i + 1; return null; };
+  const limits = new Map(S.sort === "vp" && S.dir < 0 ? [[passes(1 / 3), "&gt;33%"], [passes(2 / 3), "&gt;66%"]].filter(([at]) => at != null) : []);
   V = { src, ranked, named, unnamed, top, tail, rest, scale, resting, limits, tailKeys: new Set(tail.map((g) => g.key)), step: new Map(named.map((g, i) => [g.key, keyTone(i, named.length)])), mem, byKey: new Map() };
   [...src, rest].forEach((g) => V.byKey.set(g.key, g));
 }

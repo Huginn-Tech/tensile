@@ -10,7 +10,8 @@ Wants=network-online.target
 # reads half a file). A deploy replaces the site's directory whole, which is
 # why the file does not live there: fibre-site-analytics.conf copies it back
 # when the site starts. A run that cannot read something fails before it
-# writes, and the page keeps the last file.
+# writes, and the page keeps the last file. The copies keep the time the run
+# wrote it ("-p"), which healthwatch's analytics check reads.
 [Service]
 Type=oneshot
 DynamicUser=true
@@ -18,7 +19,7 @@ StateDirectory=fibre-analytics/%i
 EnvironmentFile=/etc/fibre-observer/site-%i.env
 Environment=NETWORK=%i
 ExecStart=/usr/bin/node /usr/local/lib/fibre-observer/analytics-data.mjs
-ExecStartPost=+/usr/bin/install -m 0644 /var/lib/fibre-analytics/%i/data.json /srv/fibre-site/%i/analytics/data.json.new
+ExecStartPost=+/usr/bin/install -p -m 0644 /var/lib/fibre-analytics/%i/data.json /srv/fibre-site/%i/analytics/data.json.new
 ExecStartPost=+/usr/bin/mv -f /srv/fibre-site/%i/analytics/data.json.new /srv/fibre-site/%i/analytics/data.json
 # The first run reads every settlement and every validator, on a disk the
 # validator may share.

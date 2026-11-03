@@ -34,7 +34,7 @@ export type ArrivedBlob = {
 /**
  * one move of the grid: the blobs that just came in, newest first. live is false for what the grid shows without a
  * beat of its own: what it opened with (id 0, its newest blob), and what came while the page was hidden. came is when
- * the page heard of the newest of them, by its own clock: a move held under the pointer is drawn later than that
+ * the page heard of the newest block of them, by its own clock: a move held under the pointer is drawn later than that
  */
 export type Arrival = { id: number; blobs: ArrivedBlob[]; live: boolean; came?: number };
 

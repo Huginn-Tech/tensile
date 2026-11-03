@@ -512,7 +512,9 @@ export default function RecentBlobs() {
     if (mv) {
       const moved = shown.cells.filter((c) => mv.fresh.has(c.b.promise_hash)), blobs = moved.map((c) => c.b);
       const live = blobs.some((b) => !quiet.current.has(b.promise_hash));
-      const heard = moved.map((c) => c.came).filter((t): t is number => t !== undefined);
+      // when the page heard of the move's newest block, the one the map's pill names: the cells of a block stored in two reads came apart
+      const top = Math.max(0, ...blobs.map((b) => b.settlement_height));
+      const heard = moved.filter((c) => c.b.settlement_height === top).map((c) => c.came).filter((t): t is number => t !== undefined);
       for (const b of blobs) quiet.current.delete(b.promise_hash);
       announce({ id: mv.id, blobs, live, came: heard.length ? Math.max(...heard) : undefined });
     }

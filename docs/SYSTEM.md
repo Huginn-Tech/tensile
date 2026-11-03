@@ -746,8 +746,8 @@ GET /v1/tip                   the newest block read, the newest blob stored (lat
                               gains a row (its highest rowid) or a minute on
 GET /v1/tip/stream            /v1/tip as server-sent events: "tip" (the same JSON) on connecting
                               and whenever a field but server_time changes, "blobs" in front of a
-                              tip that names a new blob (the rows settled since the last one,
-                              newest first, up to 50, as /v1/blobs?endorsers=1 gives them, and
+                              tip that names a new blob (the rows settled since the newest blob
+                              it saw before, newest first, up to 50, as /v1/blobs?endorsers=1 gives them, and
                               the total, in one snapshot; they can span blocks and repeat a row
                               already sent), "ping" every 15 s,
                               "end" before the API closes it, within an hour; one producer reads
