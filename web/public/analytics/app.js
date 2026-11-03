@@ -1424,12 +1424,6 @@ function toThird(rows, w, total) {
   for (const g of [...rows].sort((a, b) => w(b) - w(a))) { if (c >= total / 3) break; c += w(g); n++; }
   return n;
 }
-// Fewest groups, biggest first, whose loss leaves hosted voting power under the two thirds a settlement needs.
-function toStop(rows, total) {
-  let left = sum(rows, (g) => g.vp), n = 0;
-  for (const g of [...rows].sort((a, b) => b.vp - a.vp)) { if (left < total * 2 / 3) break; left -= g.vp; n++; }
-  return { n, left: left / total };
-}
 const third = (n, one, many, what) => `${int(n)} ${n === 1 ? `${one} reaches` : `${many} reach`} a third of ${what}`;
 const and = (a) => (a.length < 2 ? a.join("") : `${a.slice(0, -1).join(", ")} and ${a.at(-1)}`);
 // Where a group's weight sits, when one city or provider holds most of it.
@@ -1441,8 +1435,7 @@ function mostly(g) {
 }
 function say() {
   const n = N(), t = n.totals, hosts = S.weigh === "hosts", lead = V.ranked.filter((g) => weight(g) === weight(V.ranked[0])), names = and(lead.map((g) => `<b>${esc(nameOf(g))}</b>`));
-  const stop = toStop(V.src, t.voting_power), many = stop.n === 1 ? noun1() : `${stop.n} ${noun()}`;
-  const why = hosts ? `${third(toThird(V.src, weight, t.hosts), noun1(), noun(), "Fibre hosts")}.` : stop.n ? `Minus the top ${many}, <b>${sharePct(stop.left)}</b> of it is left.` : "";
+  const why = hosts ? `${third(toThird(V.src, weight, t.hosts), noun1(), noun(), "Fibre hosts")}.` : "";
   const who = (where) => (hosts ? `${names} ${lead.length > 1 ? "have" : "has"} the most Fibre hosts, <b>${lead[0].hosts}</b> of ${t.hosts}${lead.length > 1 ? " each" : ""}.` : `${names} ${lead.length > 1 ? "host" : "hosts"} the most voting power, <b>${sharePct(shareOf(lead[0]))}</b>${lead.length > 1 ? " each" : where}.`);
   sayWho.innerHTML = `<span class="lead">${who(mostly(lead[0]))}</span><small>${why}</small>`;
   // One line: the place goes first, the row under the name still says it.
