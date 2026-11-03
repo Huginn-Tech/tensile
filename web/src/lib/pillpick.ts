@@ -49,14 +49,9 @@ export class PillPicker<E> {
     this.rand = rand;
   }
 
-  /**
-   * The endorsers the pill holds its width for: while a round runs, all of the beat's, so the longest name sets it and
-   * nothing beside the names moves; once the last is named and stays, that one alone, so no gap is left after a short name.
-   */
+  /** the name the pill sizes its cell to: the one shown, so "endorsed" and the age always follow it with no gap */
   get names(): string[] {
-    const order = this.order;
-    if (!order) return [];
-    return this.i >= order.length - 1 ? [order[this.i]] : order;
+    return this.order ? [this.order[this.i]] : [];
   }
 
   /**

@@ -1345,8 +1345,8 @@ body { background: var(--canvas); }
 @keyframes cm-dot-pop { 0% { transform: scale(1); } 10% { transform: scale(.9); } 40% { transform: scale(1.6); filter: brightness(1.5); } 100% { transform: scale(1); } }
 .cm-ev-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cm-ev-t a { color: var(--text); font-weight: 600; }
-/* the beat's endorsers, ten names a second: every name stacked in one cell as wide as the widest, the one named shown,
-   with no fade, so at that pace nothing beside them moves and nothing is measured; a very long name is cut short */
+/* the beat's endorsers, five names a second: the cell holds the name shown, with no fade, so "endorsed" and the age follow
+   it with no gap and nothing is measured; a very long name is cut short */
 .cm-ev-who { display: inline-grid; justify-items: start; vertical-align: bottom; overflow: hidden; }
 .cm-ev-who > span { grid-area: 1 / 1; max-width: 16em; overflow: hidden; text-overflow: ellipsis; font-weight: 600; color: var(--text); white-space: nowrap; visibility: hidden; pointer-events: none; }
 .cm-ev-who > span.on { visibility: visible; pointer-events: auto; }

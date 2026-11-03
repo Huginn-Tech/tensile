@@ -273,9 +273,8 @@ function useReducedMotion(): boolean {
 /**
  * The pill: an endorser of the newest beat at a time, "B-Harvest endorsed · 12 s ago", a new one each
  * ROTATE_MS in a shuffled order, each once (lib/pillpick.ts); with reduced motion one name a beat. The names
- * change in place with no fade, every name of the beat stacked in one cell as wide as the widest while the round runs,
- * so at that pace nothing beside them moves; the last name, which stays, has the cell to itself, so no gap is left
- * after it. Nothing is measured. The name is a plain link with the app's router on a plain click:
+ * change in place with no fade, the cell as wide as the name shown, so "endorsed" and the age follow it with no gap and
+ * move with it. Nothing is measured. The name is a plain link with the app's router on a plain click:
  * one of Next's links per name would be mounted, and prefetch, five times a second. A
  * new beat takes the pill in the frame the grid moves, and its dot pops (not for what the grid opened with); a
  * validator's new or changed endpoint takes it for HOLD_MS (ev, at epAt) and pops it too. A beat whose endorsers are

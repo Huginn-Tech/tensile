@@ -25,12 +25,12 @@ test("a beat's endorsers are named in a shuffled order, each once, and the last 
   const pk = new PillPicker(seeded(3));
   const es = set("a", 60);
   pk.beat("b1", "2026-10-19T10:00:00Z", es);
-  assert.deepEqual([...pk.names].sort(), es, "while the round runs, the whole set, for the pill's width");
+  assert.deepEqual(pk.names, [who(pk)], "the name shown alone, for the pill's width");
   const named = run(pk, 60);
   assert.equal(new Set(named).size, 60, "no repeats within the beat");
   assert.deepEqual([...named].sort(), es, "every endorser, and only them");
   assert.notDeepEqual(named, es, "shuffled, not in the record's order");
-  assert.deepEqual(pk.names, [named[59]], "the round over, the last name alone, so no gap stays after it");
+  assert.deepEqual(pk.names, [named[59]], "the round over, the last name alone");
   for (let i = 0; i < 300; i++) pk.tick(i * ROTATE_MS);
   assert.equal(who(pk), named[59], "one round: the last named stays, minutes on");
   // an endorser known only later is named next, then stays
