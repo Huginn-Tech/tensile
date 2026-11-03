@@ -12,7 +12,7 @@
  */
 
 /** ms between two endorsers named */
-export const ROTATE_MS = 100;
+export const ROTATE_MS = 200;
 /** ms a new or changed endpoint holds the pill */
 export const HOLD_MS = 12000;
 
@@ -49,9 +49,14 @@ export class PillPicker<E> {
     this.rand = rand;
   }
 
-  /** the endorsers of the beat named now, all of them (for the pill to keep its width for the longest name) */
+  /**
+   * The endorsers the pill holds its width for: while a round runs, all of the beat's, so the longest name sets it and
+   * nothing beside the names moves; once the last is named and stays, that one alone, so no gap is left after a short name.
+   */
   get names(): string[] {
-    return this.order ?? [];
+    const order = this.order;
+    if (!order) return [];
+    return this.i >= order.length - 1 ? [order[this.i]] : order;
   }
 
   /**

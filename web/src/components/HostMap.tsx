@@ -39,7 +39,7 @@ import { PillPicker, HOLD_MS, ROTATE_MS } from "@/lib/pillpick";
  * counts in the centre. With each beat of the recent blobs (a block's blobs,
  * as they come: lib/pace.ts) the places of the validators that endorsed
  * them burst on the map (lib/mapflash.ts, lib/mapburst.ts), and the pill
- * names them, ten a second (lib/pillpick.ts); a validator's new or changed
+ * names them, five a second (lib/pillpick.ts); a validator's new or changed
  * endpoint (/v1/tip) takes the pill for 12 s, and its place bursts. The map has no heading
  * of its own: the counts say what
  * it shows, and the panel's one heading on the subject is "Current Fibre
@@ -273,9 +273,10 @@ function useReducedMotion(): boolean {
 /**
  * The pill: an endorser of the newest beat at a time, "B-Harvest endorsed · 12 s ago", a new one each
  * ROTATE_MS in a shuffled order, each once (lib/pillpick.ts); with reduced motion one name a beat. The names
- * change in place with no fade, every name of the beat stacked in one cell as wide as the widest, so at that pace
- * nothing beside them moves and nothing is measured. The name is a plain link with the app's router on a plain click:
- * one of Next's links per name would be mounted, and prefetch, ten times a second. A
+ * change in place with no fade, every name of the beat stacked in one cell as wide as the widest while the round runs,
+ * so at that pace nothing beside them moves; the last name, which stays, has the cell to itself, so no gap is left
+ * after it. Nothing is measured. The name is a plain link with the app's router on a plain click:
+ * one of Next's links per name would be mounted, and prefetch, five times a second. A
  * new beat takes the pill in the frame the grid moves, and its dot pops (not for what the grid opened with); a
  * validator's new or changed endpoint takes it for HOLD_MS (ev, at epAt) and pops it too. A beat whose endorsers are
  * not known yet is named once they are; until then the pill keeps what it names, its beat with it (named), or waits
