@@ -7,7 +7,7 @@ import { H2, H3 } from "@/components/RefHeading";
 // The rules version, as verdict.MethodologyVersion in the Go code and
 // methodology_version in /v1/meta and every export manifest. Bumped in the
 // same change as any rule that can move a figure.
-const METHODOLOGY_VERSION = "2026-10-08";
+const METHODOLOGY_VERSION = "2026-10-20";
 
 export const metadata = { title: `Methodology · ${SITE_NAME} · Celestia Fibre` };
 
@@ -34,6 +34,7 @@ const SECTIONS: Section[] = [
     ],
   },
   { id: "checks", label: "How checks work" },
+  { id: "hosting", label: "Hosting" },
   { id: "publishers", label: "Publishers and escrow" },
   { id: "params", label: "Protocol parameters" },
   { id: "evidence", label: "Evidence and corrections" },
@@ -311,6 +312,20 @@ export default function Methodology() {
           <Def id="locations" aliases={["vantage"]} name="Observation locations" say="Endpoints are checked from two locations; blobs are read from one, as one client’s download is.">
             <p>The second location&rsquo;s checks confirm the status shown now (see <a href="#reachable-now">Reachability</a>) and enter no percentage. A blob reading follows one network path, and asking again, twice, 90 s apart, keeps a passing failure on that path from counting.</p>
           </Def>
+        </section>
+
+        {/* ----------------------------------------------------------- hosting */}
+        <section className="ref-sec">
+          <H2 id="hosting">Hosting</H2>
+          <p className="ref-lead">Where a validator&rsquo;s Fibre host runs: whose network announced its address, and where that address is estimated to be. Nothing here enters a result.</p>
+          <p>The address is the one the endpoint checks resolved. It is looked up in local copies of public IP databases, so no lookup leaves the observer.</p>
+          <dl className="ref-terms">
+            <Term id="provider" term="Provider">The company whose network announced the address: the origin AS in iptoasn.com&rsquo;s routing table, mapped to a provider by its AS number. A network not on that list counts as Other, which is every such network together, not one entity. An address with no route there takes its AS from DB-IP&rsquo;s ASN file, marked <em>per DB-IP</em>.</Term>
+            <Term id="host-country" term="Country">DB-IP&rsquo;s estimate of where the address is used; without one, the country the network is registered in, which the hover says.</Term>
+            <Term id="host-city" term="City">DB-IP&rsquo;s city estimate and its approximate coordinates, which place the host on the map.</Term>
+            <Term id="host-files" term="Updates">The routing table is fetched daily and DB-IP&rsquo;s files monthly. An address range that changed hands since its file was made shows as it was then.</Term>
+          </dl>
+          <p>It says whose network announced the address, not who owns the machine: a proxy, a tunnel or an anycast address hides where the machine runs, and a location is an estimate.</p>
         </section>
 
         {/* -------------------------------------------------------- publishers */}
