@@ -12,7 +12,7 @@
  */
 
 /** ms between two endorsers named */
-export const ROTATE_MS = 100;
+export const ROTATE_MS = 200;
 /** ms a new or changed endpoint holds the pill */
 export const HOLD_MS = 12000;
 
@@ -49,9 +49,9 @@ export class PillPicker<E> {
     this.rand = rand;
   }
 
-  /** the endorsers of the beat named now, all of them (for the pill to keep its width for the longest name) */
+  /** the name the pill sizes its cell to: the one shown, so "endorsed" and the age always follow it with no gap */
   get names(): string[] {
-    return this.order ?? [];
+    return this.order ? [this.order[this.i]] : [];
   }
 
   /**
