@@ -647,8 +647,10 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
     const nb = block.reduce((m, b) => ((b.settlement_tx_index ?? 0) > (m.settlement_tx_index ?? 0) ? b : m));
     const beat: PillBeat = { key: nb.promise_hash, at: nb.settlement_time ?? "", height: top, blobs: block.length, endorsers: unionOf(block), live: a.live };
     setBeatNow(beat);
-    // what the grid opened with was read without its endorsers: its newest block's, once
-    if (a.id === 0 && beat.endorsers === null) {
+    // a block on the grid without its endorsers: what the grid opened with, and what a re-read of the whole grid for
+    // its statuses brought in (those reads go without, RecentBlobs' readPage), as a page shown again after a while
+    // often reads first. Its endorsers once, so the pill names it and does not keep the block before
+    if (beat.endorsers === null) {
       fetch(`${API_BASE}/v1/blobs?before_height=${top + 1}&limit=20&endorsers=1`, { cache: "no-store" })
         .then((r) => (r.ok ? r.json() : null))
         .then((j) => {
