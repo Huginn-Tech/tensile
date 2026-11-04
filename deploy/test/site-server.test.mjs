@@ -413,10 +413,10 @@ const policyOf = async (at, p) => {
 
 // a second server beside the first, with SITE_CONNECT_SRC set to value: its address once it listens, or its exit code
 // and what it printed when it stops instead; exited settles when its process has ended
-async function another(value) {
+async function another(value, more = {}) {
   const port = await freePort();
   const p = spawn(process.execPath, [SERVER], {
-    env: { ...process.env, SITE_ROOT: root, SITE_LISTEN: `127.0.0.1:${port}`, API_LISTEN: `127.0.0.1:${api.address().port}`, SITE_CONNECT_SRC: value },
+    env: { ...process.env, SITE_ROOT: root, SITE_LISTEN: `127.0.0.1:${port}`, API_LISTEN: `127.0.0.1:${api.address().port}`, SITE_CONNECT_SRC: value, ...more },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const exited = new Promise((ok) => p.once("exit", ok));
@@ -428,6 +428,35 @@ async function another(value) {
   });
   return { ...got, stop: () => p.kill(), exited };
 }
+
+// With SITE_TRUSTED_PROXY set, X-Forwarded-For counts only from that address: a peer that is not the proxy (another
+// container on the proxy's network) is one client whatever it names, and its allowance runs out; from the proxy, each
+// address it names is a client of its own.
+test("X-Forwarded-For is believed from SITE_TRUSTED_PROXY alone when it is set", async () => {
+  const burst = async (at) => {
+    const got = [];
+    for (let i = 0; i < 250; i++) {
+      const r = await fetch(at + "/api/v1/blobs?limit=50", { headers: { "x-forwarded-for": `198.20.${i >> 8}.${i & 255}` } });
+      await r.arrayBuffer();
+      got.push(r.status);
+    }
+    return got;
+  };
+  const other = await another("", { SITE_TRUSTED_PROXY: "127.0.0.2" });
+  assert.ok(other.at, `it did not start: ${other.err}`);
+  try {
+    assert.ok((await burst(other.at)).includes(429), "a peer that is not the proxy named a fresh client for each request");
+  } finally {
+    other.stop();
+  }
+  const proxy = await another("", { SITE_TRUSTED_PROXY: "10.0.0.9, 127.0.0.1" });
+  assert.ok(proxy.at, `it did not start: ${proxy.err}`);
+  try {
+    assert.ok(!(await burst(proxy.at)).includes(429), "the proxy's clients were counted as one");
+  } finally {
+    proxy.stop();
+  }
+});
 
 test("a shutdown cuts the open tip streams rather than waiting on them", { skip: process.platform === "win32" && "needs POSIX signals" }, async () => {
   const s = await another("");
