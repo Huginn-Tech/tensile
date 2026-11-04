@@ -108,13 +108,16 @@ func TestVantageFilesAreTailedBesideTheOwnFile(t *testing.T) {
 	}
 
 	// A second vantage directory appears between passes. A row in it that
-	// claims this observer's own vantage is stepped over, not counted as ours.
+	// claims this observer's own vantage is stepped over, not counted as ours,
+	// and so is one that claims any name but its directory's: a pulled file
+	// does not choose the name its rows are published and alerted under.
 	us := filepath.Join(vdir, "us-2", "reachability.jsonl")
 	os.MkdirAll(filepath.Dir(us), 0o755)
-	os.WriteFile(us, []byte(beatLine("us-2", "aa", 0)+"\n"+beatLine("ut-1", "aa", 20)+"\n"), 0o644)
+	os.WriteFile(us, []byte(beatLine("us-2", "aa", 0)+"\n"+beatLine("ut-1", "aa", 20)+"\n"+
+		beatLine("de-1", "aa", 25)+"\n"+beatLine("<b>x</b>", "aa", 30)+"\n"), 0o644)
 	ins, skipped := ingestVantages(t, st, vdir)
-	if ins != 1 || skipped != 1 {
-		t.Fatalf("new vantage: inserted %d skipped %d, want 1 and 1", ins, skipped)
+	if ins != 1 || skipped != 3 {
+		t.Fatalf("new vantage: inserted %d skipped %d, want 1 and 3", ins, skipped)
 	}
 
 	if n := countRows(t, st, "de-1"); n != 4 {

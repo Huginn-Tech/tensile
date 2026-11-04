@@ -14,16 +14,19 @@
 #     answers 200 or 503 — either proves the proxy, the certificate and the
 #     API are wired; 000 means one of them is not.
 #   - alerts: fibre-healthwatch --test posts a real message to every
-#     destination the env file sets (ALERT_WEBHOOK, and the Telegram chat
-#     with TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID), run as the service user
-#     with the instance's EnvironmentFile exactly as the timer runs it.
+#     destination the env files set (ALERT_WEBHOOK, and the Telegram chat
+#     with TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID, in alert-<instance>.env),
+#     run as a user of its own with the instance's EnvironmentFiles as the
+#     timer runs it.
 #     Delivery is the point of an alert; a destination that was never
 #     exercised is a guess. Neither set fails: nobody would be told. No
 #     webhook or token is ever printed.
-#   - secrets: the env file, rclone.conf and litestream's env file hold the
-#     alert and backup credentials, and no other account on the host may
-#     read them (0640 root:fibre-observer; systemd reads EnvironmentFile= as
-#     root).
+#   - secrets: the env files (the network's, alert-<instance>.env and
+#     litestream's) hold the alert and backup credentials, and only root may
+#     read them (0600 root:root; systemd reads EnvironmentFile= as root): a
+#     service process reading one directly would get what UnsetEnvironment
+#     keeps from it. rclone.conf is read by rclone under the backup unit, so
+#     it is 0640 root:fibre-observer and no other account may read it.
 #
 # Usage: sudo deploy/test/exposure.sh [instance]   (default mocha)
 # Reads /etc/fibre-observer/<instance>.env. Exit 0 when every check passes.
@@ -33,6 +36,7 @@ set -o errexit -o nounset -o pipefail
 
 INSTANCE="${1:-mocha}"
 ENVFILE=/etc/fibre-observer/$INSTANCE.env
+ALERTFILE=/etc/fibre-observer/alert-$INSTANCE.env
 ALLOWED="${ALLOWED_PORTS:-22 80 443}"
 SERVICE_USER=fibre-observer
 
@@ -88,12 +92,12 @@ else
 fi
 
 echo "== alert delivery"
-dests=$(alert_destinations "$ENVFILE")
+dests=$(alert_destinations "$ENVFILE" "$ALERTFILE")
 if [ -z "$dests" ]; then
   fail "neither ALERT_WEBHOOK nor TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are set: healthwatch only logs; nobody is told when the observer breaks"
 elif [ -x /usr/local/bin/fibre-healthwatch ]; then
-  if run_as_service "$ENVFILE" "$SERVICE_USER" /usr/local/bin/fibre-healthwatch "$INSTANCE" --test; then
-    pass "test alert delivered to every configured destination ($dests) as $SERVICE_USER with $ENVFILE; check that it arrived where a human looks"
+  if run_as_service dynamic "$ENVFILE" "$ALERTFILE" -- /usr/local/bin/fibre-healthwatch "$INSTANCE" --test; then
+    pass "test alert delivered to every configured destination ($dests) as the watcher's own user with $ENVFILE and $ALERTFILE; check that it arrived where a human looks"
   else
     fail "test alert not delivered to every configured destination ($dests); healthwatch said which refused it, above"
   fi
@@ -102,14 +106,22 @@ else
 fi
 
 echo "== secrets readable by the service only"
-for f in "$ENVFILE" /etc/fibre-observer/rclone.conf "/etc/fibre-observer/litestream-$INSTANCE.env"; do
+for f in "$ENVFILE" "$ALERTFILE" "/etc/fibre-observer/litestream-$INSTANCE.env"; do
   [ -e "$f" ] || continue
+  if m=$(root_only_file "$f"); then
+    pass "$f is $m"
+  else
+    fail "$f is ${m:-unreadable}: an account other than root can read it (sudo chown root:root $f; sudo chmod 0600 $f)"
+  fi
+done
+f=/etc/fibre-observer/rclone.conf
+if [ -e "$f" ]; then
   if m=$(private_file "$f"); then
     pass "$f is $m"
   else
     fail "$f is ${m:-unreadable}: other accounts on the host can read it (sudo chown root:$SERVICE_USER $f; sudo chmod 0640 $f)"
   fi
-done
+fi
 
 echo "== the master key stays on the host"
 if [ -n "$DATA_DIR" ] && [ -f "$DATA_DIR/sampling-master.key" ]; then

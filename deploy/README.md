@@ -105,23 +105,34 @@ Everything is per network. The examples below set up `mocha`; repeat with
 ```bash
 sudo useradd --system --home /var/lib/fibre-observer --create-home fibre-observer   # the service user
 sudo install -d -m 0755 /etc/fibre-observer
-sudo install -m 0640 -o root -g fibre-observer deploy/observer.env.example /etc/fibre-observer/mocha.env
+sudo install -m 0600 -o root -g root deploy/observer.env.example /etc/fibre-observer/mocha.env
+sudo install -m 0600 -o root -g root /dev/null /etc/fibre-observer/alert-mocha.env                 # the alert credentials, below
 sudo cp deploy/publishers.yaml.example /etc/fibre-observer/publishers-mocha.yaml                  # publisher labels; optional, the API runs without it
 ```
 
 Edit `mocha.env` (`sudo -e /etc/fibre-observer/mocha.env`, which keeps
 its mode): set `NETWORK`, `RPC`, `VANTAGE`, `DATA_DIR`
 (`/var/lib/fibre-observer/mocha`), `API_LISTEN` (a port of its
-own), and, when you have them, `ALERT_WEBHOOK` or `TELEGRAM_BOT_TOKEN`
-and `TELEGRAM_CHAT_ID`, and `BACKUP_REMOTE`. Leave `POLICY` empty.
+own), and, when you have it, `BACKUP_REMOTE`. Leave `POLICY` empty.
+The alert credentials, `ALERT_WEBHOOK` or `TELEGRAM_BOT_TOKEN` and
+`TELEGRAM_CHAT_ID`, go in `alert-mocha.env` (`sudo -e
+/etc/fibre-observer/alert-mocha.env`), which only the health watch loads.
 
-The env file holds the alert token, the webhook and the backup remote,
-so no other account on the host may read it: `0640 root:fibre-observer`.
-A plain `cp` under root's umask leaves it `0644`, readable by every
-account on a host it may share with a validator. systemd reads
-`EnvironmentFile=` as root, the commands below that source it run under
-`sudo`, and `deploy/test/exposure.sh` fails a file other accounts can
-read. `rclone.conf` (section 7) is installed the same way.
+The env file holds the backup remote and the alert file the token and
+the webhook, so no other account on the host may read either: `0600
+root:root`. systemd reads `EnvironmentFile=` as root, so no service
+account needs them open, and the commands below that read them run under
+`sudo`. A plain `cp` under root's umask leaves a file `0644`, readable by
+every account on a host it may share with a validator, and
+`deploy/test/exposure.sh` fails a file other accounts can read. The
+alert credentials are kept out of the network's env file because every
+observer process loads that file and runs as the one service account, so
+each could read them from any other's environment; the watcher runs as a
+user of its own ("Health and alerting" below). Each other unit also drops the
+settings it does not use (`UnsetEnvironment=`), so a token left in
+`mocha.env` from an older setup reaches no other process. `rclone.conf`
+(section 7) is `0640 root:fibre-observer`: rclone, under the backup unit,
+reads it itself.
 
 The prober reads every blob; nothing is sampled or budgeted. `POLICY` is
 left over from the earlier sampling, and the prober's unit no longer
@@ -284,7 +295,7 @@ attempt's own verifier, about 4 MiB at K = 4096, is charged to it.
 With the service user from section 3:
 
 ```bash
-sudo install -d -o fibre-observer -m 0750 /var/lib/fibre-observer/mocha
+sudo install -d -o fibre-observer -g fibre-observer -m 0750 /var/lib/fibre-observer/mocha
 sudo install -m 0755 fibre-sentinel/bin/* /usr/local/bin/
 sudo install -m 0755 deploy/vantage-pull.sh /usr/local/bin/fibre-vantage-pull  # when the script changed
 sudo install -m 0755 deploy/healthwatch.sh /usr/local/bin/fibre-healthwatch
@@ -301,7 +312,10 @@ The units are templates: the part after `@` is the network, and it selects
 and `publishers-<network>.yaml`. They are hardened (`ProtectSystem=strict`,
 `ProtectHome`, `PrivateTmp`, an empty `CapabilityBoundingSet`,
 `SystemCallFilter=@system-service`) and can write only their own data
-directory.
+directory. The health watch is the exception: it runs as a user of its own
+(`DynamicUser`) in the `fibre-observer` group, which is why the data
+directory is group `fibre-observer`, reads the record without writing it,
+and keeps its own files in `/var/lib/fibre-healthwatch/<network>`.
 
 Each unit runs one binary with the flags from its env file. The prober
 also takes any extra flags from `PROBE_ARGS` in it (for example
@@ -333,6 +347,24 @@ watch on the scanner's files works the same way: if it cannot start or is
 lost, the collector reads them every second on its timer and says so once.
 
 `sudo systemctl status 'fibre-*@mocha'` and `journalctl -u fibre-probe@mocha -f`.
+
+The prober and the heartbeat dial whatever host a validator registers. A
+registered host may name the observer itself, and the dial then lands on a
+port that is open only to this host. A drop-in keeps both off the host's own
+public addresses (`ip -br addr` lists them; loopback stays reachable):
+
+```bash
+for u in fibre-probe@mocha fibre-heartbeat@mocha; do
+  sudo mkdir -p /etc/systemd/system/$u.service.d
+  printf '[Service]\nIPAddressDeny=%s\n' '<public IPv4> <public IPv6>' |
+    sudo tee /etc/systemd/system/$u.service.d/own-address.conf
+done
+sudo systemctl daemon-reload && sudo systemctl restart fibre-probe@mocha fibre-heartbeat@mocha
+```
+
+Check first that the env file's RPC and gRPC addresses are not one of them,
+and that no registered host resolves to one, or the drop-in turns those
+reads into failures.
 
 ### Health and alerting
 
@@ -378,12 +410,29 @@ dot on the network chip). Every failing check reaches the operator from
 the health watch below instead.
 
 `fibre-healthwatch@<network>.timer` asks `/v1/health` every five minutes as
-the service user and posts when the verdict or the set of failing checks
+a user of its own and posts when the verdict or the set of failing checks
 changes, again every `ALERT_REPEAT_MIN` while it stays bad, and once on
 recovery, with every failing check and its detail. A change is posted only
 once `ALERT_AFTER_RUNS` runs in a row (2 by default, ten minutes) have seen
 it, so a restart one run happens to catch says nothing; while it waits,
-`status/healthwatch.pending` holds what it saw. It posts first and
+`healthwatch.pending` holds what it saw. Its files are in
+`/var/lib/fibre-healthwatch/<network>/`, which no observer process can
+write (an older build kept them in `status/`; the first run takes them
+over, and the old ones can then be removed). The first run that finds
+the observer well records it and posts nothing.
+
+The watcher is outside the processes it judges, as an account too: they
+all run as `fibre-observer`, and one of them gone wrong could otherwise
+read the alert credentials in its environment, rewrite what it remembers,
+or take the API's port while the API is stopped and answer for it. So it
+runs as a `DynamicUser` that reads the record through the
+`fibre-observer` group, loads `alert-<network>.env`, which no other unit
+does, and takes an answer on `API_LISTEN` as the API's only while
+`fibre-api@<network>` is running: an answer while that unit is stopped
+is posted as the API down. The check names and details it quotes are
+plain text (names keep only the letters a check's name is made of), and
+the API's details name an error only by its stage and a status file's
+names only when they are plain words. It posts first and
 records what it sent only once a destination took it, so a post that was
 refused is sent again on the next run, and a full disk does not silence
 the alerts after it. It also checks the jobs `/v1/health` cannot see, by
@@ -404,9 +453,11 @@ failing checks under its own name until it holds again:
   fixes is not reported;
 - `archive-due`: `failed_txs.jsonl` or `tx_costs.jsonl`, which are not
   archived yet, is past 64 MiB, or grew more than 1 MiB in a day, measured
-  from a size sample taken again each day (`status/healthwatch.sizes`):
-  the mark past which it is to be archived ("Archive: bounded live
-  files" below).
+  from a size sample taken again each day (`healthwatch.sizes`): the
+  mark past which it is to be archived ("Archive: bounded live files"
+  below). Upkeep, not an outage, and a file anyone can grow by paying for
+  large failed transactions: while it is the only failing check it is
+  repeated once a day, not every `ALERT_REPEAT_MIN`.
 
 A vantage that never sent anything is not judged: before Fibre is live
 there is nothing for it to check.
@@ -419,17 +470,30 @@ log line), and 1 when an alert was refused or its state could not be
 written. A failed `fibre-healthwatch@<network>` unit therefore means the
 watcher itself is in trouble. It posts to
 `ALERT_WEBHOOK`, any URL that accepts a JSON body with a `content` field
-(Discord, Slack incoming webhooks, Matrix), and to Telegram when
-`TELEGRAM_BOT_TOKEN` (from @BotFather) and `TELEGRAM_CHAT_ID` (a chat the
-bot is in) are set in the env file, whichever are set. After setting them,
-`sudo bash -c 'set -a; . /etc/fibre-observer/mocha.env; fibre-healthwatch mocha --test'`
-sends one message and says whether each destination took it. With none
-set it only logs; an external uptime monitor pointed at
-`https://<site>/api/v1/health` is the same signal with somebody else's
-timer. The webhook and the bot token are never printed, and never on
-curl's command line either, where every account on the host could read
-them in the process list while a post is in flight: curl reads the URL
-from a config on its stdin.
+(Discord, Slack incoming webhooks, Matrix; Discord is told to ping
+nobody and Slack's text is escaped, so nothing in an alert is a mention),
+and to Telegram when `TELEGRAM_BOT_TOKEN` (from @BotFather) and
+`TELEGRAM_CHAT_ID` (a chat the bot is in) are set in
+`alert-<network>.env`, whichever are set. After setting them,
+
+```bash
+sudo systemd-run --quiet --wait --pipe --collect -p DynamicUser=yes \
+  -p EnvironmentFile=/etc/fibre-observer/mocha.env -p EnvironmentFile=/etc/fibre-observer/alert-mocha.env \
+  /usr/local/bin/fibre-healthwatch mocha --test
+```
+
+sends one message and says whether each destination took it
+(`deploy/test/exposure.sh` runs the same). With none set it only logs; an
+external uptime monitor pointed at `https://<site>/api/v1/health` is the
+same signal with somebody else's timer. The webhook, the bot token and
+the chat are never printed, and never on curl's command line either,
+where every account on the host could read them in the process list
+while a post is in flight: curl reads the URL and the body from a config
+on its stdin.
+
+For Telegram, a bot of its own for each host, a plain member of its chat
+(not an administrator), with joining other groups turned off in
+@BotFather (`/setjoingroups`), can do nothing but post there.
 
 ### Upgrading a running observer
 
@@ -458,6 +522,39 @@ is installed with the archive timer stopped, and its writers restarted
 before the timer runs again ("Archive: bounded live files", upgrade
 order).
 
+**The alert credentials in a file of their own** (the build that gave the
+health watch a user of its own). The token and the webhook move out of the
+network's env file, which every observer process loads, into
+`alert-<network>.env`; the data directory is opened to the
+`fibre-observer` group, through which the watcher reads it; and the
+processes that held the token are restarted so it leaves their
+environment, the collector first as for any upgrade:
+
+```bash
+N=mocha
+sudo install -m 0600 -o root -g root /dev/null /etc/fibre-observer/alert-$N.env
+sudo grep -E '^(ALERT_WEBHOOK|TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID)=' /etc/fibre-observer/$N.env | sudo tee /etc/fibre-observer/alert-$N.env >/dev/null
+sudo sed -i -E '/^(ALERT_WEBHOOK|TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID)=/d' /etc/fibre-observer/$N.env
+sudo chown root:root /etc/fibre-observer/$N.env && sudo chmod 0600 /etc/fibre-observer/$N.env
+sudo chgrp fibre-observer /var/lib/fibre-observer/$N && sudo chmod 0750 /var/lib/fibre-observer/$N
+sudo install -m 0755 deploy/healthwatch.sh /usr/local/bin/fibre-healthwatch
+sudo install -m 0755 deploy/analytics-publish.sh /usr/local/bin/fibre-analytics-publish
+sudo cp deploy/systemd/*.service deploy/systemd/*.timer /etc/systemd/system/ && sudo systemctl daemon-reload
+sudo systemctl restart fibre-collector@$N
+sudo systemctl restart fibre-scan@$N fibre-probe@$N fibre-heartbeat@$N
+sudo systemctl start fibre-healthwatch@$N && sudo journalctl -u fibre-healthwatch@$N -n 3 --no-pager
+sudo rm -f /var/lib/fibre-observer/$N/status/healthwatch.state /var/lib/fibre-observer/$N/status/healthwatch.pending /var/lib/fibre-observer/$N/status/healthwatch.sizes
+```
+
+The first run takes the old `status/healthwatch.*` over, so it posts
+nothing the old one would not have; the journal line says the verdict.
+The site's drop-in for the Analytics page (`fibre-site-analytics.conf`)
+names the new copy step too, so a host with the page installs it again
+("The Analytics page" below). A token that sat in the daemons'
+environment is worth replacing once this is in place (@BotFather
+`/revoke`, then the new one in `alert-<network>.env` and a
+`--test`).
+
 **The env files and the site's own settings** (the build that gave
 `fibre-site@` a file of its own). A host set up before it has its env
 files as `cp` left them, `0644`; close them, then give site-server its two
@@ -466,8 +563,8 @@ unit no longer reads the network's env file and does not start without its
 own:
 
 ```bash
-sudo chown root:fibre-observer /etc/fibre-observer/*.env /etc/fibre-observer/rclone.conf
-sudo chmod 0640 /etc/fibre-observer/*.env /etc/fibre-observer/rclone.conf
+sudo chown root:root /etc/fibre-observer/*.env && sudo chmod 0600 /etc/fibre-observer/*.env
+sudo chown root:fibre-observer /etc/fibre-observer/rclone.conf && sudo chmod 0640 /etc/fibre-observer/rclone.conf
 sudo grep -E '^(SITE_LISTEN|API_LISTEN)=' /etc/fibre-observer/mocha.env | sudo tee /etc/fibre-observer/site-mocha.env >/dev/null
 sudo cat /etc/fibre-observer/site-mocha.env   # both lines, SITE_LISTEN and API_LISTEN, before going on
 sudo cp deploy/systemd/fibre-site@.service /etc/systemd/system/ && sudo systemctl daemon-reload
@@ -1123,6 +1220,15 @@ printf 'SITE_LISTEN=127.0.0.1:3112\nAPI_LISTEN=127.0.0.1:8081\n' | sudo tee /etc
 printf 'SITE_LISTEN=127.0.0.1:3113\nAPI_LISTEN=127.0.0.1:8080\nSITE_CONNECT_SRC=https://mocha.observer.example.org\n' | sudo tee /etc/fibre-observer/site-mainnet.env >/dev/null
 ```
 
+site-server counts a request by the client the front proxy names in
+`X-Forwarded-For` only when the request comes from the proxy:
+`SITE_TRUSTED_PROXY` in `site-<network>.env`, the proxy's address
+(`127.0.0.1` for an nginx or Caddy on the host, the proxy container's
+address on a docker network), or several, comma separated. Unset, any
+loopback or private peer is believed, which on a host whose other
+containers share that network lets any of them name a fresh client for
+every request.
+
 Point the front proxy's site for that network at `SITE_LISTEN`. A new
 build is copied over the directory; the server picks up the changed files
 without a restart. A change to the env file, or to `site-server.cjs`,
@@ -1148,10 +1254,13 @@ clients stays bounded. An answer refused by these limits is a 429 with
 
 The tip stream (`/api/v1/tip/stream`, below) is one long request per shown
 page. Opening one spends a `/v1/tip` token; an open one holds none of the
-client's 16 places, but one of its 30 streams, and of the site's 5,000:
-the unit's `MemoryMax=256M` is the real ceiling (two sockets a stream, the
-client's and the API's), and the open files are not, since Node raises its
-soft limit to systemd's hard one. A stream refused past either is a 429 or
+client's 16 places, but one of its 30 streams, and of the site's 1,800,
+below the API's 2,000, so a flood of streams from a few dozen addresses
+is refused at the site and never fails the API's `tip_streams` check,
+which would make the health watch alert at will. The unit's
+`MemoryMax=256M` is the real ceiling (two sockets a stream, the client's
+and the API's), and the open files are not, since Node raises its soft
+limit to systemd's hard one. A stream refused past either is a 429 or
 a 503, and its page polls `/v1/tip` as before; a 503 at the site's cap is
 in site-server's journal at most once a minute. site-server neither
 buffers nor compresses an API answer, so each event passes as it comes; a
@@ -1171,6 +1280,7 @@ newest settlements, and the validators' list.
 
 ```bash
 sudo install -m 0644 deploy/analytics-data.mjs /usr/local/lib/fibre-observer/analytics-data.mjs
+sudo install -m 0755 deploy/analytics-publish.sh /usr/local/bin/fibre-analytics-publish
 sudo cp deploy/systemd/fibre-analytics@.service deploy/systemd/fibre-analytics@.timer /etc/systemd/system/
 sudo install -d -m 0755 /etc/systemd/system/fibre-site@mocha.service.d
 sudo cp deploy/systemd/fibre-site-analytics.conf /etc/systemd/system/fibre-site@mocha.service.d/analytics.conf
@@ -1180,7 +1290,11 @@ sudo systemctl enable --now fibre-analytics@mocha.timer
 ```
 
 The file lives in the unit's state directory and root copies it into the
-site after each run, since a deploy replaces the site's directory whole. The
+site after each run (`fibre-analytics-publish`), since a deploy replaces
+the site's directory whole. The job's user owns that directory, so root
+takes only a plain JSON file from it, never a link or a second name of
+another file, which would otherwise put whatever root can read on the
+public site. The
 drop-in puts it back when the site restarts, so a deploy needs no step of its
 own. A run that fails leaves the last file, and the page's foot says when it
 was read; healthwatch fails a check named `analytics` once the served file was
@@ -2187,11 +2301,15 @@ install -m 0755 observer-heartbeat /usr/local/bin/tensile-heartbeat
 # unit: User=tensile-vantage, Group=tensile-vantage, UMask=0027, ProtectSystem=strict,
 #   ReadWritePaths=/srv/tensile-vantage/de-1, ExecStart=/usr/local/bin/tensile-heartbeat
 #   -rpc https://<mocha rpc>:443 -data-dir /srv/tensile-vantage/de-1 -vantage de-1 -interval 5m
+#   InaccessiblePaths=-/opt, IPAddressDeny=<this host's public addresses>
 ```
 
 The vantage service has its own group on purpose: it parses TLS answers from
 every registered host, so it must not be able to write the backups kept under
-the same account.
+the same account. For the same reason it gets no view of the other services
+on that host (`InaccessiblePaths=`) and may not dial the host's own public
+addresses (`IPAddressDeny=`): a provider that registers one of them as its
+Fibre host would otherwise point the check at the host's own ports.
 
 On the observer, `fibre-vantage-pull@<net>.timer` fetches each vantage's
 record once a minute over the backup account's sftp-only key, appending only
@@ -2216,7 +2334,7 @@ all types). Check it once as the service user:
 prints the remote file's size. Configure it in the network's env file:
 
 ```
-VANTAGE_PULL_HOST=tensile-backup@85.10.211.222
+VANTAGE_PULL_HOST=tensile-backup@<backup-host>
 VANTAGE_PULL_NAMES=de-1
 ```
 
@@ -2288,13 +2406,14 @@ differ from Mocha's, in order.
    needs (section 3).
 3. **The env file.** `/etc/fibre-observer/mainnet.env` from
    `deploy/observer.env.example`, installed as in section 3
-   (`sudo install -m 0640 -o root -g fibre-observer deploy/observer.env.example /etc/fibre-observer/mainnet.env`):
+   (`sudo install -m 0600 -o root -g root deploy/observer.env.example /etc/fibre-observer/mainnet.env`):
    `NETWORK=mainnet`, `RPC` (the mainnet
    node), a `VANTAGE` name of its own,
    `DATA_DIR=/var/lib/fibre-observer/mainnet`, `POLICY=` empty,
    `API_LISTEN=127.0.0.1:8080`, `START_HEIGHT=0` or a height the node holds,
-   `END_READ_SINCE=` empty, `VANTAGE_LOCATION`, `VANTAGE_PROVIDER`, the
-   alert settings and `BACKUP_REMOTE`. With site-server,
+   `END_READ_SINCE=` empty, `VANTAGE_LOCATION`, `VANTAGE_PROVIDER` and
+   `BACKUP_REMOTE`; the alert settings in `alert-mainnet.env`, a bot of
+   its own for this host (section 4, "Health and alerting"). With site-server,
    `/etc/fibre-observer/site-mainnet.env` with `SITE_LISTEN` (a port of
    its own) and `API_LISTEN=127.0.0.1:8080` (section 5).
    `publishers-mainnet.yaml` only if you label publishers.
@@ -2324,9 +2443,9 @@ differ from Mocha's, in order.
    `BACKUP_REMOTE/mainnet` by itself.
 7. **The second vantage.** A heartbeat instance of its own against a
    mainnet RPC, and `VANTAGE_PULL_NAMES` in `mainnet.env` (7c).
-8. **The checks.** Section 8 with `mainnet`, and
-   `sudo bash -c 'set -a; . /etc/fibre-observer/mainnet.env; fibre-healthwatch mainnet --test'`
-   to prove the alerts arrive.
+8. **The checks.** Section 8 with `mainnet`, and the health watch's
+   `--test` (section 4, "Health and alerting") with `mainnet` to prove
+   the alerts arrive.
 
 ## 8. Checks after deploy
 

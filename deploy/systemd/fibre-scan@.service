@@ -6,6 +6,10 @@ Wants=network-online.target
 [Service]
 User=fibre-observer
 EnvironmentFile=/etc/fibre-observer/%i.env
+# Every observer process runs as one account and can read a sibling's
+# environment, so each is given only the settings it uses: the alert
+# credentials are the health watcher's alone (alert-<network>.env).
+UnsetEnvironment=ALERT_WEBHOOK TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID BACKUP_REMOTE TENSILE_EXPORT_SIGNING_KEY
 # SKIP_HEIGHTS is optional and normally unset: heights the scanner must not
 # read, recorded and published as scan gaps (deploy/README.md, Runbook, "The
 # scanner crash-loops on one block"). Passed as one word, -skip-heights=VALUE:

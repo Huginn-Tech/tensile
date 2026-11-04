@@ -2,7 +2,13 @@
 #
 # fibre-healthwatch <instance>: ask this instance's API whether the observer
 # is healthy, and if not, tell somebody. Runs from fibre-healthwatch@.timer
-# every five minutes as the service user, with the instance's env file.
+# every five minutes as a user of its own (DynamicUser, in the service
+# group to read the record), with the instance's env file and the alert
+# credentials (alert-<instance>.env), which no other unit loads: the
+# observer's processes share one account, and any of them could read a
+# sibling's environment or rewrite a file the watcher keeps. Its own files
+# (healthwatch.state, .pending, .sizes) are in its StateDirectory, which
+# only it can write; a first run there takes them over from status/.
 #
 # /v1/health is 200 when every process is alive and the disk has room, 503
 # with the failing checks otherwise. The check is deliberately outside the
@@ -53,8 +59,13 @@ repeat="${ALERT_REPEAT_MIN:-60}"
 after="${ALERT_AFTER_RUNS:-2}"
 case "$after" in ''|*[!0-9]*|0) after=1 ;; esac
 data="${DATA_DIR:-/var/lib/fibre-observer/$instance}"
-state="$data/status/healthwatch.state"
-pending="$data/status/healthwatch.pending"
+# The watcher's own files: in the unit's StateDirectory (systemd sets
+# STATE_DIRECTORY), else beside the record in status/ as before.
+state_dir="${STATE_DIRECTORY:-$data/status}"
+state_dir="${state_dir%%:*}"
+state="$state_dir/healthwatch.state"
+pending="$state_dir/healthwatch.pending"
+sizes="$state_dir/healthwatch.sizes"
 name="${NETWORK:-$instance}"
 backup_remote="${BACKUP_REMOTE:-}"
 pull_names="${VANTAGE_PULL_NAMES:-}"
@@ -66,14 +77,19 @@ epoch="${HEALTHWATCH_NOW:-$(date +%s)}"
 # status is ever printed: curl's own error text can carry the URL, and the
 # URL is the secret (the webhook, or the bot token inside Telegram's). Nor
 # is the URL on curl's command line, which every account on the host can
-# read in the process list for as long as the post takes: curl reads it
-# from a config on its stdin (-K -), written by printf, a builtin, so it is
-# in no process's arguments. In the config's quotes a backslash and a
-# double quote are escaped.
+# read in the process list for as long as the post takes, nor the body,
+# which holds the chat: curl reads both from a config on its stdin (-K -),
+# written by printf, a builtin, so they are in no process's arguments. In
+# the config's quotes a backslash and a double quote are escaped; the body
+# is one line of JSON (json.dumps escapes every newline in it), and
+# data-raw never reads a file however it begins. -q, first, keeps any
+# .curlrc out.
 post() {
-  local u=${1//\\/\\\\} code
+  local u=${1//\\/\\\\} d=${2//\\/\\\\} code
   u=${u//\"/\\\"}
-  code=$(printf 'url = "%s"\n' "$u" | curl -sS -m 20 -K - -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d "$2" 2>/dev/null) || true
+  d=${d//\"/\\\"}
+  case "$u$d" in *$'\n'*|*$'\r'*) printf '000\n'; return ;; esac
+  code=$(printf 'url = "%s"\ndata-raw = "%s"\n' "$u" "$d" | curl -q -sS -m 20 -K - -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' 2>/dev/null) || true
   case "$code" in
     [1-5][0-9][0-9]) printf '%s\n' "$code" ;;
     *) printf '000\n' ;;
@@ -91,15 +107,26 @@ deliver() {
     # Read stdin once. Reading it twice in one dict literal left "text"
     # empty, because Python evaluates the values in order and the first read
     # exhausts it: Discord reads "content" and worked, Slack reads "text",
-    # rejected the empty payload with a 400, and nothing said so.
-    payload=$(printf '%s' "$msg" | python3 -c 'import json,sys; m=sys.stdin.read()[:1900]; print(json.dumps({"content": m, "text": m}))' 2>/dev/null \
-      || printf '{"content":"%s"}' "$msg")
-    code=$(post "$webhook" "$payload")
+    # rejected the empty payload with a 400, and nothing said so. Discord
+    # pings nobody (allowed_mentions), and Slack's "text" has its &, < and >
+    # escaped, so a name in an alert is never a mention or a link there.
+    if payload=$(printf '%s' "$msg" | python3 -I -c '
+import json, sys
+m = sys.stdin.read()[:1900]
+t = m.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+print(json.dumps({"content": m, "text": t, "allowed_mentions": {"parse": []}}))' 2>/dev/null); then
+      code=$(post "$webhook" "$payload")
+    else
+      code="000, no payload"
+    fi
     case "$code" in 2*) delivered=$((delivered + 1)) ;; *) echo "healthwatch[$name]: webhook post failed (HTTP $code)" >&2; failed=1 ;; esac
   fi
   if [ "$tg" = 1 ]; then
-    payload=$(printf '%s' "$msg" | TG_CHAT="$tg_chat" python3 -c 'import json,os,sys; m=sys.stdin.read()[:3500]; print(json.dumps({"chat_id": os.environ["TG_CHAT"], "text": m, "disable_web_page_preview": True}))')
-    code=$(post "${tg_api}/bot${tg_token}/sendMessage" "$payload")
+    if payload=$(printf '%s' "$msg" | TG_CHAT="$tg_chat" python3 -I -c 'import json,os,sys; m=sys.stdin.read()[:3500]; print(json.dumps({"chat_id": os.environ["TG_CHAT"], "text": m, "disable_web_page_preview": True}))' 2>/dev/null); then
+      code=$(post "${tg_api}/bot${tg_token}/sendMessage" "$payload")
+    else
+      code="000, no payload"
+    fi
     case "$code" in 2*) delivered=$((delivered + 1)) ;; *) echo "healthwatch[$name]: telegram post failed (HTTP $code)" >&2; failed=1 ;; esac
   fi
   return $failed
@@ -120,11 +147,36 @@ if [ "${2:-}" = "--test" ]; then
   exit 1
 fi
 
-body=$(curl -sS -m 20 -o /dev/stdout -w '\n%{http_code}' "$url" 2>/dev/null || echo -e '\n000')
+body=$(curl -q -sS -m 20 -o /dev/stdout -w '\n%{http_code}' "$url" 2>/dev/null || echo -e '\n000')
 code="${body##*$'\n'}"
 json="${body%$'\n'*}"
 
-if [ "$code" = "200" ]; then
+# SYSTEMCTL is the systemctl binary (the selftest puts a fake there); with
+# none, nothing is asked of it.
+sysctl_bin="${SYSTEMCTL:-systemctl}"
+have_sysctl=0
+if command -v "$sysctl_bin" >/dev/null 2>&1; then have_sysctl=1; fi
+unit_prop() { [ "$have_sysctl" = 1 ] && "$sysctl_bin" show -p "$2" --value "$1" 2>/dev/null; }
+
+# An answer is the API's only while its unit runs. Every observer process
+# shares one account, so with the API stopped any of them could take its
+# port and answer 200 for ever; an answer while fibre-api@<instance> is
+# loaded and stopped is nobody's to trust, and is said as the API down.
+# A host whose API is no such unit is not asked.
+squat=""
+if [ "$code" != "000" ] && [ "$(unit_prop "fibre-api@$instance.service" LoadState || true)" = loaded ]; then
+  api_state=$(unit_prop "fibre-api@$instance.service" ActiveState || true)
+  case "$api_state" in
+    active|reloading|activating|deactivating|refreshing) ;;
+    *) squat=${api_state:-unknown} ;;
+  esac
+fi
+
+if [ -n "$squat" ]; then
+  now="down"
+  failing=""
+  summary="something answers at $listen while fibre-api@$instance is $squat"
+elif [ "$code" = "200" ]; then
   now="ok"
   failing=""
   summary="every observer process is alive"
@@ -138,16 +190,21 @@ else
   # then the human summary. The names are what the state file remembers
   # (below); the summary is what the alert says. No f-strings: a nested
   # c["name"] inside one is a syntax error before Python 3.12, and this
-  # runs on whatever python3 the host has.
-  parsed=$(printf '%s' "$json" | python3 -c '
-import json, sys
+  # runs on whatever python3 the host has. A name keeps only the letters a
+  # check's name is made of, and nothing the body holds can start a line.
+  parsed=$(printf '%s' "$json" | python3 -I -c '
+import json, re, sys
+def name(c):
+    return re.sub(r"[^A-Za-z0-9_@.-]", "_", str(c.get("name", "?")))[:64] or "?"
+def text(s):
+    return "".join(ch if ch.isprintable() else " " for ch in str(s))[:1000]
 try:
     h = json.load(sys.stdin)
+    bad = [c for c in h.get("checks", []) if isinstance(c, dict) and not c.get("ok")]
 except Exception:
     print("?"); print("unreadable health body"); sys.exit()
-bad = [c for c in h.get("checks", []) if not c.get("ok")]
-print(",".join(sorted(set(str(c.get("name", "?")) for c in bad))))
-print(str(h.get("status", "?")) + ": " + "; ".join(str(c.get("name", "?")) + ": " + str(c.get("detail", "")) for c in bad))
+print(",".join(sorted(set(name(c) for c in bad))))
+print(text(h.get("status", "?"))[:20] + ": " + "; ".join(name(c) + ": " + text(c.get("detail", "")) for c in bad))
 ' 2>/dev/null) || parsed=$(printf '?\nhealth %s' "$code")
   failing=$(printf '%s\n' "$parsed" | sed -n 1p)
   summary=$(printf '%s\n' "$parsed" | sed -n 2p)
@@ -158,8 +215,9 @@ fi
 # under NAME (no spaces), so it alerts once, nags while it stays failed,
 # and the run that finds it fixed recovers; WHAT joins the summary.
 fail_check() {
-  # shellcheck disable=SC2086 # the check names hold no spaces
-  failing=$(printf '%s\n' ${failing//,/ } "$1" | LC_ALL=C sort -u | paste -sd, -)
+  # one name a line, quoted: a name is never split or matched as a pattern
+  local nl=$'\n'
+  failing=$(printf '%s\n%s\n' "${failing//,/$nl}" "$1" | sed '/^$/d' | LC_ALL=C sort -u | paste -sd, -)
   case $now in
     ok) now="degraded"; summary="every observer process is alive; $2" ;;
     *) summary="$summary; $2" ;;
@@ -173,11 +231,7 @@ hours() { echo "$(($1 / 3600))h"; }
 # longer copies (and with it the remote proofs that retiring a local copy
 # rests on, which then stops), or an archive run that failed (which skips
 # the retirement after it). A failed unit is a failing check under its own
-# name. SYSTEMCTL is the systemctl binary (the selftest puts a fake there);
-# with none, nothing is asked.
-sysctl_bin="${SYSTEMCTL:-systemctl}"
-have_sysctl=0
-if command -v "$sysctl_bin" >/dev/null 2>&1; then have_sysctl=1; fi
+# name.
 unit_failed() { [ "$have_sysctl" = 1 ] && "$sysctl_bin" is-failed --quiet "$1" 2>/dev/null; }
 for unit in "fibre-backup@$instance.service" "fibre-archive@$instance.service"; do
   if unit_failed "$unit"; then fail_check "${unit%.service}" "$unit failed (journalctl -u $unit)"; fi
@@ -299,12 +353,27 @@ fi
 # backup copies each whole, and nothing else measures them, so past either
 # mark is a failing check, archive-due, for as long as it holds. A day's
 # growth is measured from a sample of each file's size, taken again once it
-# is a day old, in status/healthwatch.sizes: one line a file, its name, the
+# is a day old, in healthwatch.sizes: one line a file, its name, the
 # sample's epoch and size, and the growth a day the last two samples
 # measured. A file shorter than its sample (replaced) grew nothing. A sample
 # that cannot be written is said, and fails the run; the next run takes it.
 rc=0
-sizes="$data/status/healthwatch.sizes"
+
+# A first run in the StateDirectory takes over the files an older build
+# kept in status/, so the move itself neither alerts nor forgets a sample.
+# They are only read from there (what they say is checked below as any
+# state file's is), and left for the operator to remove.
+if [ "$state_dir" != "$data/status" ] && [ ! -e "$state" ] && [ ! -e "$pending" ]; then
+  for f in healthwatch.state healthwatch.pending healthwatch.sizes; do
+    old="$data/status/$f"
+    [ -f "$old" ] && [ ! -L "$old" ] || continue
+    if ! { mkdir -p "$state_dir" && head -c 65536 "$old" > "$state_dir/$f.tmp" && mv -f "$state_dir/$f.tmp" "$state_dir/$f"; } 2>/dev/null; then
+      echo "healthwatch[$name]: could not take $old over into $state_dir" >&2
+      rc=1
+    fi
+  done
+fi
+
 mib=1048576
 num() { case $1 in ''|*[!0-9]*) return 1 ;; esac; }
 mibs() { awk -v b="$1" 'BEGIN { printf "%.1f", b / 1048576 }'; }
@@ -341,6 +410,9 @@ fi
 # the last alert, line 3 the failing check names at that alert. Line 3 is
 # new; a file written by an older build has two lines, and its missing set
 # is "unknown" rather than "empty", so the upgrade alone does not alert.
+# What the file says is taken only in the shapes this script writes: a
+# state word, an epoch no later than now (a later one would hold the repeat
+# off for as long as it is ahead), and check names, which an alert quotes.
 prev_state=""; prev_at=0; prev_failing=""; have_prev_failing=0
 if [ -r "$state" ]; then
   prev_state=$(sed -n 1p "$state"); prev_at=$(sed -n 2p "$state")
@@ -348,7 +420,10 @@ if [ -r "$state" ]; then
     prev_failing=$(sed -n 3p "$state"); have_prev_failing=1
   fi
 fi
+case "$prev_state" in ok|degraded|down) ;; *) prev_state="" ;; esac
 case "$prev_at" in ''|*[!0-9]*) prev_at=0 ;; esac
+if [ "${#prev_at}" -gt 12 ] || [ "$prev_at" -gt "$epoch" ]; then prev_at=0; fi
+case "$prev_failing" in *[!A-Za-z0-9_@.,?-]*) prev_failing=""; have_prev_failing=0 ;; esac
 echo "healthwatch[$name]: $now ($summary)"
 
 # Alert when the state changes, when the set of failing checks changes
@@ -356,11 +431,16 @@ echo "healthwatch[$name]: $now ($summary)"
 # The set matters because "degraded" is one word for many faults: without
 # it, a disk filling up an hour after a stuck scan would be the same state,
 # already alerted, and nobody would hear about the second fault until the
-# repeat — or ever, if the first one was the kind that lingers.
+# repeat — or ever, if the first one was the kind that lingers. A record
+# file due for archiving alone is upkeep, not an outage, and anybody who
+# pays for a large failed transaction can make one grow: it is repeated
+# once a day, not every ALERT_REPEAT_MIN.
+every=$repeat
+if [ "$failing" = archive-due ] && [ "$every" -lt 1440 ]; then every=1440; fi
 notify=0; changed=0; change=0
 if [ "$now" != "$prev_state" ]; then notify=1; change=1
 elif [ "$have_prev_failing" = 1 ] && [ "$failing" != "$prev_failing" ]; then notify=1; changed=1; change=1
-elif [ "$now" != "ok" ] && [ $((epoch - prev_at)) -ge $((repeat * 60)) ]; then notify=1
+elif [ "$now" != "ok" ] && [ $((epoch - prev_at)) -ge $((every * 60)) ]; then notify=1
 fi
 
 # A change waits for ALERT_AFTER_RUNS runs in a row to see it. The pending
@@ -402,6 +482,14 @@ write_state() {
   fi
   rm -f "$pending" 2>/dev/null || true
 }
+
+# The first run that finds the observer well (a new host, a state file
+# lost) records it and says nothing: there is nothing to recover from, and
+# the --test message is how delivery is proved.
+if [ "$notify" = 1 ] && [ -z "$prev_state" ] && [ "$now" = ok ]; then
+  notify=0
+  write_state
+fi
 
 if [ "$notify" = 1 ]; then
   if [ -n "$webhook" ] || [ "$tg" = 1 ]; then

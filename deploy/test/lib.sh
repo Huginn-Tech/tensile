@@ -63,14 +63,21 @@ strip_quotes() {
   printf '%s' "$v"
 }
 
-# alert_destinations <envfile>: where healthwatch posts with this env file,
-# by its own rule: "webhook" for ALERT_WEBHOOK, "telegram" for
-# TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID both set, space-separated. Empty
-# when none is: then it only logs.
+# alert_destinations <envfile>...: where healthwatch posts with these env
+# files (the network's, then alert-<network>.env, a later file's line over
+# an earlier one's, as systemd loads them), by its own rule: "webhook" for
+# ALERT_WEBHOOK, "telegram" for TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID both
+# set, space-separated. Empty when none is: then it only logs.
 alert_destinations() {
-  local d=""
-  if [ -n "$(envval "$1" ALERT_WEBHOOK)" ]; then d="webhook"; fi
-  if [ -n "$(envval "$1" TELEGRAM_BOT_TOKEN)" ] && [ -n "$(envval "$1" TELEGRAM_CHAT_ID)" ]; then d="${d:+$d }telegram"; fi
+  local d="" f w="" t="" c=""
+  for f in "$@"; do
+    [ -r "$f" ] || continue
+    if grep -q '^ALERT_WEBHOOK=' "$f"; then w=$(envval "$f" ALERT_WEBHOOK); fi
+    if grep -q '^TELEGRAM_BOT_TOKEN=' "$f"; then t=$(envval "$f" TELEGRAM_BOT_TOKEN); fi
+    if grep -q '^TELEGRAM_CHAT_ID=' "$f"; then c=$(envval "$f" TELEGRAM_CHAT_ID); fi
+  done
+  if [ -n "$w" ]; then d="webhook"; fi
+  if [ -n "$t" ] && [ -n "$c" ]; then d="${d:+$d }telegram"; fi
   printf '%s' "$d"
 }
 
@@ -84,6 +91,21 @@ private_file() {
   m=$(stat -c '%a %U:%G' "$1") || return 1
   printf '%s\n' "$m"
   [ $(( 8#${m%% *} & 7 )) = 0 ]
+}
+
+# root_only_file <path>: as private_file, and exits 0 only when root alone
+# can read the file: owned by root, no bit for others, and none for its
+# group unless the group is root. The env files are read by systemd as
+# root; a group a service account is in would hand that account what
+# UnsetEnvironment keeps from it.
+root_only_file() {
+  local m mode owner
+  m=$(stat -c '%a %U:%G' "$1") || return 1
+  printf '%s\n' "$m"
+  mode=$(( 8#${m%% *} )); owner=${m#* }
+  [ "${owner%%:*}" = root ] || return 1
+  [ $(( mode & 7 )) = 0 ] || return 1
+  [ "${owner#*:}" = root ] || [ $(( mode & 8#070 )) = 0 ]
 }
 
 # parse_envfile <file>: KEY=VALUE per line for every assignment in the file,
@@ -149,22 +171,40 @@ sys.exit(1)
 PY
 }
 
-# run_as_service <envfile> <user> <cmd...>: run cmd as the service user with
-# the instance's environment, the way the units run. As root on a systemd
-# host, systemd-run reads the EnvironmentFile with systemd's own parser and
-# runs the command under the unit's user; otherwise (no systemd, or not
-# root — a transient unit with --uid needs root, and CI is neither) the
-# fallback parses the file here and passes each pair as its own argument
-# to env. The self-test covers the fallback; the systemd-run path is what
-# exposure.sh takes under sudo on the host.
+# run_as_service <user> <envfile>... -- <cmd...>: run cmd as the unit's user
+# with its environment files, later ones over earlier ones, the way the
+# units run; a file that is not there is skipped, as systemd does with
+# "-". <user> "dynamic" is a user of the run's own (DynamicUser), as the
+# health watch has. As root on a systemd host, systemd-run reads the files
+# with systemd's own parser; otherwise (no systemd, or not root — a
+# transient unit needs root, and CI is neither) the fallback parses them
+# here and exports each pair in a subshell, a builtin, so no value is ever
+# on a command line, which every account on the host can read in the
+# process list. The self-test covers the fallback; the systemd-run path is
+# what exposure.sh takes under sudo on the host.
 run_as_service() {
-  local envfile=$1 user=$2; shift 2
+  local user=$1 f
+  shift
+  local files=()
+  while [ $# -gt 0 ] && [ "$1" != -- ]; do files+=("$1"); shift; done
+  [ $# -gt 0 ] && shift
   if [ "$(id -u)" = 0 ] && command -v systemd-run >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
-    systemd-run --quiet --wait --pipe --collect --uid="$user" -p "EnvironmentFile=$envfile" "$@"
+    local props=()
+    for f in "${files[@]}"; do props+=(-p "EnvironmentFile=-$f"); done
+    if [ "$user" = dynamic ]; then props+=(-p DynamicUser=yes); else props+=(--uid="$user"); fi
+    systemd-run --quiet --wait --pipe --collect "${props[@]}" "$@"
   else
-    local pairs=()
-    mapfile -t pairs < <(parse_envfile "$envfile")
-    if [ "$(id -un)" = "$user" ]; then env "${pairs[@]}" "$@"; else sudo -u "$user" env "${pairs[@]}" "$@"; fi
+    (
+      for f in "${files[@]}"; do
+        [ -r "$f" ] || continue
+        while IFS= read -r pair; do export "${pair?}"; done < <(parse_envfile "$f")
+      done
+      if [ "$user" = dynamic ]; then user=nobody; fi
+      if [ "$(id -un)" = "$user" ]; then exec "$@"
+      elif [ "$(id -u)" = 0 ] && command -v runuser >/dev/null 2>&1; then exec runuser -u "$user" -- "$@"
+      else echo "run_as_service: run as root or as $user" >&2; exit 2
+      fi
+    )
   fi
 }
 

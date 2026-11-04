@@ -6,6 +6,10 @@ After=local-fs.target
 Type=oneshot
 User=fibre-observer
 EnvironmentFile=/etc/fibre-observer/%i.env
+# Every observer process runs as one account and can read a sibling's
+# environment, so each is given only the settings it uses: the alert
+# credentials are the health watcher's alone (alert-<network>.env).
+UnsetEnvironment=ALERT_WEBHOOK TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID BACKUP_REMOTE TENSILE_EXPORT_SIGNING_KEY
 # ARCHIVE_ARGS (optional, in the env file): e.g. "-keep 336h". Unbraced so
 # an empty value adds no argument. observer-archive refuses a -keep shorter
 # than the longest retention window in state.json plus a day.
