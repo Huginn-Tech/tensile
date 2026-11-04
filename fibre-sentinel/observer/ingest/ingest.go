@@ -17,6 +17,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -340,17 +341,21 @@ func VantageFiles(dir string) ([]string, error) {
 // replaced by a longer one only reads what is new, and one that ends in a
 // half-copied line leaves that line for the next pass.
 //
-// Rows keep the vantage recorded in them. One that carries this observer's
-// own vantage (own), or none, is stepped over as a bad record: every
-// published figure is counted over own's rows, and a second heartbeat
+// Rows keep the vantage recorded in them, which must be the name of the
+// directory the file was pulled into (vantages/<name>/, the name the
+// operator listed in VANTAGE_PULL_NAMES). One that carries another name, this
+// observer's own vantage (own), or none, is stepped over as a bad record:
+// every published figure is counted over own's rows, a second heartbeat
 // configured with the same name would otherwise be counted as this one, its
-// rows merged into the same keys.
+// rows merged into the same keys, and a name the pulled file chose would
+// reach the public health report and the alerts as whatever text it held.
 //
 // Every row must also be from this observer's chain (chainGuard). A file
 // pulled from another network stops at its first row, as a line the store
 // refuses does: nothing of it reaches the record.
 func VantageReachability(st *store.Store, path, own string, now time.Time) (Result, error) {
 	g := newChainGuard(st.DB(), own)
+	name := filepath.Base(filepath.Dir(path))
 	return tail(st, path, func(raw []byte) (bool, error) {
 		var m probe.Measurement
 		if err := json.Unmarshal(raw, &m); err != nil {
@@ -359,8 +364,8 @@ func VantageReachability(st *store.Store, path, own string, now time.Time) (Resu
 		if m.ValidatorAddress == "" {
 			return false, fmt.Errorf("%w: reachability without validator_address", ErrBadRecord)
 		}
-		if m.Vantage == "" || m.Vantage == own {
-			return false, fmt.Errorf("%w: reachability from another vantage's file carries vantage %q", ErrBadRecord, m.Vantage)
+		if m.Vantage == "" || m.Vantage == own || m.Vantage != name || !vantageNameRE.MatchString(name) {
+			return false, fmt.Errorf("%w: reachability in vantages/%s carries vantage %q", ErrBadRecord, name, m.Vantage)
 		}
 		if err := g.check(m); err != nil {
 			return false, err
@@ -368,6 +373,10 @@ func VantageReachability(st *store.Store, path, own string, now time.Time) (Resu
 		return st.InsertReachability(m, raw)
 	}, now)
 }
+
+// vantageNameRE is a vantage name as vantage-pull.sh takes one from
+// VANTAGE_PULL_NAMES: lower-case letters, digits and "-".
+var vantageNameRE = regexp.MustCompile(`^[a-z0-9-]{1,64}$`)
 
 // chainGuard decides whether a row copied in from another vantage was taken
 // on this observer's chain.

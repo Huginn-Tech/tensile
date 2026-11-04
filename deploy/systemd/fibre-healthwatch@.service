@@ -2,15 +2,42 @@
 Description=Fibre observer (%i): health check with webhook alert
 After=network-online.target
 
+# The watcher runs as a user of its own, not as fibre-observer, the account
+# every process it judges shares: one of them gone wrong could otherwise
+# read the alert credentials from its environment (/proc/<pid>/environ is
+# open to the same account), rewrite what the watcher remembers, or kill it.
+# It reads the record through the service group (SupplementaryGroups), keeps
+# its own files in its StateDirectory, and writes nowhere else. The alert
+# credentials are in alert-<network>.env (0600 root:root, read by systemd as
+# root), which no other unit loads; the network's env file gives the rest.
 [Service]
 Type=oneshot
-User=fibre-observer
+DynamicUser=true
+User=fibre-healthwatch
+SupplementaryGroups=fibre-observer
+StateDirectory=fibre-healthwatch/%i
 EnvironmentFile=/etc/fibre-observer/%i.env
+EnvironmentFile=-/etc/fibre-observer/alert-%i.env
 ExecStart=/usr/local/bin/fibre-healthwatch %i
+UMask=0077
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+PrivateDevices=true
+ProtectProc=invisible
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
 CapabilityBoundingSet=
-ReadWritePaths=/var/lib/fibre-observer/%i
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+# nothing in /etc/fibre-observer is the watcher's to read
+TemporaryFileSystem=/etc/fibre-observer:ro

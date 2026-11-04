@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -55,10 +56,26 @@ func errorStage(msg string) string {
 	}
 	stage, _, found := strings.Cut(msg, ":")
 	stage = strings.TrimSpace(stage)
-	if !found || stage == "" || len(stage) > 40 || strings.ContainsAny(stage, `/\"'@`) {
+	if !found || !stageRE.MatchString(stage) {
 		return "in its journal"
 	}
 	return stage
+}
+
+// stageRE is what a stage may be made of: words, digits and "=", "-", "_",
+// "(", ")". No dot, so no host name or IP address ("dial tcp 10.0.0.1"
+// before the port's colon), and nothing markup or a chat client would read.
+var stageRE = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9 =_()-]{0,39}$`)
+
+// publicWord is a name a component's status file gives (a work stage, a
+// stop reason) as a public answer may say it: as it is when stageRE allows
+// it, else "unnamed". The status files are written by the components, and
+// /v1/health and the alerts read from it say only what this code would.
+func publicWord(s string) string {
+	if stageRE.MatchString(s) {
+		return s
+	}
+	return "unnamed"
 }
 
 // tipSlack is how much newer than the scanner's last cycle the newest block
@@ -141,15 +158,16 @@ func workCheck(c componentStatus, now time.Time) healthCheck {
 	for _, stage := range stages {
 		e, _ := errs[stage].(map[string]any)
 		raw, _ := e["since"].(string)
+		name := publicWord(stage)
 		since, err := time.Parse(time.RFC3339Nano, raw)
 		if err != nil {
-			bad = append(bad, stage+" failing (since an unknown time)")
+			bad = append(bad, name+" failing (since an unknown time)")
 			continue
 		}
 		if d := now.Sub(since); d > workFailingAfter {
-			bad = append(bad, fmt.Sprintf("%s failing for %s", stage, d.Round(time.Minute)))
+			bad = append(bad, fmt.Sprintf("%s failing for %s", name, d.Round(time.Minute)))
 		} else {
-			young = append(young, fmt.Sprintf("%s (%s)", stage, d.Round(time.Second)))
+			young = append(young, fmt.Sprintf("%s (%s)", name, d.Round(time.Second)))
 		}
 	}
 	switch {

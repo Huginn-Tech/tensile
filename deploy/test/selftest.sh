@@ -118,14 +118,35 @@
 #                   from 06:00 UTC with BACKUP_REMOTE set; so does a record
 #                   file not archived yet past 64 MiB, or grown over 1 MiB
 #                   in a day from its day-old size sample, until it holds
-#                   again; a new host
-#                   with no exports directory yet completes its run; the
-#                   webhook and the bot token never reach curl's command
-#                   line
-#   exposure        Telegram alone is an alert destination; an env file
-#   helpers         others can read is not private; fibre-site@ loads no
-#                   env file with credentials; the README installs the env
-#                   file 0640 root:fibre-observer and reads it only as root
+#                   again, and repeated once a day, not hourly, while it is
+#                   the only failing check; a new host
+#                   with no exports directory yet completes its run, and
+#                   its first run that finds the observer well posts
+#                   nothing; the webhook, the bot token, the chat and the
+#                   message never reach curl's command line; Discord pings
+#                   nobody and Slack's text is escaped; a check's name keeps
+#                   only a name's letters and nothing in a body starts a
+#                   line; the watcher's files go in its StateDirectory, a
+#                   first run there takes over status/'s (never through a
+#                   link), and a later change there is not read; a state
+#                   epoch ahead of the clock does not hold the repeat off,
+#                   and failing names in it that no check has are not
+#                   quoted; an answer while fibre-api@ is stopped is the
+#                   API down
+#   exposure        Telegram alone is an alert destination, and the alert
+#   helpers         file's lines win over the network's; an env file
+#                   others can read is not private, and one not root's
+#                   is not root's alone; fibre-site@ loads no env file with
+#                   credentials; the watcher alone loads the alert file
+#                   and runs as a user of its own, and every other unit
+#                   that loads the network's env file drops the alert keys;
+#                   the README installs the env files 0600 root:root and
+#                   reads them only as root; run_as_service puts no value
+#                   on a command line
+#   analytics       a plain JSON file is copied into the site with its
+#   publish         time, 0644; a link, a second name of another file, a
+#                   file that is not a JSON object, or none, is refused and
+#                   the site keeps its file
 #   hosting-db      a gzip cut short or failing its CRC, with enough lines
 #                   before the damage, does not replace the good file; a
 #                   DB-IP release already in place is not fetched again
@@ -240,7 +261,13 @@ check eq "$(envval "$T/test.env" ALERT_WEBHOOK)" "https://hooks.example.org/x/y?
 check eq "$(envval "$T/test.env" MISSING)" ""
 # every pair is one argument, and the command sees the exact values
 check eq "$(env "${pairs[@]}" sh -c 'printf "%s|%s|%s|%s" "$VANTAGE_LOCATION" "$VANTAGE_PROVIDER" "$START_HEIGHT" "$ALERT_WEBHOOK"')" "Helsinki, Finland|Hetzner Online|0|https://hooks.example.org/x/y?a=1&b=2"
-check eq "$(run_as_service "$T/test.env" "$(id -un)" sh -c 'printf "%s" "$VANTAGE_LOCATION"')" "Helsinki, Finland"
+check eq "$(run_as_service "$(id -un)" "$T/test.env" -- sh -c 'printf "%s" "$VANTAGE_LOCATION"')" "Helsinki, Finland"
+# later files over earlier ones, a missing one skipped, as systemd loads
+# them; the values reach the command through the environment, never on a
+# command line (the fallback once ran sudo -u <user> env KEY=value...)
+printf 'VANTAGE_LOCATION=Nuremberg\nALERT_WEBHOOK=\n' > "$T/test2.env"
+check eq "$(run_as_service "$(id -un)" "$T/test.env" "$T/nonesuch.env" "$T/test2.env" -- sh -c 'printf "%s|%s|%s" "$VANTAGE_LOCATION" "$ALERT_WEBHOOK" "$VANTAGE_PROVIDER"')" "Nuremberg||Hetzner Online"
+check not grep -qE '(sudo|env) .*"\$\{pairs\[@\]\}"' "$HERE/lib.sh"
 
 echo "== backup manifest"
 D="$T/data"; mkdir -p "$D"
@@ -899,9 +926,15 @@ J
 serve fake-http.py --code 503 --body "$T/degraded2.json"; p503b=$PORT
 hwstate="$T/hw/status/healthwatch.state"
 # a fake systemctl: is-failed --quiet <unit> passes for each unit listed in
-# $T/failed-units
+# $T/failed-units; with FAKE_API_STATE set, show -p <property> --value says
+# the unit is loaded and in that state (without it, show fails, as on a
+# host whose API is no such unit, and the watcher does not ask)
 cat > "$T/systemctl" <<'SH'
 #!/bin/sh
+if [ "$1" = show ] && [ -n "${FAKE_API_STATE:-}" ]; then
+  case "$3" in LoadState) echo loaded ;; ActiveState) echo "$FAKE_API_STATE" ;; esac
+  exit 0
+fi
 [ "$1" = is-failed ] && [ "$2" = --quiet ] || exit 2
 grep -qxF "$3" "$FAKE_FAILED_UNITS" 2>/dev/null
 SH
@@ -1195,6 +1228,88 @@ check env PATH="$T/curlspy:$PATH" API_LISTEN="127.0.0.1:$p200" DATA_DIR="$T/hw2"
 check eq "$(posts)" $((n + 1))
 check grep -q -- '-K -' "$T/curl-argv.log"
 check not grep -q sekret "$T/curl-argv.log"
+# ...and neither are the chat and the message, which travel in the same
+# config as the body; -q, first, keeps any .curlrc out
+check not grep -q -- '-1001' "$T/curl-argv.log"
+check not grep -q 'alert delivery check' "$T/curl-argv.log"
+check grep -q -- '^-q ' "$T/curl-argv.log"
+# Discord pings nobody, and Slack's text has &, < and > escaped, so nothing
+# in an alert is a mention or a link there
+check contains "$(lastpost)" '"allowed_mentions": {"parse": []}'
+cat > "$T/degraded3.json" <<'J'
+{"status":"degraded","checks":[{"name":"prober","ok":false,"detail":"a <!channel> & b"},{"name":"x\ny<b>","ok":false,"detail":"line\nbreak"}]}
+J
+serve fake-http.py --code 503 --body "$T/degraded3.json"; p503c=$PORT
+# (from here on a data directory of its own: the one above has exports a
+# day old by the real clock, which the export check would add)
+hwa="$T/hwA"; hwastate="$hwa/status/healthwatch.state"; mkdir -p "$hwa/status"
+hwareset() { printf 'ok\n%s\n\n' "$(date +%s)" > "$hwastate"; }
+hwareset
+hwx "$p503c" DATA_DIR="$hwa" > /dev/null
+check contains "$(lastpost)" '"text": "Fibre observer [t] degraded: degraded: prober: a &lt;!channel&gt; &amp; b; x_y_b_: line break"'
+check contains "$(lastpost)" '"content": "Fibre observer [t] degraded: degraded: prober: a <!channel> & b; x_y_b_: line break"'
+check eq "$(sed -n 3p "$hwastate")" "prober,x_y_b_"
+# The watcher's own files go in its StateDirectory (STATE_DIRECTORY) when
+# the unit gives it one. A first run there takes over what an older build
+# left in status/, so the move itself says nothing; it is never taken
+# through a link, and a later change in status/ is not read.
+hw6="$T/hw6"; mkdir -p "$hw6/status" "$T/hw6sd"
+printf 'degraded\n%s\nchain_liveness\n' "$(date +%s)" > "$hw6/status/healthwatch.state"
+printf 'tx_costs.jsonl 100 5 0\n' > "$hw6/status/healthwatch.sizes"
+n=$(posts)
+check eq "$(hwx "$p503" DATA_DIR="$hw6" STATE_DIRECTORY="$T/hw6sd")" 0
+check eq "$(posts)" "$n"
+check eq "$(sed -n 3p "$T/hw6sd/healthwatch.state")" chain_liveness
+check eq "$(cat "$T/hw6sd/healthwatch.sizes")" "tx_costs.jsonl 100 5 0"
+printf 'ok\n%s\n\n' "$(date +%s)" > "$hw6/status/healthwatch.state"
+hwx "$p503" DATA_DIR="$hw6" STATE_DIRECTORY="$T/hw6sd" > /dev/null
+check eq "$(posts)" "$n"
+hw7="$T/hw7"; mkdir -p "$hw7/status"
+printf 'degraded\n%s\nchain_liveness\n' "$(date +%s)" > "$T/hw7-elsewhere"
+ln -s "$T/hw7-elsewhere" "$hw7/status/healthwatch.state"
+hwx "$p503" DATA_DIR="$hw7" STATE_DIRECTORY="$T/hw7sd" > /dev/null
+check eq "$(posts)" $((n + 1))
+# A state is read only in the shapes this script writes: an epoch ahead of
+# the clock holds the repeat off no longer than now, and failing names no
+# check has are not quoted in an alert (the set is then unknown, as an
+# older build's)
+printf 'degraded\n%s\nchain_liveness\n' "$(($(date +%s) + 86400))" > "$hwastate"
+n=$(posts)
+hwx "$p503" DATA_DIR="$hwa" > /dev/null
+check eq "$(posts)" $((n + 1))
+printf 'degraded\n%s\n@everyone <b>\n' "$(date +%s)" > "$hwastate"
+hwx "$p503b" DATA_DIR="$hwa" > /dev/null
+check eq "$(posts)" $((n + 1))
+# the first run that finds the observer well records it and says nothing:
+# there is nothing to recover from
+n=$(posts)
+check eq "$(hwx "$p200" DATA_DIR="$T/hw8")" 0
+check eq "$(posts)" "$n"
+check eq "$(sed -n 1p "$T/hw8/status/healthwatch.state")" ok
+# an answer on API_LISTEN while fibre-api@<instance> is loaded and stopped
+# is not the API's (any process of the service account could have taken
+# the port): it is said as the API down, and the API running again recovers
+hwareset
+n=$(posts)
+hwx "$p200" DATA_DIR="$hwa" FAKE_API_STATE=inactive > /dev/null
+check eq "$(posts)" $((n + 1))
+check eq "$(sed -n 1p "$hwastate")" down
+check contains "$(lastpost)" "while fibre-api@t is inactive"
+hwx "$p200" DATA_DIR="$hwa" FAKE_API_STATE=active > /dev/null
+check eq "$(posts)" $((n + 2))
+check contains "$(lastpost)" recovered
+# a record file due for archiving, the only failing check, is upkeep: said
+# once, repeated once a day rather than every ALERT_REPEAT_MIN
+hw9="$T/hw9"; mkdir -p "$hw9"
+truncate -s $((65 * 1048576)) "$hw9/tx_costs.jsonl"
+n=$(posts)
+hwx "$p200" HEALTHWATCH_NOW="$noon" DATA_DIR="$hw9" > /dev/null
+check eq "$(posts)" $((n + 1))
+hwx "$p200" HEALTHWATCH_NOW="$((noon + 3600))" DATA_DIR="$hw9" > /dev/null
+check eq "$(posts)" $((n + 1))
+hwx "$p200" HEALTHWATCH_NOW="$((noon + 86400))" DATA_DIR="$hw9" > /dev/null
+check eq "$(posts)" $((n + 2))
+rm -rf "$hw9"
 
 echo "== exposure helpers"
 # where healthwatch posts, by its own rule: Telegram alone is a destination
@@ -1211,19 +1326,73 @@ printf 'x\n' > "$T/p.env"
 chmod 0644 "$T/p.env"; check not private_file "$T/p.env"
 chmod 0640 "$T/p.env"; check private_file "$T/p.env"
 chmod 0600 "$T/p.env"; check private_file "$T/p.env"
+# the alert file's lines win over the network's, as systemd loads them
+printf 'ALERT_WEBHOOK=https://hooks.example.org/x\n' > "$T/net.env"
+printf 'TELEGRAM_BOT_TOKEN=123:abc\nTELEGRAM_CHAT_ID=-1001\nALERT_WEBHOOK=\n' > "$T/alert.env"
+check eq "$(alert_destinations "$T/net.env" "$T/alert.env")" telegram
+check eq "$(alert_destinations "$T/net.env" "$T/nonesuch.env")" webhook
+# a file root does not own is not root's alone, whatever its mode
+check not root_only_file "$T/p.env"
+# the watcher alone loads the alert file, as a user of its own; every other
+# unit that loads the network's env file drops the alert keys
+HWU="$HERE/../systemd/fibre-healthwatch@.service"
+check grep -q '^DynamicUser=true' "$HWU"
+check grep -q '^SupplementaryGroups=fibre-observer' "$HWU"
+check grep -q '^StateDirectory=fibre-healthwatch/%i' "$HWU"
+check grep -q '^EnvironmentFile=-/etc/fibre-observer/alert-%i\.env' "$HWU"
+check not grep -q '^User=fibre-observer' "$HWU"
+check not grep -q '^ReadWritePaths=' "$HWU"
+for u in "$HERE"/../systemd/*.service; do
+  [ "$u" = "$HWU" ] && continue
+  check not grep -q 'alert-%i' "$u"
+  if grep -q '^EnvironmentFile=/etc/fibre-observer/%i\.env' "$u"; then
+    check grep -qE '^UnsetEnvironment=.*ALERT_WEBHOOK TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID' "$u"
+  fi
+done
+check not grep -qE '^(ALERT_WEBHOOK|TELEGRAM_BOT_TOKEN|TELEGRAM_CHAT_ID)=' "$HERE/../observer.env.example"
 # the internet-facing site-server gets its own two settings, not the env
 # file that holds the alert and backup credentials; and the README never
 # puts an env file in place with root's umask (0644)
 check not grep -q '^EnvironmentFile=/etc/fibre-observer/%i\.env' "$HERE/../systemd/fibre-site@.service"
 check grep -q '^EnvironmentFile=/etc/fibre-observer/site-%i\.env' "$HERE/../systemd/fibre-site@.service"
 check not grep -qE 'cp deploy/observer\.env\.example /etc/' "$HERE/../README.md"
-check grep -q 'install -m 0640 -o root -g fibre-observer deploy/observer.env.example /etc/fibre-observer/mocha.env' "$HERE/../README.md"
+check grep -q 'install -m 0600 -o root -g root deploy/observer.env.example /etc/fibre-observer/mocha.env' "$HERE/../README.md"
+check grep -q 'install -m 0600 -o root -g root /dev/null /etc/fibre-observer/alert-mocha.env' "$HERE/../README.md"
+check not grep -q 'install -m 0640 -o root -g fibre-observer deploy/observer.env.example' "$HERE/../README.md"
 # once closed, an env file is read as root: a grep without sudo got
 # "Permission denied", and its tee wrote an empty site-<network>.env that
 # left site-server on mocha's ports whatever the network
 check not grep -qE '^[[:space:]]*(grep|cat|sed|awk|head|tail|cut)[[:space:]].*/etc/fibre-observer/[^ ]*\.env' "$HERE/../README.md"
 check grep -qF "sudo grep -E '^(SITE_LISTEN|API_LISTEN)=' /etc/fibre-observer/mocha.env | sudo tee /etc/fibre-observer/site-mocha.env" "$HERE/../README.md"
 check grep -qF 'sudo cat /etc/fibre-observer/site-mocha.env' "$HERE/../README.md"
+
+echo "== analytics publish"
+# root copies the Analytics job's file out of a directory the job's user
+# owns: a plain JSON object goes into the site with its time, 0644; a link,
+# a second name of another file, a file that is not a JSON object, or none
+# is refused, and the site keeps the file it has
+AP="$HERE/../analytics-publish.sh"
+ap() { ANALYTICS_STATE_ROOT="$T/ast" SITE_BASE="$T/site" bash "$AP" "${1:-t}"; }
+mkdir -p "$T/ast/t" "$T/site/t/analytics"
+printf '{"net":"t","n":1}' > "$T/ast/t/data.json"
+touch -d 2026-10-07T12:00:00Z "$T/ast/t/data.json"
+check ap
+check eq "$(cat "$T/site/t/analytics/data.json")" '{"net":"t","n":1}'
+check eq "$(stat -c '%a %Y' "$T/site/t/analytics/data.json")" "644 $(date -u -d 2026-10-07T12:00:00Z +%s)"
+printf 'not for the site\n' > "$T/ap-secret"
+rm -f "$T/ast/t/data.json"; ln -s "$T/ap-secret" "$T/ast/t/data.json"
+check not ap
+rm -f "$T/ast/t/data.json"; ln "$T/ap-secret" "$T/ast/t/data.json"
+check not ap
+rm -f "$T/ast/t/data.json"; printf 'not json' > "$T/ast/t/data.json"
+check not ap
+printf '[1]' > "$T/ast/t/data.json"
+check not ap
+rm -f "$T/ast/t/data.json"
+check not ap
+check eq "$(cat "$T/site/t/analytics/data.json")" '{"net":"t","n":1}'
+check not test -e "$T/site/t/analytics/data.json.new"
+check not ap ../t
 
 echo "== hosting-db"
 # deploy/hosting-db.sh against a curl that serves one file, whatever the

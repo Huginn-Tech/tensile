@@ -6,12 +6,14 @@ Wants=network-online.target
 # Only for a network whose site has the Analytics page. Reads the API on this
 # host (deploy/analytics-data.mjs) and writes data.json into its own state
 # directory, with no way to write anywhere else; root then copies the file
-# into the site (the two ExecStartPost lines, a rename so a visitor never
-# reads half a file). A deploy replaces the site's directory whole, which is
-# why the file does not live there: fibre-site-analytics.conf copies it back
-# when the site starts. A run that cannot read something fails before it
-# writes, and the page keeps the last file. The copies keep the time the run
-# wrote it ("-p"), which healthwatch's analytics check reads.
+# into the site (fibre-analytics-publish, deploy/analytics-publish.sh: only a
+# plain JSON file, never a link the job left there, renamed into place so a
+# visitor never reads half a file). A deploy replaces the site's directory
+# whole, which is why the file does not live there:
+# fibre-site-analytics.conf copies it back when the site starts. A run that
+# cannot read something fails before it writes, and the page keeps the last
+# file. The copies keep the time the run wrote it, which healthwatch's
+# analytics check reads.
 [Service]
 Type=oneshot
 DynamicUser=true
@@ -19,8 +21,7 @@ StateDirectory=fibre-analytics/%i
 EnvironmentFile=/etc/fibre-observer/site-%i.env
 Environment=NETWORK=%i
 ExecStart=/usr/bin/node /usr/local/lib/fibre-observer/analytics-data.mjs
-ExecStartPost=+/usr/bin/install -p -m 0644 /var/lib/fibre-analytics/%i/data.json /srv/fibre-site/%i/analytics/data.json.new
-ExecStartPost=+/usr/bin/mv -f /srv/fibre-site/%i/analytics/data.json.new /srv/fibre-site/%i/analytics/data.json
+ExecStartPost=+/usr/local/bin/fibre-analytics-publish %i
 # The first run reads every settlement and every validator, on a disk the
 # validator may share.
 Nice=19

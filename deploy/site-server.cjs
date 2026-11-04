@@ -16,6 +16,12 @@
 //                ask besides this one (connect-src): a record this network has
 //                none of is looked for on its API (web/src/lib/othernet.tsx);
 //                unset, the pages ask this origin alone
+//   SITE_TRUSTED_PROXY  the front proxy's address (or several, comma or space
+//                separated): X-Forwarded-For is read from a request that
+//                comes from one of them and no other. Unset, from any
+//                loopback or private address, which on a host where other
+//                containers or services share that network lets any of
+//                them name its own client, and so a fresh allowance
 //
 // Node's standard library only, so it runs from a copied file with no install.
 "use strict";
@@ -141,21 +147,24 @@ setInterval(() => {
   sayFull(now);
 }, 60_000).unref();
 
-// The site's streams: at most 5,000, for memory. fibre-site@'s MemoryMax=256M
-// is the real ceiling: a stream holds two sockets, the client's and the
-// API's, some tens of KB with their buffers, beside the compressed files'
-// 64 MB. Within that, at most half the files the process may hold open,
-// less 512 for everything else: Node raises its soft limit to the hard one
-// at start (systemd's 524,288), read here from /proc (Linux), else taken as
-// 1,024. The API's own cap (observer-api -tip-streams, 2,000) is the one a
-// stream meets first.
+// The site's streams: at most 1,800, below the API's own cap
+// (observer-api -tip-streams, 2,000), so a stream past it is refused here
+// and never at the API, whose refusals fail /v1/health (tip_streams): a few
+// dozen addresses each holding STREAMS_PER_CLIENT would otherwise make the
+// health watch alert at will. A refused page polls /v1/tip, and the
+// refusals are in this journal. fibre-site@'s MemoryMax=256M is the real
+// ceiling: a stream holds two sockets, the client's and the API's, some
+// tens of KB with their buffers, beside the compressed files' 64 MB. Within
+// that, at most half the files the process may hold open, less 512 for
+// everything else: Node raises its soft limit to the hard one at start
+// (systemd's 524,288), read here from /proc (Linux), else taken as 1,024.
 function streamsAllowed() {
   let soft = 1024;
   try {
     const m = /^Max open files\s+(\d+|unlimited)/m.exec(fs.readFileSync("/proc/self/limits", "utf8"));
     if (m) soft = m[1] === "unlimited" ? 1 << 20 : Number(m[1]);
   } catch { /* not Linux */ }
-  return Math.min(5000, Math.max(0, Math.floor((soft - 512) / 2)));
+  return Math.min(1800, Math.max(0, Math.floor((soft - 512) / 2)));
 }
 
 // Streams refused at STREAMS_TOTAL go to the journal, at most once a minute
@@ -188,13 +197,19 @@ function v6net(a) {
   return groups.slice(0, 4).map((g) => (parseInt(g, 16) || 0).toString(16)).join(":") + "::/64";
 }
 
+// SITE_TRUSTED_PROXY's addresses, as clientOf compares a peer: lower case,
+// an IPv4-mapped IPv6 address as its IPv4 one.
+const TRUSTED = (process.env.SITE_TRUSTED_PROXY || "").split(/[\s,]+/).filter(Boolean)
+  .map((a) => a.toLowerCase().replace(/^::ffff:(?=\d+\.)/, ""));
+
 // The client a request is counted as: the front proxy's X-Forwarded-For when
-// the request comes from a private address (the proxy's container), else the
-// socket's; an IPv6 address by its /64 (v6net). Of a list, the last address:
-// the one the proxy added. Those before it are whatever the client sent.
+// the request comes from the proxy (SITE_TRUSTED_PROXY; unset, any private
+// address, as the proxy's container has), else the socket's; an IPv6
+// address by its /64 (v6net). Of a list, the last address: the one the
+// proxy added. Those before it are whatever the client sent.
 function clientOf(req) {
-  const peer = (req.socket.remoteAddress || "").replace(/^::ffff:/, "");
-  const priv = /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|::1$|f[cd])/.test(peer);
+  const peer = (req.socket.remoteAddress || "").toLowerCase().replace(/^::ffff:(?=\d+\.)/, "");
+  const priv = TRUSTED.length ? TRUSTED.includes(peer) : /^(127\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|::1$|f[cd])/.test(peer);
   const xff = priv && typeof req.headers["x-forwarded-for"] === "string" ? req.headers["x-forwarded-for"].split(",").pop().trim() : "";
   const who = (xff || peer).toLowerCase().replace(/^::ffff:(?=\d+\.)/, "");
   return who.includes(":") ? v6net(who) : who;

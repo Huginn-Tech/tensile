@@ -273,7 +273,7 @@ func (s *Server) health(ctx context.Context, now time.Time) healthResponse {
 		case !c.Alive:
 			why := "not running"
 			if c.StoppedAt != nil {
-				why = fmt.Sprintf("stopped %s ago (%s)", now.Sub(*c.StoppedAt).Round(time.Second), c.StopReason)
+				why = fmt.Sprintf("stopped %s ago (%s)", now.Sub(*c.StoppedAt).Round(time.Second), publicWord(c.StopReason))
 			} else {
 				why = fmt.Sprintf("no update for %s; last error: %s", now.Sub(c.UpdatedAt).Round(time.Second), errorStage(c.LastError))
 			}
