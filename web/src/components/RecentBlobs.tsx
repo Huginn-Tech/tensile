@@ -103,7 +103,9 @@ type Page = { blobs: Blob[]; total: number };
 /**
  * a page of the newest blobs; named: with each blob's endorsers (?endorsers=1), for the reads that bring new blobs in
  * after the first, which the map bursts with and its pill names. The first read and the whole grid's re-reads for its
- * statuses go without: fifty blobs' endorsers are some 70 kB the page has no use for there.
+ * statuses go without: fifty blobs' endorsers are some 70 kB the page has no use for there. A new block such a read
+ * brings in (one after the page was hidden, as the grid's statuses fell due meanwhile) has its endorsers asked by the
+ * map's pill on its own, for that block alone (HostMap).
  */
 async function readPage(limit: number, named = false): Promise<Page> {
   const ctl = new AbortController();
