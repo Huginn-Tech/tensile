@@ -342,9 +342,9 @@ func TestAnotherVantageStandsInWhenThisObserverCannotDial(t *testing.T) {
 	}
 	yes, no := true, false
 	wants := map[string]want{
-		"up":     {"reachable", "de-1", "", &yes},
+		"up":     {"reachable", "", "", &yes},
 		"flaky":  {"reachable", "", "", &yes},
-		"oldOwn": {"reachable", "de-1", "", &yes},
+		"oldOwn": {"reachable", "", "", &yes},
 		"down":   {"unreachable", "", "de-1", &no},
 		"stale":  {"", "", "", nil},
 		"none":   {"", "", "", nil},
@@ -377,9 +377,16 @@ func TestAnotherVantageStandsInWhenThisObserverCannotDial(t *testing.T) {
 		if got, ok := inList[addrs[name]]; !ok || !same(got, w.reachable) {
 			t.Errorf("%s: list reachable %v (listed %v), want %v", name, got, ok, w.reachable)
 		}
-		// What this observer saw stays its own.
-		if body.Check == nil || body.Check.Vantage != "ut-1" || body.Check.Outcome != "PROBE_ERROR" {
-			t.Errorf("%s: last_endpoint_check = %+v, want this observer's own PROBE_ERROR", name, body.Check)
+		// The check shown: this observer's own PROBE_ERROR says nothing about
+		// the endpoint, so another vantage's recent answer stands in for it;
+		// without one, the own row stays.
+		wantVantage, wantOutcome := "de-1", ""
+		if name == "stale" || name == "none" {
+			wantVantage, wantOutcome = "ut-1", "PROBE_ERROR"
+		}
+		if body.Check == nil || body.Check.Vantage != wantVantage || (wantOutcome != "" && body.Check.Outcome != wantOutcome) ||
+			(wantOutcome == "" && body.Check.Outcome == "PROBE_ERROR") {
+			t.Errorf("%s: last_endpoint_check = %+v, want vantage %s", name, body.Check, wantVantage)
 		}
 	}
 }

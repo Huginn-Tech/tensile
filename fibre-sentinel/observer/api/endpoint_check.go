@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
+
+	"github.com/plsgiveup/fibre/fibre-sentinel/observer/store"
 )
 
 // endpointCheck is the newest heartbeat against one validator's Fibre host,
@@ -35,22 +38,41 @@ type endpointCheck struct {
 // window's end (so ?as_of= shows the check as it stood then), nil when the
 // validator was never checked. It is this observer's own row: when another
 // vantage's check confirms the endpoint up (validatorRow.ConfirmedFrom), this
-// is still what failed from here.
+// is still what failed from here. When that row is this observer's own fault
+// (PROBE_ERROR: the packets never left, e.g. an IPv6-only host from a vantage
+// without IPv6), it says nothing about the endpoint, and another vantage's
+// newest answer within confirmWithin of it is shown instead, its vantage
+// named.
 func (s *Server) lastEndpointCheck(ctx context.Context, addr string, win Window) (*endpointCheck, error) {
+	const cols = `SELECT started_at, validator_host, outcome, dns_ok, tcp_ok, tcp_ms, tls_ok, tls_ms,
+			identity_ok, identity_reason, raw_error, vantage, raw_json FROM reachability `
 	var c endpointCheck
 	var dns, tcp, tls, id int
 	var raw []byte
 	q := s.q(ctx)
-	err := q.QueryRowContext(ctx, `SELECT started_at, validator_host, outcome, dns_ok, tcp_ok, tcp_ms, tls_ok, tls_ms,
-			identity_ok, identity_reason, raw_error, vantage, raw_json
-		FROM reachability WHERE validator_address = ? AND started_at <= ? AND +vantage = ?
-		ORDER BY started_at DESC LIMIT 1`, addr, win.endArg(), s.vantage).
-		Scan(&c.At, &c.Host, &c.Outcome, &dns, &tcp, &c.TCPMS, &tls, &c.TLSMS, &id, &c.IdentityReason, &c.RawError, &c.Vantage, &raw)
+	scan := func(row *sql.Row) error {
+		return row.Scan(&c.At, &c.Host, &c.Outcome, &dns, &tcp, &c.TCPMS, &tls, &c.TLSMS, &id, &c.IdentityReason, &c.RawError, &c.Vantage, &raw)
+	}
+	err := scan(q.QueryRowContext(ctx, cols+`WHERE validator_address = ? AND started_at <= ? AND +vantage = ?
+		ORDER BY started_at DESC LIMIT 1`, addr, win.endArg(), s.vantage))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
+	}
+	if c.Outcome == "PROBE_ERROR" {
+		own := c
+		if at, perr := time.Parse(store.TimeLayout, own.At); perr == nil {
+			err := scan(q.QueryRowContext(ctx, cols+`WHERE validator_address = ? AND started_at > ? AND started_at <= ?
+				AND +outcome <> 'PROBE_ERROR' AND +vantage <> ?
+				ORDER BY started_at DESC LIMIT 1`, addr, store.TS(at.Add(-confirmWithin)), win.endArg(), s.vantage))
+			if errors.Is(err, sql.ErrNoRows) {
+				c = own
+			} else if err != nil {
+				return nil, err
+			}
+		}
 	}
 	c.DNSOK, c.TCPOK, c.TLSOK, c.IdentityOK = dns == 1, tcp == 1, tls == 1, id == 1
 	if c.TLSOK && c.IdentityOK {

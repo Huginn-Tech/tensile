@@ -2311,7 +2311,7 @@ const otherVantagePrevSQL = `SELECT q.tcp_ok, q.tls_ok, q.identity_ok, q.identit
 // so reachabilityNow has nothing for them and they read as not checked yet
 // for good. Another vantage's newest check within confirmWithin then stands
 // for the endpoint, under the same rule this observer's own checks follow:
-// reachable when TCP and TLS completed there (confirmedFrom names it); when
+// reachable when TCP and TLS completed there; when
 // it failed, flaky if that vantage's check before it, on the same host,
 // completed, else unreachable (alsoFailedFrom names it). An endpoint this
 // observer has an answer of inside the span is never touched here; one whose
@@ -2370,9 +2370,11 @@ func (s *Server) fillFromOtherVantages(ctx context.Context, out map[string]reach
 		st.tcpOK, st.tlsOK = tcp == 1, tls == 1
 		st.reachable = st.tcpOK && st.tlsOK
 		st.identityOK = id == 1
-		if st.reachable {
-			st.confirmedFrom = vantage
-		} else {
+		// Reachable there is the endpoint's state, not a confirmation of a
+		// failure here (this observer never reached the endpoint to fail on
+		// it), so confirmedFrom stays empty and the endpoint reads as any
+		// reachable one; the check shown names the vantage (lastEndpointCheck).
+		if !st.reachable {
 			var reason string
 			err := s.q(ctx).QueryRowContext(ctx, otherVantagePrevSQL, addr, st.at, vantage, st.host).Scan(&tcp, &tls, &id, &reason)
 			switch {
