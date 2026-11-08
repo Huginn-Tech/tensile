@@ -2262,7 +2262,133 @@ func (s *Server) reachabilityNow(ctx context.Context, only, asOf string) (map[st
 	if err := s.confirmFromOtherVantages(ctx, out, asOf); err != nil {
 		return nil, err
 	}
+	if err := s.fillFromOtherVantages(ctx, out, only, asOf); err != nil {
+		return nil, err
+	}
 	return out, nil
+}
+
+// otherVantageSpan is the span another vantage's check must start in to count
+// as recent: confirmWithin before asOf (before now when unpinned), up to asOf,
+// or a minute past now, since a second clock a little ahead is still recent.
+func (s *Server) otherVantageSpan(asOf string) (lo, hi string, err error) {
+	ref := s.now().UTC()
+	hi = store.TS(ref.Add(time.Minute))
+	if asOf != "" {
+		t, err := time.Parse(store.TimeLayout, asOf)
+		if err != nil {
+			return "", "", fmt.Errorf("as_of %q: %w", asOf, err)
+		}
+		ref, hi = t, asOf
+	}
+	return store.TS(ref.Add(-confirmWithin)), hi, nil
+}
+
+// otherVantageCheckedSQL lists the validators another vantage checked inside
+// a bounded span, read by reachability_started. TestHotQueriesUseIndexes pins
+// the plan.
+const otherVantageCheckedSQL = `SELECT DISTINCT q.validator_address FROM reachability q
+	WHERE q.started_at > ? AND q.started_at <= ? AND +q.outcome <> 'PROBE_ERROR' AND +q.vantage <> ?`
+
+// otherVantageNewestSQL is the newest check of one validator, of any host, by
+// any vantage but this observer's, started inside a bounded span; as
+// otherVantageSQL, it seeks reachability_validator_time.
+const otherVantageNewestSQL = `SELECT q.vantage, q.validator_host, q.started_at, q.tcp_ok, q.tls_ok, q.identity_ok, q.identity_reason FROM reachability q
+	WHERE q.validator_address = ? AND q.started_at > ? AND q.started_at <= ?
+	  AND +q.outcome <> 'PROBE_ERROR' AND +q.vantage <> ?
+	ORDER BY q.started_at DESC LIMIT 1`
+
+// otherVantagePrevSQL is the check before that one: the same vantage, the
+// same host, started earlier; as this observer's own rule, of any age.
+const otherVantagePrevSQL = `SELECT q.tcp_ok, q.tls_ok, q.identity_ok, q.identity_reason FROM reachability q
+	WHERE q.validator_address = ? AND q.started_at < ?
+	  AND +q.outcome <> 'PROBE_ERROR' AND +q.vantage = ? AND +q.validator_host = ?
+	ORDER BY q.started_at DESC LIMIT 1`
+
+// fillFromOtherVantages gives a state to the endpoints this observer has no
+// answer of at all: every one of its own checks was its own fault
+// (PROBE_ERROR, e.g. an IPv6-only host dialled from a vantage without IPv6),
+// so reachabilityNow has nothing for them and they read as not checked yet
+// for good. Another vantage's newest check within confirmWithin then stands
+// for the endpoint, under the same rule this observer's own checks follow:
+// reachable when TCP and TLS completed there (confirmedFrom names it); when
+// it failed, flaky if that vantage's check before it, on the same host,
+// completed, else unreachable (alsoFailedFrom names it). An endpoint this
+// observer has an answer of inside the span is never touched here; one whose
+// newest own answer is older is treated as having none. With no recent check
+// from elsewhere nothing changes.
+func (s *Server) fillFromOtherVantages(ctx context.Context, out map[string]reachState, only, asOf string) error {
+	lo, hi, err := s.otherVantageSpan(asOf)
+	if err != nil {
+		return err
+	}
+	// Without an answer of this observer's, or with only one older than the
+	// span: every own check since was its own fault, and the newest answer
+	// it has is not the endpoint's state now.
+	missing := func(a string) bool {
+		cur, ok := out[a]
+		return !ok || cur.at <= lo
+	}
+	var addrs []string
+	if only != "" {
+		if missing(only) {
+			addrs = append(addrs, only)
+		}
+	} else {
+		rows, err := s.q(ctx).QueryContext(ctx, otherVantageCheckedSQL, lo, hi, s.vantage)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var a string
+			if err := rows.Scan(&a); err != nil {
+				rows.Close()
+				return err
+			}
+			if missing(a) {
+				addrs = append(addrs, a)
+			}
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+	}
+	for _, addr := range addrs {
+		var st reachState
+		var vantage string
+		var tcp, tls, id int
+		err := s.q(ctx).QueryRowContext(ctx, otherVantageNewestSQL, addr, lo, hi, s.vantage).
+			Scan(&vantage, &st.host, &st.at, &tcp, &tls, &id, &st.identityReason)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		st.source = "heartbeat"
+		st.tcpOK, st.tlsOK = tcp == 1, tls == 1
+		st.reachable = st.tcpOK && st.tlsOK
+		st.identityOK = id == 1
+		if st.reachable {
+			st.confirmedFrom = vantage
+		} else {
+			var reason string
+			err := s.q(ctx).QueryRowContext(ctx, otherVantagePrevSQL, addr, st.at, vantage, st.host).Scan(&tcp, &tls, &id, &reason)
+			switch {
+			case err == nil && tcp == 1 && tls == 1:
+				// up, but its newest check there failed: not a confirmation
+				st.flaky = true
+				st.identityOK, st.identityReason = id == 1, reason
+			case err == nil || errors.Is(err, sql.ErrNoRows):
+				st.alsoFailedFrom = vantage
+			default:
+				return err
+			}
+		}
+		out[addr] = st
+	}
+	return nil
 }
 
 // otherVantageSQL is the newest check of one host by any vantage but this
@@ -2287,16 +2413,10 @@ const otherVantageSQL = `SELECT q.vantage, q.tcp_ok, q.tls_ok, q.identity_ok, q.
 // changes. This observer's own failing check stays what lastEndpointCheck
 // reports.
 func (s *Server) confirmFromOtherVantages(ctx context.Context, out map[string]reachState, asOf string) error {
-	ref := s.now().UTC()
-	hi := store.TS(ref.Add(time.Minute)) // a second clock a little ahead is still recent
-	if asOf != "" {
-		t, err := time.Parse(store.TimeLayout, asOf)
-		if err != nil {
-			return fmt.Errorf("as_of %q: %w", asOf, err)
-		}
-		ref, hi = t, asOf
+	lo, hi, err := s.otherVantageSpan(asOf)
+	if err != nil {
+		return err
 	}
-	lo := store.TS(ref.Add(-confirmWithin))
 	for addr, st := range out {
 		if st.up() {
 			continue

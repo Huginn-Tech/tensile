@@ -1,11 +1,14 @@
 package api_test
 
 import (
+	"encoding/hex"
 	"net/http/httptest"
 	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/cosmos/cosmos-sdk/types/bech32"
 
 	"github.com/plsgiveup/fibre/fibre-sentinel/observer/api"
 	"github.com/plsgiveup/fibre/fibre-sentinel/observer/store"
@@ -275,5 +278,108 @@ func TestMetaListsRecentVantages(t *testing.T) {
 	}
 	if ut.Name != "ut-1" || !ut.Primary || ut.NewestAt != store.TS(f.now.Add(-5*time.Minute)) {
 		t.Errorf("ut-1 entry = %+v", ut)
+	}
+}
+
+// ownError stores one heartbeat of this observer's that failed on its own
+// side (PROBE_ERROR), as an IPv6-only host dialled from a vantage without
+// IPv6 does, ago before now.
+func (f *vantageFixture) ownError(addr, host string, ago time.Duration) {
+	f.t.Helper()
+	at := store.TS(f.now.Add(-ago))
+	if _, err := f.st.DB().Exec(`INSERT INTO reachability (dedupe_key, vantage, validator_address, validator_host, height, scheduled_at, started_at,
+		dns_ok, tcp_ok, tcp_ms, tls_ok, tls_ms, identity_ok, identity_reason, outcome, raw_error, total_duration_ms, raw_json)
+		VALUES (?, 'ut-1', ?, ?, 1, ?, ?, 1, 0, 0, 0, 0, 0, '', 'PROBE_ERROR', 'connect: network is unreachable', 0, '{}')`,
+		"ut-1|"+addr+"|"+at+"|"+host, addr, host, at, at); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+// An endpoint this observer never had an answer of, every own check its own
+// fault, takes another vantage's newest recent check of it, under the rule the
+// observer's own checks follow: reachable when it completed there; one failure
+// after a completed check is flaky, still up; failures only are unreachable.
+// An own answer older than the span counts as none. A stale check from elsewhere leaves it not checked yet, and the list and the
+// validator's own page agree.
+func TestAnotherVantageStandsInWhenThisObserverCannotDial(t *testing.T) {
+	f := newVantageFixture(t)
+	const host = "[2001:db8::5]:7980"
+	addrs := map[string]string{
+		"up":     "00000000000000000000000000000000000000b1",
+		"flaky":  "00000000000000000000000000000000000000b2",
+		"down":   "00000000000000000000000000000000000000b3",
+		"stale":  "00000000000000000000000000000000000000b4",
+		"none":   "00000000000000000000000000000000000000b5",
+		"oldOwn": "00000000000000000000000000000000000000b6",
+	}
+	for _, a := range addrs {
+		raw, err := hex.DecodeString(a)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cons, err := bech32.ConvertAndEncode("celestiavalcons", raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.endpoint(cons, host)
+		f.ownError(a, host, 10*time.Minute)
+		f.ownError(a, host, 5*time.Minute)
+	}
+	f.beat("de-1", addrs["up"], host, 3*time.Minute, true)
+	f.beat("de-1", addrs["flaky"], host, 8*time.Minute, true)
+	f.beat("de-1", addrs["flaky"], host, 3*time.Minute, false)
+	f.beat("de-1", addrs["down"], host, 8*time.Minute, false)
+	f.beat("de-1", addrs["down"], host, 3*time.Minute, false)
+	f.beat("de-1", addrs["stale"], host, 40*time.Minute, true)
+	// an own answer of an hour ago is not the endpoint's state now
+	f.beat("ut-1", addrs["oldOwn"], host, time.Hour, false)
+	f.beat("de-1", addrs["oldOwn"], host, 3*time.Minute, true)
+	ts := f.server()
+
+	type want struct {
+		state, confirmed, alsoFailed string
+		reachable                    *bool
+	}
+	yes, no := true, false
+	wants := map[string]want{
+		"up":     {"reachable", "de-1", "", &yes},
+		"flaky":  {"reachable", "", "", &yes},
+		"oldOwn": {"reachable", "de-1", "", &yes},
+		"down":   {"unreachable", "", "de-1", &no},
+		"stale":  {"", "", "", nil},
+		"none":   {"", "", "", nil},
+	}
+	var list struct {
+		Rows []struct {
+			Address   string `json:"address"`
+			Reachable *bool  `json:"reachable"`
+		} `json:"validators"`
+	}
+	if code := getAny(t, ts, "/v1/validators", &list); code != 200 {
+		t.Fatalf("validators: %d", code)
+	}
+	inList := map[string]*bool{}
+	for _, r := range list.Rows {
+		inList[r.Address] = r.Reachable
+	}
+	same := func(a, b *bool) bool { return (a == nil) == (b == nil) && (a == nil || *a == *b) }
+	for name, w := range wants {
+		var body vantageValidator
+		if code := getAny(t, ts, "/v1/validators/"+addrs[name], &body); code != 200 {
+			t.Fatalf("%s: %d", name, code)
+		}
+		v := body.V
+		if v.EndpointState != w.state || !same(v.Reachable, w.reachable) ||
+			v.ConfirmedFrom != w.confirmed || v.AlsoFailedFrom != w.alsoFailed {
+			t.Errorf("%s: state %q reachable %v confirmed %q also_failed %q; want %+v",
+				name, v.EndpointState, v.Reachable, v.ConfirmedFrom, v.AlsoFailedFrom, w)
+		}
+		if got, ok := inList[addrs[name]]; !ok || !same(got, w.reachable) {
+			t.Errorf("%s: list reachable %v (listed %v), want %v", name, got, ok, w.reachable)
+		}
+		// What this observer saw stays its own.
+		if body.Check == nil || body.Check.Vantage != "ut-1" || body.Check.Outcome != "PROBE_ERROR" {
+			t.Errorf("%s: last_endpoint_check = %+v, want this observer's own PROBE_ERROR", name, body.Check)
+		}
 	}
 }
