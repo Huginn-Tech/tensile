@@ -25,7 +25,7 @@ port, behind one Caddy with a site per network (see "Two networks").
 
 ## 1. Prerequisites
 
-- A Linux VM with Go 1.23+ (the celestia-app pin needs 1.26.6; `GOTOOLCHAIN=auto` downloads it), Node 22, Caddy 2.
+- A Linux VM with Go 1.23+ (the celestia-app pin needs 1.26.10; `GOTOOLCHAIN=auto` downloads it), Node 22, Caddy 2.
 - `rclone` 1.60 or later, `python3` and util-linux's `flock`: the nightly
   backup, its manifest and its remote proof of the exports, and the second
   vantage's pull use them.
@@ -2380,13 +2380,13 @@ differ from Mocha's, in order.
 
 1. **Check the celestia-app release.** The row assignment is pinned to the
    release both networks run (`PinnedCelestiaAppCommit` in `fibre-assign/params.go`,
-   `v10.5.0`). `pin_status` compares only the major version, so any
+   `v10.6.0`). `pin_status` compares only the major version, so any
    v10 release reads `matches`, whatever it changed. Before mainnet starts,
    diff the release tag mainnet runs against the pinned commit, in a
    celestia-app checkout:
 
    ```bash
-   git diff 6013e758d5dceb75827ad191c8d739d7c43cfa04 <mainnet tag> -- fibre x/fibre x/valaddr proto specs
+   git diff 25f09cab3f8912bbe78c62909e8d39d8fa8b3fc0 <mainnet tag> -- fibre x/fibre x/valaddr proto specs
    ```
 
    Then run the reference test against that tag: in
