@@ -217,6 +217,8 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #tip.on { opacity: 1; }
 #tip h4 { margin: 0 0 4px; font-size: var(--fs-note); font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 7px; }
 #tip h4 i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+/* a second head in one tooltip opens its own group */
+#tip div + h4 { margin-top: 8px; }
 /* a long label wraps inside the box; the figure stays whole on its right */
 #tip div { display: flex; justify-content: space-between; gap: 18px; }
 #tip div b { flex: none; font-weight: 500; color: var(--ink); white-space: nowrap; }
@@ -235,6 +237,10 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #top h3 { margin: 0; font-size: var(--fs-lab); font-weight: 500; line-height: 16px; color: var(--ink2); }
 /* a tile's note sits at the title line's far end, on every tile */
 #top h3 span { position: absolute; top: 18px; right: var(--pad); font-size: var(--fs-note); font-weight: 400; color: var(--ink2); }
+/* the big tile's note ends in its switch: the running total, or a bar a day */
+#top .swap { margin-left: 10px; padding: 3px 10px; border: 1px solid var(--line2); border-radius: 999px; font-size: var(--fs-note); line-height: 16px; color: var(--ink); white-space: nowrap; transition: background-color .12s; }
+#top .swap:hover { background: var(--wash4); }
+#top .main h3 span { top: 14px; }
 
 #top .hero { display: flex; align-items: baseline; gap: 14px; margin: 8px 0 0; line-height: 1; }
 #top .hero b { font-size: var(--fs-hero); font-weight: 600; letter-spacing: -.035em; font-variant-numeric: proportional-nums; }
@@ -264,6 +270,9 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #top .dot { fill: var(--acc); stroke: var(--card); stroke-width: 1; paint-order: stroke; }
 #top .level { stroke: var(--rule3); stroke-dasharray: 3 3; }
 
+#top .dbar { fill: var(--acc); }
+#top .dbar.cur { fill: var(--ink); }
+#top text.over { stroke: var(--card); stroke-width: 4px; stroke-linejoin: round; paint-order: stroke; }
 #top .tick { fill: var(--rule3); }
 #top .tick.on { fill: var(--acc); }
 #top .tick.cur { fill: var(--ink); }
@@ -291,6 +300,9 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #cost text { font-size: var(--fs-tick); fill: var(--ink3); }
 #cost text.mid { fill: var(--ink2); }
 #cost text.lab { font-size: var(--fs-note); fill: var(--ink2); }
+/* a period that settled few sizes: those take the ink, the bare columns step back */
+#cost text.lab.used { fill: var(--ink); }
+#cost text.lab.bare { fill: var(--ink3); }
 #cost .grid { stroke: var(--rule1); }
 #cost .base { stroke: var(--rule2); }
 #cost .curve { fill: none; stroke: var(--acc); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
@@ -934,6 +946,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #top .grid { grid-template-rows: auto repeat(2, 144px); }
   #top .main { display: flex; flex-direction: column; padding-bottom: 0; }
   #top .main h3 span { position: static; display: block; margin-top: 2px; }
+  #top .main h3 .swap { margin: 0 0 0 8px; }
   #top .hero { flex-wrap: wrap; gap: 8px 12px; }
   #top .main .plot { position: relative; flex: none; width: calc(100% + 2 * var(--pad)); height: 190px; margin: 8px calc(-1 * var(--pad)) 0; }
 

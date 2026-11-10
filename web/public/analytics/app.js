@@ -192,8 +192,8 @@ const MAX_PINS = 3;
 // Adds or removes a provider; a fourth pin drops the oldest.
 const pin = (name) => { const p = state.pinned; set("pinned", p.includes(name) ? p.filter((x) => x !== name) : [...p, name].slice(-MAX_PINS)); };
 
-// An area's render runs at boot and on net, theme and win, with that word as its argument.
-const area = (name, render) => { for (const ev of ["boot", "net", "theme", "win"]) on(ev, () => { try { render(ev); } catch (e) { console.error(`${name} render failed on ${ev}:`, e); } }); };
+// An area's render runs at boot and on net, theme, win and fresh (the file read again), with that word as its argument.
+const area = (name, render) => { for (const ev of ["boot", "net", "theme", "win", "fresh"]) on(ev, () => { try { render(ev); } catch (e) { console.error(`${name} render failed on ${ev}:`, e); } }); };
 
 /* ---------- data: N() is hosting, U() is usage ---------- */
 const N = () => DATA[state.net];
@@ -252,6 +252,12 @@ const activeDays = (p) => {
     return { days, active: days.filter((d) => d.settlements).length, total: days.length };
   });
 };
+// What everyone but the largest publisher paid per MiB, when that one account holds half the window's data or more and
+// so sets the average by itself; null otherwise.
+const others = () => once("others", () => {
+  const ps = pubs(), top = ps[0], rest = ps.slice(1), b = sum(rest, (p) => p.bytes);
+  return top && b && top.bytes >= b ? { top, rate: sum(rest, (p) => p.fees_utia) / (b / 2 ** 20), share: top.bytes / (top.bytes + b) } : null;
+});
 // Fees ÷ data per active day, in utia per MiB. joined: the day before settled too, the only case a line may reach back.
 const dailyRate = () => once("rate", () => activeDays().days.filter((d) => d.settlements).map((d, i, a) => ({ ...d, rate: d.fees / (d.bytes / 2 ** 20), joined: i > 0 && d.i - a[i - 1].i === 1 })));
 // Accounts whose first settlement ever falls in the window, oldest first: pubs() rows plus t.
@@ -356,15 +362,49 @@ function updated() {
   const t = Math.min(Date.parse(U().read_at), Date.parse(N().read_at)), d = new Date(t).toISOString();
   return `Updated ${d.slice(0, 10) === new Date().toISOString().slice(0, 10) ? "" : day(d.slice(0, 10)) + " "}${d.slice(11, 16)} UTC`;
 }
+// The times and the periods the file has, set again whenever the file is.
+function dated() {
+  $$(".upd .dt").forEach((n) => { n.textContent = updated(); });
+  $('#seg-win [data-v="30d"]').hidden = young(state.net);
+  $('#seg-win [data-v="24h"]').hidden = !U().market["24h"];
+  syncSegs();
+}
 function chrome() {
   const how = touch() ? ["Tap a circle", "Tap a figure"] : ["Click rows", "Hover a heading or figure"];
   // The foot gives the header's time again, the older of the two reads, so the page never shows two different times.
   $("#foot").innerHTML = `<span class="upd"><span class="dt"></span></span><span class="how"><span>${how[0]} to compare, up to ${MAX_PINS}</span><span>${how[1]} for what it means</span></span>`;
-  $$(".upd .dt").forEach((n) => { n.textContent = updated(); });
-  $('#seg-win [data-v="30d"]').hidden = young(state.net);
-  $('#seg-win [data-v="24h"]').hidden = !U().market["24h"];
   $(".hold").textContent = "Hosts now";
-  syncSegs();
+  dated();
+}
+/* ---------- a tab left open: the file is read again, and drawn without touching what the reader chose ---------- */
+// The timer writes the file every quarter hour; asking every five minutes shows a new one soon after, and an unchanged
+// file costs one conditional request.
+const AGAIN = 5 * 60e3, HELD = 4e3;
+let sameHosts = true, asked = Date.now(), waiting = null;
+const bare = (d) => JSON.stringify({ ...d, read_at: null });
+function take(file) {
+  if (stop.signal.aborted) return;
+  waiting = file;
+  // Not under the reader's pointer: an open tooltip names marks a redraw would replace.
+  if (tip.classList.contains("on")) { setTimeout(() => { if (waiting === file) take(file); }, HELD); return; }
+  waiting = null;
+  // Hosting is drawn again only when a host, its place or its power changed, so its ring does not stir for nothing.
+  sameHosts = bare(file.data) === bare(DATA[net]);
+  USAGE[net] = file.usage; DATA[net] = file.data;
+  memo.clear();
+  if (!U().market[state.win]) state.win = "all";
+  dated();
+  emit("fresh");
+}
+async function again() {
+  if (document.hidden || stop.signal.aborted) return;
+  asked = Date.now();
+  try {
+    const r = await fetch("/analytics/data.json", { cache: "no-cache", signal: stop.signal });
+    if (!r.ok) return;
+    const file = await r.json();
+    if (file.net === net && file.usage?.read_at && file.data?.read_at && file.usage.read_at !== U().read_at) take(file);
+  } catch { /* the next turn asks again */ }
 }
 /* ---------- the pinned bar: where the reader is, and the way to the other parts ---------- */
 const SPY_LINE = .4;
@@ -414,18 +454,23 @@ function boot() {
   on("resize", spySoon);
   spy();
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { syncSegs(); spy(); });
+  const turn = setInterval(again, AGAIN);
+  stop.signal.addEventListener("abort", () => clearInterval(turn));
+  // A tab that comes back after a turn it slept through asks at once.
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() - asked >= AGAIN) again(); }, { signal: stop.signal });
 }
 
 return { $, $$, el, esc, sum, calm, narrow, phone, touch, keptFor, sorter, token, pct, sharePct, readyPct, int, count, bytes, size, tiaN, tia, tiaRange, day, dayOf, stamp,
   state, hourly, stepS, on, set, lit, pin, MAX_PINS, area, boot, N, U, market, span, pubs, settled, fee, perMib,
-  activeDays, dayTicks, dailyRate, newPublishers, escrowFlow, blobEver, blobsLeft, runway, TAIL, RANKS, inkOn, agg, regionOf, regions, seg, showTip, tipAt, hideTip, tipHead, tipRow };
+  activeDays, dayTicks, dailyRate, others, sameHosts: () => sameHosts, newPublishers, escrowFlow, blobEver, blobsLeft, runway, TAIL, RANKS, inkOn, agg, regionOf, regions, seg, showTip, tipAt, hideTip, tipHead, tipRow };
 })();
 
 /* ---------- top ---------- */
 try {
-const { $, $$, el, esc, sum, state, hourly, stepS, market, U, N, settled, span, perMib, area, on, bytes, size, int, count, tia, tiaN, pct, day, dayOf, stamp, showTip, hideTip, tipHead, tipRow, activeDays, dayTicks, dailyRate, newPublishers, escrowFlow } = M;
+const { $, $$, el, esc, sum, state, hourly, stepS, market, U, N, settled, span, perMib, area, on, bytes, size, int, count, tia, tiaN, pct, day, dayOf, stamp, showTip, hideTip, tipHead, tipRow, activeDays, dayTicks, dailyRate, others, newPublishers, escrowFlow } = M;
 
 const WINDOW = { "24h": "last 24 hours", "7d": "last 7 days", "30d": "last 30 days", all: "since launch" };
+const Period = () => WINDOW[state.win].replace(/^./, (ch) => ch.toUpperCase());
 const q = (s) => $("#top " + s);
 const f = (name) => q(`[data-f="${name}"]`), c = (name) => q(`[data-c="${name}"]`);
 const wipe = (svg) => { svg.textContent = ""; return svg; };
@@ -523,6 +568,45 @@ function steps(name, rows, value, hero) {
   CH[name] = { rows, X, pad, end, base, part, path, dots, t0, t1, at };
 }
 
+/* ---------- Data settled, a bar a day: what each day took, where the running total shows only its largest ---------- */
+// The reader's choice, kept across periods. One day can hold most of a period's data and flatten every other day's
+// bar, so the scale turns logarithmic once the busiest day is LOG_FROM times the quietest, and the tile says so.
+let DAILY = false;
+const LOG_FROM = 50, MARKS = [0, 1, 2, 3].flatMap((k) => [1, 32].map((m) => m * 2 ** (10 * (k + 1))));
+function bars(rows) {
+  const svg = wipe(c("data")), [t0, t1] = span(), { H, L, R } = frame(svg, true), snap = snapper(svg), { days } = activeDays(), step = stepS();
+  const pad = L, end = R - 5.5, base = H - 32, top = 10;
+  const some = days.filter((d) => d.bytes).map((d) => d.bytes), peak = Math.max(1, ...some), low = Math.min(peak, ...some), log = peak / low >= LOG_FROM, floor = low / 2;
+  const X = (t) => pad + ((end - pad) * (t - t0)) / (t1 - t0);
+  const Y = (v) => +(log ? base - ((base - top) * Math.log(v / floor)) / (Math.log(peak / floor) * 1.04) : base - ((base - top) * v) / (peak * 1.06)).toFixed(2);
+  const marks = log ? MARKS.filter((v) => v > floor * 2 && v < peak * .7).map((v) => ({ v, t: bytes(v) })) : ladder(peak);
+  const rules = some.length > 1 ? (marks.length > 2 ? [marks[0], marks.at(-1)] : marks).map((g) => ({ ...g, y: Math.round(Y(g.v)) + .5 })) : [];
+  for (const g of rules) el("line", { class: "rule", x1: pad, x2: end, y1: g.y, y2: g.y }, svg);
+  el("line", { class: "base", x1: pad, x2: end, y1: base + .5, y2: base + .5 }, svg);
+  dateAxis(svg, X, pad, end, true);
+  // A day's bar spans its day on the axis the running total uses, so a date names the same place in both views.
+  const at = new Map();
+  for (const d of days) {
+    const a = snap(X(Math.max(t0, d.s))), z = snap(X(Math.min(t1, d.s + step))), gap = z - a > 4 ? 2 : z - a > 2 ? 1 : 0, x = a + gap / 2, w = Math.max(1, z - a - gap);
+    const node = d.bytes ? el("rect", { class: "dbar", x, y: Math.min(base - 2, Y(d.bytes)), width: w, height: Math.max(2, base - Y(d.bytes)), rx: Math.min(2, w / 2) }, svg) : null;
+    at.set(d.day, { x, w, node });
+  }
+  // A rule's value is written over the bars, on the card's own ground, so a tall last day never hides it.
+  for (const g of rules) el("text", { class: "over", x: end, y: g.y + 14, "text-anchor": "end" }, svg).textContent = g.t;
+  // A publisher lit on the New publishers tile: its own part of each day, outlined on that day's bar.
+  const part = el("g", {}, svg);
+  const path = (list) => {
+    const by = new Map(); let d = "";
+    for (const r of list) by.set(dayOf(r.t), (by.get(dayOf(r.t)) || 0) + r.size);
+    for (const [k, v] of by) { const b = at.get(k); if (b) d += `M${b.x} ${base}V${Math.min(base - 2, Y(v))}H${b.x + b.w}V${base}`; }
+    return d;
+  };
+  let cur = null;
+  const point = (t) => { cur?.classList.remove("cur"); cur = t == null ? null : at.get(dayOf(t))?.node || null; cur?.classList.add("cur"); };
+  CH.data = { rows, X, pad, end, base, part, path, dots: new Map(), t0, t1, at: point, daily: true };
+  return log;
+}
+
 const nearest = (ch, x) => [...ch.dots.keys()].reduce((b, r) => { const g = Math.abs(ch.X(r.t) - x); return g < NEAR && (!b || g < b.g) ? { r, g } : b; }, null)?.r;
 
 /* ---------- new publishers: hovering one shows its share of the big curve ---------- */
@@ -550,7 +634,10 @@ function newTip(t, x) {
 }
 
 function dataTip(t, x) {
-  const ch = CH.data, s = nearest(ch, x);
+  const ch = CH.data;
+  // A bar is its own day, not the total through it.
+  if (ch.daily) { const d = dayAt(t); return tipHead(day(d.day)) + (d.settlements ? tipRow("Data", size(d.bytes)) + tipRow("Fees paid", tia(d.fees)) + tipRow("Settlements", int(d.settlements)) : tipRow("No settlements")); }
+  const s = nearest(ch, x);
   if (s) return tipHead(s.pub.display, s.pub.colour) + tipRow("Time", stamp(s.t * 1e3)) + tipRow("Size", size(s.size)) + tipRow("Fee", tia(s.fee));
   const done = ch.rows.filter((r) => r.t < dayEnd(t)), h = tipHead(through(t));
   if (!done.length) return h + tipRow("No settlements");
@@ -596,8 +683,9 @@ function drawRate() {
 }
 
 function rateTip(t) {
-  const d = dayAt(t), s = dailyRate().find((x) => x.day === d.day);
-  return tipHead(day(d.day)) + (s ? tipRow("TIA per MiB", tiaN(s.rate, 2)) + tipRow("Data", size(s.bytes)) + tipRow("Fees paid", tia(s.fees)) + tipRow("Price range", `${range()} TIA`) : tipRow("No settlements"));
+  const d = dayAt(t), s = dailyRate().find((x) => x.day === d.day), o = others();
+  return tipHead(day(d.day)) + (s ? tipRow("TIA per MiB", tiaN(s.rate, 2)) + tipRow("Data", size(s.bytes)) + tipRow("Fees paid", tia(s.fees)) + tipRow("Price range", `${range()} TIA`) : tipRow("No settlements"))
+    + (o ? tipHead(Period()) + tipRow("Average paid", tiaN(market().paid_per_mib_utia, 2)) + tipRow(`Without ${o.top.display}, ${pct(o.share)} of data`, tiaN(o.rate, 2)) : "");
 }
 
 /* ---------- active days: a tick a day, lit or quiet ---------- */
@@ -649,16 +737,23 @@ function drawEscrow() {
     el("text", { class: "lab", x: rows ? x + SWATCH + 5 : x, y: rows ? y : KEY_Y }, g).textContent = name;
     el("text", { class: "val", x: rows ? R : x + SWATCH + 4, y, "text-anchor": rows ? "end" : "start" }, g).textContent = tiaN(F[k]);
   });
-  axisEnd(svg, L, `Of ${tia(F.deposited)} deposited`, "start");
+  // The bar is since launch in every period. A shorter period's own flow stands under it, where since launch names the
+  // bar's whole; paid alone where the tile is too narrow for both.
+  const w = flow(), foot = el("text", { x: L, y: svg.clientHeight - AXIS, "text-anchor": "start" }, svg);
+  foot.textContent = w ? `${state.win}: ${tiaN(w.paid)} paid · ${tiaN(w.deposited)} deposited` : `Of ${tia(F.deposited)} deposited`;
+  if (w && foot.getComputedTextLength() > W) foot.textContent = `${state.win}: ${tiaN(w.paid)} TIA paid`;
 }
+// What moved in a period shorter than since launch: deposits in, charges (settled and timed out) and withdrawals out.
+const flow = () => { const m = market(); return state.win === "all" ? null : { deposited: m.deposits?.utia ?? 0, paid: m.fees_utia + (m.timed_out_utia ?? 0), withdrawn: m.withdrawn?.utia ?? 0 }; };
 
 function hoverEscrow() {
   const tile = q('[data-tile="escrow"]');
   const mark = (part) => { const k = part && PARTS.find(([n]) => part.classList.contains(n))?.[0]; c("escrow").classList.toggle("dim", !!k); $$("#top .part").forEach((n) => n.classList.toggle("on", !!k && n.classList.contains(k))); };
   tile.addEventListener("mousemove", (e) => {
-    const F = escrowFlow(), P = U().params;
+    const F = escrowFlow(), P = U().params, w = flow();
     mark(e.target.closest(".part"));
-    showTip(tipHead("Since launch") + tipRow("Deposited", tia(F.deposited)) + tipRow("Paid", tia(F.paid)) + tipRow("Unspent, for future blobs", tia(F.held)) + tipRow("Withdrawn", tia(F.withdrawn)) + tipRow("Withdrawal delay", count(P.withdrawal_delay_s / DAY, "day")), e.clientX, e.clientY);
+    showTip(tipHead("Since launch") + tipRow("Deposited", tia(F.deposited)) + tipRow("Paid", tia(F.paid)) + tipRow("Unspent, for future blobs", tia(F.held)) + tipRow("Withdrawn", tia(F.withdrawn)) + tipRow("Withdrawal delay", count(P.withdrawal_delay_s / DAY, "day"))
+      + (w ? tipHead(Period()) + tipRow("Deposited", tia(w.deposited)) + tipRow("Paid", tia(w.paid)) + tipRow("Withdrawn", tia(w.withdrawn)) : ""), e.clientX, e.clientY);
   });
   tile.addEventListener("mouseleave", () => { mark(null); hideTip(); });
 }
@@ -667,15 +762,20 @@ function hoverEscrow() {
 function draw() {
   const m = market(), [num, u] = bytes(m.bytes).split(" "), fresh = newPublishers(), D = activeDays();
   f("data").innerHTML = unit(num, u);
-  f("sub").textContent = `running total, ${WINDOW[state.win]}${m.settlements <= FEW ? "; a dot is a settlement" : ""}`;
   f("count").textContent = `${count(m.settlements, "settlement")} · ${tia(m.fees_utia)} paid`;
   f("new").innerHTML = int(fresh.length) + side(WINDOW[state.win]);
-  f("rate").innerHTML = m.settlements ? unit(tiaN(m.paid_per_mib_utia, 2), "average paid") : "<small>no settlements</small>";
+  // One account with most of the data sets the average alone; the note is what the rest paid.
+  const o = others();
+  f("rate").innerHTML = m.settlements ? unit(tiaN(m.paid_per_mib_utia, 2), "average paid") + side(o ? `others ${tiaN(o.rate, 2)}` : "") : "<small>no settlements</small>";
   f("escrow").innerHTML = pct(escrowFlow().used) + side("since launch");
   f("days").innerHTML = unit(int(D.active), `of ${int(D.total)}`) + side("with a settlement");
   q('[data-tile="days"] h3').textContent = hourly() ? "Active hours" : "Active days";
   LIT_PUB = null;
-  steps("data", [...settled()].reverse(), (r) => r.size, true);
+  const rows = [...settled()].reverse(), per = hourly() ? "hour" : "day";
+  let note;
+  if (DAILY) note = `per ${per}, ${WINDOW[state.win]}${bars(rows) ? "; log scale" : ""}`;
+  else { steps("data", rows, (r) => r.size, true); note = `running total, ${WINDOW[state.win]}${m.settlements <= FEW ? "; a dot is a settlement" : ""}`; }
+  f("sub").innerHTML = `${esc(note)}<button type="button" class="swap" aria-pressed="${DAILY}">${DAILY ? "Running total" : `Per ${per}`}</button>`;
   steps("new", fresh, () => 1);
   drawRate();
   drawEscrow();
@@ -684,6 +784,7 @@ function draw() {
 
 area("top", draw);
 on("resize", draw);
+f("sub").addEventListener("click", (e) => { if (e.target.closest(".swap")) { DAILY = !DAILY; cursor(null); hideTip(); draw(); } });
 hoverTime("data", dataTip);
 hoverTime("new", newTip, () => light(null));
 hoverTime("rate", rateTip);
@@ -693,7 +794,7 @@ hoverEscrow();
 
 /* ---------- cost ---------- */
 try {
-const { $, el, esc, sum, area, on, U, market, settled, fee, perMib, tia, tiaN, tiaRange, bytes, size, int, sharePct, tipHead, tipRow, showTip, hideTip } = M;
+const { $, el, esc, sum, area, on, U, market, settled, others, fee, perMib, tia, tiaN, tiaRange, bytes, size, int, sharePct, tipHead, tipRow, showTip, hideTip } = M;
 
 const sizeRange = (a, b) => { const [x, u] = size(a).split(" "), [y, v] = size(b).split(" "); return u === v ? `${x}–${y} ${u}` : `${x} ${u}–${y} ${v}`; };
 
@@ -799,10 +900,13 @@ function draw() {
   const ty = base + 15;
   if (small) list.filter((b) => !(b.i % SIZES)).forEach((b) => label(svg, X(b.tick), ty, bytes(b.tick), !b.i ? "start" : b.i === n - 1 ? "end" : "middle", "lab"));
   else { label(svg, 0, ty, "Size", "start", "lab"); label(svg, 0, ty + 16, "Fee per blob", "start", "lab"); }
+  // The columns never move, so a period with few sizes settled leaves most of them bare: the sizes it did settle then
+  // take the ink and the others step back, and the eye lands where the period's blobs are.
+  const sparse = m.settlements > 0 && list.some((b) => !b.n), tone = (b) => (!sparse ? "lab" : b.n ? "lab used" : "lab bare");
   if (!small) for (const b of list) {
     const s = b.tick, end = !b.i || b.i === n - 1, x = X(s);
-    label(svg, x, ty, bytes(s), "middle", "lab");
-    label(svg, x, ty + 16, end ? tia(fee(s), 2) : tiaN(fee(s), 2), "middle", "lab");
+    label(svg, x, ty, bytes(s), "middle", tone(b));
+    label(svg, x, ty + 16, end ? tia(fee(s), 2) : tiaN(fee(s), 2), "middle", tone(b));
   }
 
   G.cells = new Map(list.map((b) => [b, []]));
@@ -869,7 +973,7 @@ const SHARES = () => tipHead("Share rows") + tipRow("Each settlement counts at t
 function hook() {
   const svg = q(".plot"), tab = q(".ctab");
   const curveTip = (s) => tipHead(`${size(s)} blob`) + tipRow("Fee", tia(fee(s), 2)) + tipRow("TIA per MiB", tiaN(perMib(s), 2)) + (s === G.hi ? tipRow("Largest blob allowed") : "");
-  const paidTip = () => { const m = market(); return tipHead("Average paid") + tipRow("TIA per MiB", tiaN(m.paid_per_mib_utia, 2)) + tipRow("Fees paid", tia(m.fees_utia)) + tipRow("Data", size(m.bytes)); };
+  const paidTip = () => { const m = market(), o = others(); return tipHead("Average paid") + tipRow("TIA per MiB", tiaN(m.paid_per_mib_utia, 2)) + tipRow("Fees paid", tia(m.fees_utia)) + tipRow("Data", size(m.bytes)) + (o ? tipRow(`Without ${o.top.display}, ${sharePct(o.share)} of data`, tiaN(o.rate, 2)) : ""); };
   const leave = () => { rest(); hideTip(); };
   const onPaid = (x, y) => { const p = G.paid, b = p?.box; return p && ((x > p.x0 && x < p.x1 && y > p.y - 5 && y < p.y + PAID_H + 2) || (x > b.x && x < b.x + b.width && y > b.y && y < b.y + b.height)); };
 
@@ -2463,6 +2567,14 @@ on("resize", () => { if (root.clientWidth === S.width) return; S.width = root.cl
 area("hosting", (why) => {
   if (why === "win") return;
   if (why === "theme") { drawLand(); paint(); return; }
+  // The file read again: nothing to draw while the hosts stand as they did. When they changed, the reader's grouping,
+  // sort and field stay; a pick whose group is gone goes, and what the pointer lit is found again by the next move.
+  if (why === "fresh") {
+    if (M.sameHosts()) return;
+    S.hot = null; S.city = null; S.region = null; hideTip();
+    model();
+    S.picks = S.picks.filter((k) => V.byKey.has(k));
+  }
   // A new network opens on the resting view, as Publishers does.
   if (why === "net") { Object.assign(S, { by: "provider", weigh: "vp", sort: "vp", dir: -1, hot: null, open: false, picks: [], city: null, region: null, q: "", found: null }); segBy.sync(); segWeigh.sync(); }
   paintLine(); render(); buildRing(); layoutRing(); buildGeo(); draw(); paint();

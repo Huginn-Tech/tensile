@@ -1060,7 +1060,7 @@ without that second request.
 | `/publishers/` | `/v1/market`, `/v1/publishers` |
 | `/publisher/?addr=` | `/v1/publishers/{addr}` (the account's figures; none counts a failed transaction); its tabs: All and Escrow `/v1/publishers/{addr}/txs?view=all` and `?view=escrow` (a row opens `/tx/`; a withdrawal request's payout under its type; Escrow's statement under its last page, shown when it closes on the balance), Blobs `/v1/blobs?publisher=&include_failed=1` (the first page live, the namespace picker) |
 | `/methodology/` | `/v1/params` (the protocol-parameters section; the rest is static) |
-| `/analytics/` | `/analytics/data.json` alone, which `fibre-analytics@` writes every quarter hour from the API (`deploy/analytics-data.mjs`: `/v1/blobs`, `/v1/params`, `/v1/market` and `/v1/publishers` per period, `/v1/validators?window=30d`); only in a build with `NEXT_PUBLIC_NETWORK_LABEL` set |
+| `/analytics/` | `/analytics/data.json` alone, which `fibre-analytics@` writes every quarter hour from the API (`deploy/analytics-data.mjs`: `/v1/blobs`, `/v1/params`, `/v1/market` and `/v1/publishers` per period, `/v1/validators?window=24h`); only in a build with `NEXT_PUBLIC_NETWORK_LABEL` set |
 | `/api/` | `/v1/health` once a minute, only to say when the API does not answer (a 429 reads busy, not down; the observer's own checks are not shown), and each route when its Try it is sent; its example answers are fixed text (`endpoints.ts`) |
 
 Every link to a validator's page — the overview's table and map, the map's

@@ -162,7 +162,9 @@ function hosting(listed, params) {
 
 const state = readJson("state.json", { rows: [] });
 const rows = await settlements(state.rows);
-const listed = await get("/validators?window=30d");
+// Hosts are read as they stand now, from the window whose list the API keeps freshest (a minute; the 30d list is a
+// quarter hour old), so the page's time, the older of its two reads, is this run's.
+const listed = await get("/validators?window=24h");
 const params = await get("/params");
 writeJson("data.json", { net: NET, usage: await usage(rows), data: hosting(listed, params) });
 writeJson("state.json", { rows });
