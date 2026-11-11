@@ -14,7 +14,7 @@ import (
 // files at its release tag. See ProtocolParams and Fingerprint.
 const (
 	PinnedCelestiaAppVersion = "v10"
-	// v10.6.0 (4 November 2026; the same commit as v10.6.0-mocha), the
+	// v10.6.0 (5 November 2026 UTC; the same commit as v10.6.0-mocha), the
 	// release mainnet and Mocha run. Against v10.5.0 (6013e758) it changes
 	// celestia-core (v0.42.8), the hyperlane-cosmos and IBC capability forks,
 	// ShareProof/RowProof verification, the ante handler (escrow deposits in

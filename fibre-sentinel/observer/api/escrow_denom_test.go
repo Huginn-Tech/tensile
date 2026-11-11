@@ -15,9 +15,11 @@ import (
 	"github.com/plsgiveup/fibre/fibre-sentinel/observer/store"
 )
 
-// otherDenom is an IBC denomination. x/fibre at the pinned v10 takes an
-// escrow deposit in any denomination (no denom check until celestia-app PR
-// #8143, in v11) and creates the escrow in its first deposit's; every later
+// otherDenom is an IBC denomination. x/fibre in v10 takes an escrow deposit
+// in any denomination (no denom check in the module until celestia-app PR
+// #8143, in v11; since v10.6.0 the ante handler rejects one in CheckTx and
+// PrepareProposal, not in ProcessProposal, so a block can still carry one)
+// and creates the escrow in its first deposit's; every later
 // movement of that escrow is in the same one, and the record keeps each as
 // the chain wrote it.
 const otherDenom = "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2"
