@@ -30,7 +30,9 @@ const seen = new EventEmitter();
 // a day's export: more bytes than any buffer between the API and a client holds, sent for as long as it is read
 const CHUNK = Buffer.alloc(64 * 1024, 7);
 function apiAnswer(req, res) {
-  const p = req.url.split("?")[0];
+  // decoded before it is matched, as the API's router does; a path that does not decode is matched as it is
+  let p = req.url.split("?")[0];
+  try { p = decodeURIComponent(p); } catch { /* the site refuses these before they come here */ }
   seen.emit("asked", p);
   if (p.startsWith("/v1/exports/")) {
     res.writeHead(200, { "content-type": "application/gzip" });
@@ -298,9 +300,9 @@ test("avatars have an allowance of their own: a list's burst is answered, a loop
 
 // A tip stream opened through the site as a page opens it: resolves once its headers are in, with the events that
 // arrive after, each emitted as "event" on the response.
-function streamed(who, id = "", at = base) {
+function streamed(who, id = "", at = base, path = "/api/v1/tip/stream") {
   return new Promise((ok, no) => {
-    const req = http.get(`${at}/api/v1/tip/stream${id ? `?id=${id}` : ""}`, { headers: { "x-forwarded-for": who }, agent: false }, (res) => {
+    const req = http.get(`${at}${path}${id ? `?id=${id}` : ""}`, { headers: { "x-forwarded-for": who }, agent: false }, (res) => {
       const events = [];
       let buf = "";
       res.setEncoding("utf8");
@@ -351,6 +353,25 @@ test("one client has 30 tip streams open at most; past them its pages poll", asy
     const other = await streamed("198.51.100.52");
     open.push(other);
     assert.equal(other.res.statusCode, 200);
+  } finally {
+    open.forEach((s) => s.req.destroy());
+  }
+});
+
+test("a tip stream asked for by a percent-encoded path is a tip stream, counted with the client's others", async () => {
+  const who = "198.51.100.55", open = [];
+  try {
+    const first = await streamed(who, "", base, "/api/v1/tip/%73tream");
+    open.push(first);
+    assert.equal(first.res.statusCode, 200);
+    assert.equal(first.res.headers["content-type"], "text/event-stream; charset=utf-8");
+    for (let i = 1; i < 30; i++) open.push(await streamed(who, "", base, i % 2 ? "/api/v1/tip/stream" : "/api/v1/%74ip/stream"));
+    assert.ok(open.every((s) => s.res.statusCode === 200));
+    const past = await streamed(who, "", base, "/api/v1/tip/%73tream");
+    open.push(past);
+    assert.equal(past.res.statusCode, 429, "the thirty-first, by either spelling");
+    // and a path that is not percent-encoding at all is refused, not passed on
+    assert.equal(await ask("/api/v1/tip/%zz", who), 400);
   } finally {
     open.forEach((s) => s.req.destroy());
   }

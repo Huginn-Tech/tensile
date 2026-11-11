@@ -1910,9 +1910,13 @@ func (s *Server) computeNetwork(ctx context.Context, win Window, ex excludeSet, 
 
 	if win.AsOf {
 		resp.AsOfNote = AsOfNote
-		_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM endpoints WHERE first_seen_at <= ? AND (closed_at IS NULL OR closed_at > ?)`, win.endArg(), win.endArg()).Scan(&resp.RegisteredEndpoints)
-	} else {
-		_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM endpoints WHERE closed_at IS NULL`).Scan(&resp.RegisteredEndpoints)
+		// A count that could not be read is an error, as every statement below: a 0 here would be published as a
+		// figure, and a snapshot keeps its last answer when its computation fails.
+		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM endpoints WHERE first_seen_at <= ? AND (closed_at IS NULL OR closed_at > ?)`, win.endArg(), win.endArg()).Scan(&resp.RegisteredEndpoints); err != nil {
+			return nil, err
+		}
+	} else if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM endpoints WHERE closed_at IS NULL`).Scan(&resp.RegisteredEndpoints); err != nil {
+		return nil, err
 	}
 	// The row figures: every validator's, summed, from the day partials
 	// when there are some, and with the shipped statements over the whole
@@ -1935,9 +1939,9 @@ func (s *Server) computeNetwork(ctx context.Context, win Window, ex excludeSet, 
 	}
 	if rn != nil {
 		resp.ValidatorsProbed = rn.probed
-	} else {
-		_ = db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT validator_address) FROM probe_rows WHERE started_at >= ? AND started_at <= ?`+exv,
-			ex.args(win.startArg(), win.endArg())...).Scan(&resp.ValidatorsProbed)
+	} else if err := db.QueryRowContext(ctx, `SELECT COUNT(DISTINCT validator_address) FROM probe_rows WHERE started_at >= ? AND started_at <= ?`+exv,
+		ex.args(win.startArg(), win.endArg())...).Scan(&resp.ValidatorsProbed); err != nil {
+		return nil, err
 	}
 
 	pop := `started_at >= ? AND started_at <= ? AND assigned = 1 AND phase = 'in_window'` + exv
@@ -1969,20 +1973,31 @@ func (s *Server) computeNetwork(ctx context.Context, win Window, ex excludeSet, 
 		resp.LatencyP50, resp.LatencyP95 = rn.lat.percentiles()
 		resp.LatencySample = rn.lat.n
 	} else {
-		_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM probe_rows WHERE started_at >= ? AND started_at <= ?`+exv, ex.args(win.startArg(), win.endArg())...).Scan(&resp.ProbeCount)
-		_ = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM probe_rows WHERE started_at >= ? AND started_at <= ? AND classification IN ('NOT_PROBED','PROBE_ERROR')`+exv, ex.args(win.startArg(), win.endArg())...).Scan(&resp.Gaps)
+		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM probe_rows WHERE started_at >= ? AND started_at <= ?`+exv, ex.args(win.startArg(), win.endArg())...).Scan(&resp.ProbeCount); err != nil {
+			return nil, err
+		}
+		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM probe_rows WHERE started_at >= ? AND started_at <= ? AND classification IN ('NOT_PROBED','PROBE_ERROR')`+exv, ex.args(win.startArg(), win.endArg())...).Scan(&resp.Gaps); err != nil {
+			return nil, err
+		}
 		resp.GapsByOutcome = map[string]int64{}
-		if grows, gerr := db.QueryContext(ctx,
+		grows, err := db.QueryContext(ctx,
 			`SELECT outcome, COUNT(*) FROM probe_rows WHERE started_at >= ? AND started_at <= ? AND classification IN ('NOT_PROBED','PROBE_ERROR')`+exv+` GROUP BY outcome`,
-			ex.args(win.startArg(), win.endArg())...); gerr == nil {
-			for grows.Next() {
-				var o string
-				var n int64
-				if err := grows.Scan(&o, &n); err == nil {
-					resp.GapsByOutcome[o] = n
-				}
+			ex.args(win.startArg(), win.endArg())...)
+		if err != nil {
+			return nil, err
+		}
+		for grows.Next() {
+			var o string
+			var n int64
+			if err := grows.Scan(&o, &n); err != nil {
+				grows.Close()
+				return nil, err
 			}
-			grows.Close()
+			resp.GapsByOutcome[o] = n
+		}
+		grows.Close()
+		if err := grows.Err(); err != nil {
+			return nil, err
 		}
 
 		if resp.LatencyP50, resp.LatencyP95, resp.LatencySample, err = s.latencyWhere(ctx,
@@ -2050,7 +2065,9 @@ func (s *Server) computeNetwork(ctx context.Context, win Window, ex excludeSet, 
 		}
 	}
 	if !pubsDone {
-		_ = db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(blob_size),0) FROM publications WHERE settlement_time >= ? AND settlement_time <= ?`, win.startArg(), win.endArg()).Scan(&resp.Publications, &resp.PublicationBytes)
+		if err := db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(SUM(blob_size),0) FROM publications WHERE settlement_time >= ? AND settlement_time <= ?`, win.startArg(), win.endArg()).Scan(&resp.Publications, &resp.PublicationBytes); err != nil {
+			return nil, err
+		}
 	}
 
 	recon, err := s.reconstructableCount(ctx, win)

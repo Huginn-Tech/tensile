@@ -1168,8 +1168,10 @@ each holding its place only until the API's answer begins, so a slow
 reader costs only its own 16); an answer with no byte moving for 60 s is
 given up, and a client that leaves cancels its request to the API. A tip
 stream passes through unbuffered and uncompressed and holds none of those
-16, but one of the client's 30 streams and of the site's 5,000 (the
-unit's `MemoryMax` is the real ceiling); at a stop it cuts them, opens
+16, but one of the client's 30 streams and of the site's 1,800 (under
+the API's own 2,000, so a stream is never refused there); a request is
+classed by its decoded path, as the API's router reads it, so a
+percent-encoded spelling of the stream is counted as the stream; at a stop it cuts them, opens
 none, and exits within 5 s. A front
 proxy must pass `/api/v1/tip/stream` unbuffered with a read timeout past
 the 15-second ping: Caddy does so as it is (`reverse_proxy` flushes

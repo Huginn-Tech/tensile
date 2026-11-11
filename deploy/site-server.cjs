@@ -427,17 +427,26 @@ function proxy(req, res, u) {
     res.writeHead(400, { ...SECURITY, "content-type": "application/json" });
     return res.end('{"error":"a GET or HEAD request has no body"}');
   }
+  // A request is classed by the path the API will read: its router decodes a
+  // path before it matches, so /api/v1/tip/%73tream is the tip stream there,
+  // and here it would otherwise pass as a data request, a stream counted
+  // against no limit of streams. A path that does not decode is no route.
+  let route;
+  try { route = decodeURIComponent(u.pathname); } catch {
+    res.writeHead(400, { ...SECURITY, "content-type": "application/json" });
+    return res.end('{"error":"the path is not valid percent-encoding"}');
+  }
   // The tip stream passes like any answer, each event as it comes: nothing
   // here buffers or compresses an API answer.
-  const stream = u.pathname === "/api/v1/tip/stream";
+  const stream = route === "/api/v1/tip/stream";
   // A server that is stopping opens no stream, on a connection still open to
   // it: the page polls until it is back.
   if (stream && closing) {
     res.writeHead(503, { ...SECURITY, "content-type": "application/json", "retry-after": "5" });
     return res.end('{"error":"the site is restarting: ask /v1/tip"}');
   }
-  const avatar = u.pathname.startsWith("/api/v1/avatars/");
-  const slot = avatar ? null : admit(req, res, stream ? "stream" : u.pathname === "/api/v1/tip" ? "tip" : "data");
+  const avatar = route.startsWith("/api/v1/avatars/");
+  const slot = avatar ? null : admit(req, res, stream ? "stream" : route === "/api/v1/tip" ? "tip" : "data");
   if (avatar ? !avatarAdmitted(req, res) : !slot) return;
   // A page waiting on the API is the thing to catch before a visitor does:
   // every answer slower than SLOW_MS goes to the journal with its time; a
