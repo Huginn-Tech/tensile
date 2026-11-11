@@ -406,7 +406,7 @@ in, so a record derives them only when the celestia-app pin it names
 (`assignment.protocol_params.pinned_celestia_app_commit`) is one this build
 reproduces: its own `PinnedCelestiaAppCommit`, or an earlier pin whose
 assignment code did not change (`assignPins` in `internal/slim`; today
-v10.2.0-mocha and v10.4.0-mocha). A record of any other pin keeps every
+v10.2.0-mocha, v10.4.0-mocha and v10.5.0). A record of any other pin keeps every
 validator's rows whole. A build that does not list the pin a record was
 derived under refuses it (`slim.ErrAssignmentPin`) rather than compute its
 rows with another assignment, and the API publishes that row with the part
@@ -814,9 +814,12 @@ close on the escrow's balance once the escrow read and the scanner stand at
 the same block. No schema change: every statement seeks an index the store
 already has.
 
-**Escrow in another denomination.** x/fibre at the pinned v10 takes a
+**Escrow in another denomination.** x/fibre in v10 takes a
 deposit in any denomination (no denom check in `MsgDepositToEscrow` until
-celestia-app PR #8143, in v11) and creates the escrow in its first
+celestia-app PR #8143, in v11; since v10.6.0, PR #8401, the ante handler
+rejects a deposit in another denomination or with a non-canonical signer in
+CheckTx and PrepareProposal, but not in ProcessProposal, so a block can
+still carry one and the handling here stays) and creates the escrow in its first
 deposit's; that account's later deposits, withdrawals and payouts are in
 the same one, and a charge on it fails on chain (the module compares two
 denominations, which panics), so it never settles a blob. The record keeps
