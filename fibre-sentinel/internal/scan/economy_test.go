@@ -207,8 +207,10 @@ func TestChargeUtia(t *testing.T) {
 	}
 }
 
-// otherDenom is an IBC denomination. x/fibre at the pinned v10 takes an
-// escrow deposit in it (no denom check until celestia-app PR #8143, in v11).
+// otherDenom is an IBC denomination. x/fibre in v10 takes an escrow deposit
+// in it (no denom check in the module until celestia-app PR #8143, in v11;
+// since v10.6.0 the ante handler rejects one in CheckTx and PrepareProposal,
+// not in ProcessProposal, so a block can still carry one).
 const otherDenom = "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2"
 
 // A deposit and a withdrawal request in another denomination are recorded

@@ -38,7 +38,7 @@ and result classes.
 
 ## Build from source
 
-Requires Go 1.26.6 or newer, Node 22 and make. Build from a full checkout:
+Requires Go 1.26.10 or newer, Node 22 and make. Build from a full checkout:
 `fibre-sentinel` finds its sibling modules through relative `replace`
 directives.
 
@@ -83,8 +83,8 @@ files, schema, invariants and the path from a block to a figure are in
 
 ### Pinned celestia-app
 
-celestia-app `v10.5.0` (commit `6013e758d5dceb75827ad191c8d739d7c43cfa04`),
-the release mainnet and Mocha run; celestia-core `v0.42.3`, cosmos-sdk fork
+celestia-app `v10.6.0` (commit `25f09cab3f8912bbe78c62909e8d39d8fa8b3fc0`),
+the release mainnet and Mocha run; celestia-core `v0.42.8`, cosmos-sdk fork
 `v0.52.12`. TLS golden vectors come from celestia-app commit
 `dba155084505a8f6c5d37260a94f70f939fb96de`.
 `fibre-assign/reftest/go.mod` and `fibre-sentinel/go.mod` each carry a copy of

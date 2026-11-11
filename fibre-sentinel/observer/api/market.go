@@ -62,10 +62,15 @@ type sum struct {
 	Utia  int64 `json:"utia"`
 }
 
-// utiaDenom is the one denomination a utia figure counts. x/fibre at the
-// pinned v10 takes an escrow deposit in any denomination (no denom check in
-// MsgDepositToEscrow until celestia-app PR #8143, in v11) and creates the
-// escrow in its first deposit's; the account's later deposits, its
+// utiaDenom is the one denomination a utia figure counts. x/fibre in v10
+// takes an escrow deposit in any denomination (the module has no denom
+// check in MsgDepositToEscrow until celestia-app PR #8143, in v11). Since
+// v10.6.0 (PR #8401) the ante handler rejects a deposit in another
+// denomination, or with a non-canonical signer, in CheckTx and
+// PrepareProposal, but not in ProcessProposal, so a block proposed without
+// that check can still carry one and the handling below stays. Such a
+// deposit creates the escrow in its first deposit's denomination; the
+// account's later deposits, its
 // withdrawals and its payouts are in that one. The record keeps every
 // amount beside its denom (payments, escrow_accounts and withdrawal_queue,
 // each in its *_utia columns), so every count and sum here of deposits,
