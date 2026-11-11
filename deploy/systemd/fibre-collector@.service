@@ -31,6 +31,9 @@ SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
 # only this instance's data directory, not the service user's whole home
 ReadWritePaths=/var/lib/fibre-observer/%i
+# On a host shared with a validator, memory running out takes an observer
+# process before the node: nothing changes while there is memory.
+OOMScoreAdjust=500
 
 [Install]
 WantedBy=multi-user.target
