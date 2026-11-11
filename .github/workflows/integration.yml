@@ -46,7 +46,9 @@ jobs:
       - name: Fetch the daily exports through the site
         if: steps.cache.outputs.cache-hit != 'true'
         env:
-          SITE: https://tensile.huginn.tech/api
+          # Mocha's site: tensile.huginn.tech has been mainnet's since 2026-10-19, whose record is too small to compare
+          # two builds over and has no export from before 2026-10-11.
+          SITE: https://tensile-mocha.huginn.tech/api
           THROUGH: ${{ inputs.through }}
         run: |
           set -euo pipefail
