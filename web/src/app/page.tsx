@@ -11,6 +11,9 @@ import RecentBlobs from "@/components/RecentBlobs";
 
 /** how often the overview reads the 24h validator list, which moves with every block */
 const LIVE_POLL_MS = 15000;
+/** and the longer periods' lists, whose snapshots the observer computes again every five minutes (7d) or quarter hour
+ * (30d, all): asked every half minute, nine answers in ten were the 110 KB the page already had */
+const SLOW_POLL_MS = 120000;
 
 /**
  * The overview, from the chain's own records: which validators run a Fibre
@@ -33,7 +36,7 @@ function Overview() {
   // (endorsements move with every block; in September 2026 its 15-22 s
   // computation held it to about every 35-45 s), so it is read more often than
   // the longer periods, whose snapshots move every few minutes.
-  const vals = useApi<{ validators: Validator[]; computed_at?: string }>(winKnown ? `/v1/validators?window=${win}` : null, win === "24h" ? LIVE_POLL_MS : undefined);
+  const vals = useApi<{ validators: Validator[]; computed_at?: string }>(winKnown ? `/v1/validators?window=${win}` : null, win === "24h" ? LIVE_POLL_MS : SLOW_POLL_MS);
 
   const rows = vals.data?.validators ?? [];
   const notLive = !!meta?.app_version && !meta.fibre_active;

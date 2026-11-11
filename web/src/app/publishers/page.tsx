@@ -2,7 +2,7 @@
 import { Suspense, useCallback, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useApi, type Meta, type Window, blobFee, bytes, failedWords, fmtShare, hhmm, int, nsDisplay, tia, utcWord } from "@/lib/api";
+import { useApi, type Meta, type Window, blobFee, bytes, failedWords, fmtShare, hhmm, int, nsDisplay, nsName, tia, utcWord } from "@/lib/api";
 import { useTip } from "@/lib/tip";
 import type { MarketWithQueue, Params, PublisherWithQueue } from "@/lib/withdrawals";
 import { LIST_WINDOW, useWindow, WindowSwitch, periodName } from "@/lib/window";
@@ -128,12 +128,19 @@ function Page() {
   const per = periodName(m?.window?.name ?? win);
 
   const findChoices: Choice[] | null = all
-    ? [...all.publishers].sort((a, b) => b.settlements - a.settlements || (b.escrow?.available_utia ?? 0) - (a.escrow?.available_utia ?? 0)).map((p) => ({
-      value: p.publisher,
-      label: p.label ? <><Ident addr={p.publisher} />{p.label}</> : <><Ident addr={p.publisher} /><span className="hd">celestia •••</span><span className="mono">{p.publisher.slice(-4)}</span></>,
-      count: p.settlements || undefined,
-      find: `${p.publisher} ${p.label ?? ""}`.toLowerCase(),
-    }))
+    ? [...all.publishers].sort((a, b) => b.settlements - a.settlements || (b.escrow?.available_utia ?? 0) - (a.escrow?.available_utia ?? 0)).map((p) => {
+      // An account is found by the names it posts under too: the Analytics page calls one with no registry label by
+      // its namespace ("krews"), and that name found nothing here. The first of them that reads as a name stands
+      // after the address, muted, so a row found by it shows why; a namespace is anyone's to post to, so it is never
+      // shown in the label's place.
+      const ns = (p.namespaces ?? []).map((x) => nsName(x.namespace)).find((n) => !n.hex)?.text;
+      return {
+        value: p.publisher,
+        label: p.label ? <><Ident addr={p.publisher} />{p.label}</> : <><Ident addr={p.publisher} /><span className="hd">celestia •••</span><span className="mono">{p.publisher.slice(-4)}</span>{ns && <span className="hd">{ns}</span>}</>,
+        count: p.settlements || undefined,
+        find: `${p.publisher} ${p.label ?? ""} ${(p.namespaces ?? []).map((x) => nsDisplay(x.namespace)).join(" ")}`.toLowerCase(),
+      };
+    })
     : null;
   const open = useCallback((e: React.MouseEvent, href: string) => router.push(href), [router]);
 
@@ -157,7 +164,7 @@ function Page() {
           <EscrowParams />
           <span className="pl-find">
             <Picker name="Find a publisher" icon={FIND_ICON} value="" text={null} choices={findChoices} find
-              accept={(s) => (/^celestia1[0-9a-z]{38}$/.test(s) ? s : null)} placeholder="Address" onPick={(a) => { if (a) router.push(`/publisher/?addr=${a}`); }} />
+              accept={(s) => (/^celestia1[0-9a-z]{38}$/.test(s) ? s : null)} placeholder="Address or name" onPick={(a) => { if (a) router.push(`/publisher/?addr=${a}`); }} />
           </span>
         </div>
         <div className="lg-tw">
