@@ -89,6 +89,21 @@ jobs:
         working-directory: fibre-sentinel
         run: go test -race ./internal/probe/ ./internal/record/
 
+  # The API's concurrent code under the race detector: the snapshot keepers, the tip stream, the day partials with the
+  # collector ingesting beside them (dayparts_concurrent_test.go shrinks itself when the detector is on). A job of its
+  # own, beside the tests, since the detector makes them several times slower; the equality harnesses are not run here.
+  fibre-sentinel-race:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: fibre-sentinel/go.mod
+          cache-dependency-path: fibre-sentinel/go.sum
+      - name: test the API's concurrent code (with -race)
+        working-directory: fibre-sentinel
+        run: go test -race -timeout 30m -run 'TestDayPartsUnderConcurrency|Keeper|Lane|TipStream|Snapshot|Warm|Sealed|SealRead|Cache' ./observer/api/
+
   # ---- devnet + test scripts ----
   scripts:
     runs-on: ubuntu-latest
@@ -98,6 +113,10 @@ jobs:
         run: for f in fibre-devnet/*.sh fibre-sentinel/*.sh deploy/test/*.sh; do bash -n "$f"; done
       - name: python syntax (deploy helpers)
         run: for f in deploy/*.py deploy/test/*.py; do python3 -c "import ast,sys; ast.parse(open(sys.argv[1]).read())" "$f"; done
+      # The Analytics page is one hand-written script next builds nothing from: at least it must parse, with the
+      # servers and helpers node runs as they are.
+      - name: node syntax (the Analytics app, the site server, the helpers)
+        run: for f in web/public/analytics/app.js deploy/*.cjs deploy/*.mjs web/test/*.cjs; do node --check "$f"; done
       - name: shellcheck (errors only)
         run: shellcheck --severity=error fibre-devnet/*.sh fibre-sentinel/*.sh deploy/*.sh deploy/test/*.sh
       - name: acceptance-test self-test
