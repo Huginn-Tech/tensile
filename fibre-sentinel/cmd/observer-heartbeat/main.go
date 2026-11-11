@@ -193,13 +193,15 @@ func main() {
 	// A round the chain side refuses writes nothing to reachability.jsonl:
 	// there is no validator to attribute a row to. The status file is where
 	// the failure goes, dated, so the gap in the file has an explanation.
+	// It says whether it completed: a round that did not is tried again
+	// before the next one is due (below).
 	inactiveLogged := false
-	round := func() {
+	round := func() bool {
 		chainID, tip, err := chain.Status(ctx)
 		if err != nil {
 			log.Printf("status: %v", err)
 			st.Error(fmt.Sprintf("status: %v", err))
-			return
+			return false
 		}
 		provs, err := chain.BondedFibreProviders(ctx)
 		if err != nil {
@@ -214,11 +216,11 @@ func main() {
 					inactiveLogged = true
 				}
 				st.OK()
-				return
+				return true
 			}
 			log.Printf("providers: %v", err)
 			st.Error(fmt.Sprintf("providers: %v", err))
-			return
+			return false
 		}
 		inactiveLogged = false
 		var todo []scan.FibreProvider
@@ -232,7 +234,7 @@ func main() {
 		if err != nil {
 			log.Printf("%v", err)
 			st.Error(err.Error())
-			return
+			return false
 		}
 		known = hostsOf(provs)
 		down, back = map[string]string{}, map[string]string{}
@@ -251,6 +253,7 @@ func main() {
 		st.Progress(tip)
 		st.Set("registered", len(provs))
 		st.Set("reachable", ok+skipped)
+		return true
 	}
 
 	// A Fibre provider that registers, or moves to another host, is dialled
@@ -324,7 +327,11 @@ func main() {
 		known = hostsOf(provs)
 	}
 
-	round()
+	// A round the chain side refused (the node restarting, an RPC call timed
+	// out) wrote no row for any endpoint. Left to the next tick that is an
+	// -interval without one; it is run again at each -new-every read until
+	// one completes, and the ticks go on as they were.
+	missed := !round()
 	if *once {
 		return
 	}
@@ -343,9 +350,13 @@ func main() {
 			st.Stop("signal")
 			return
 		case <-tick.C:
-			round()
+			missed = !round()
 		case <-freshTick:
-			fresh()
+			if missed {
+				missed = !round()
+			} else {
+				fresh()
+			}
 		}
 	}
 }

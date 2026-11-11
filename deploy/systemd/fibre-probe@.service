@@ -39,6 +39,14 @@ SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
 # only this instance's data directory, not the service user's whole home
 ReadWritePaths=/var/lib/fibre-observer/%i
+# On a host shared with a validator, memory running out takes an observer
+# process before the node: nothing changes while there is memory.
+OOMScoreAdjust=500
+# This process dials hosts validators choose and parses their answers, and
+# reads no file of /etc/fibre-observer (its settings come from the
+# environment systemd read before this applies): the backup key and remote
+# beside them are not its to see, as they are not the API's.
+TemporaryFileSystem=/etc/fibre-observer:ro
 
 [Install]
 WantedBy=multi-user.target

@@ -320,7 +320,10 @@ and keeps its own files in `/var/lib/fibre-healthwatch/<network>`.
 Each unit runs one binary with the flags from its env file. The prober
 also takes any extra flags from `PROBE_ARGS` in it (for example
 `PROBE_ARGS=-max-read-mbps 600 -link-mbps 900`); a change there takes a
-`systemctl restart fibre-probe@mocha`. Order does not
+`systemctl restart fibre-probe@mocha`. The prober, the heartbeat and
+the scanner see `/etc/fibre-observer` as an empty directory (as the API does,
+but for its publishers file): a flag that names a file must name one
+elsewhere. Order does not
 matter: the collector tolerates missing files, the API waits for the
 collector to create the database, and before Fibre is active on the chain
 the prober and heartbeat have nothing to do and say so in their logs.

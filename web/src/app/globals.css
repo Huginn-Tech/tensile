@@ -1905,10 +1905,13 @@ button.pp-params[aria-expanded="true"] .pp-i { color: var(--paper); background: 
 .lg-t tbody tr:first-child td { border-top: 0; }
 /* a column whose cells are always about as wide is as wide as they are (the time at its widest: "May 28 20:48:38 23 h 59 min",
    and the publisher's chip); the namespace takes the rest */
+/* the height column holds a mainnet height whole ("28,888,888": its digits are proportional, so the widest is all
+   eights, 72px at 13.5px and 75px at 14px); at 94px "2,500,429" and "15,626,767" lost their last digits to an
+   ellipsis. The namespace, the one column without a width, gives the 6 to 10px up */
 /* the transaction column holds the hash's first six and last four and its copy button, the publisher's its chip and
    its copy button, both whole; the fee ("23.69 TIA" at most) and Tensile's lane ("retention window") at their widest,
-   so the namespace keeps its 99px at the page's width */
-.lg-t th.c-h { width: 96px; } .lg-t th.c-t { width: 206px; } .lg-t th.c-b { width: 126px; } .lg-t th.c-p { width: 165px; } .lg-t th.c-sz { width: 88px; } .lg-t th.c-fee { width: 86px; }
+   so the namespace keeps its 93px at the page's width */
+.lg-t th.c-h { width: 102px; } .lg-t th.c-t { width: 206px; } .lg-t th.c-b { width: 126px; } .lg-t th.c-p { width: 165px; } .lg-t th.c-sz { width: 88px; } .lg-t th.c-fee { width: 86px; }
 .lg-t th.c-e { width: 128px; } .lg-t th.gap { width: 10px; } .lg-t th.tn { width: 114px; }
 .lg-t tr.row { position: relative; cursor: pointer; }
 .lg-t tr.row td { transition: background var(--dur); }
@@ -1996,7 +1999,7 @@ button.pp-params[aria-expanded="true"] .pp-i { color: var(--paper); background: 
   .lg-t.lg-st th:first-child, .lg-t.lg-st td:first-child { padding-left: 18px; }
   .lg-t.lg-st .gap { padding: 0; }
   .lg-t.lg-st .tn { padding-left: 10px; padding-right: 10px; }
-  .lg-t.lg-st th.c-h { width: 88px; } .lg-t.lg-st th.c-t { width: 124px; } .lg-t.lg-st th.c-b { width: 118px; } .lg-t.lg-st th.c-p { width: 157px; }
+  .lg-t.lg-st th.c-h { width: 98px; } .lg-t.lg-st th.c-t { width: 124px; } .lg-t.lg-st th.c-b { width: 118px; } .lg-t.lg-st th.c-p { width: 157px; }
   .lg-t.lg-st th.c-sz { width: 80px; } .lg-t.lg-st th.c-fee { width: 77px; } .lg-t.lg-st th.c-st { width: 84px; } .lg-t.lg-st th.c-e { width: 104px; }
   .lg-t.lg-st .em { width: 30px; }
   /* the dot hangs in the cell's padding (8px and its 15), so every word starts on one line; the head ("TX status",
@@ -2010,7 +2013,7 @@ button.pp-params[aria-expanded="true"] .pp-i { color: var(--paper); background: 
 }
 /* From 1161px the 73px the time no longer takes are the list's: its type half a pixel larger (14px, the hashes and the
    address 13px, the age 12.5px), each column again as wide as its widest content and its padding, the namespace the
-   rest. At the page's 1118px: Height 90 · Time 126 · TX hash 122 · Namespace 142 · Publisher 161 · Blob size 82 ·
+   rest. At the page's 1118px: Height 99 · Time 126 · TX hash 122 · Namespace 133 · Publisher 161 · Blob size 82 ·
    Fee paid 80 · Status 86 · Endorsed 105 · gap 10 · Tensile 114. Below, the type and the columns stay as they were,
    since the time was as narrow there already */
 @media (min-width: 1161px) {
@@ -2022,7 +2025,7 @@ button.pp-params[aria-expanded="true"] .pp-i { color: var(--paper); background: 
   .lg-t.lg-st td:not(.tn) { font-size: 14px; }
   .lg-t.lg-st .c-b a, .lg-t.lg-st .lg-who .hd, .lg-t.lg-st .lg-who .tl, .lg-t.lg-st .nsb .mono { font-size: 13px; }
   .lg-t.lg-st td.c-t .ag { font-size: 12.5px; }
-  .lg-t.lg-st th.c-h { width: 94px; } .lg-t.lg-st th.c-t { width: 130px; } .lg-t.lg-st th.c-b { width: 126px; } .lg-t.lg-st th.c-p { width: 165px; }
+  .lg-t.lg-st th.c-h { width: 103px; } .lg-t.lg-st th.c-t { width: 130px; } .lg-t.lg-st th.c-b { width: 126px; } .lg-t.lg-st th.c-p { width: 165px; }
   .lg-t.lg-st th.c-sz { width: 86px; } .lg-t.lg-st th.c-fee { width: 84px; } .lg-t.lg-st th.c-st { width: 90px; } .lg-t.lg-st th.c-e { width: 109px; }
 }
 @media (min-width: 1161px) and (max-width: 1220px) {
@@ -2458,7 +2461,7 @@ button.warn:focus-visible { outline-offset: 0; }
 }
 /* its blobs without the time's age, as on Blobs: a little less room for each column, so the time keeps its own */
 @media (max-width: 1160px) {
-  .lg-one th.c-h { width: 92px; }
+  .lg-one th.c-h { width: 98px; }
   .lg-one th.c-sz { width: 90px; }
   .lg-one th.c-fee { width: 116px; }
   .lg-one th.c-e { width: 128px; }

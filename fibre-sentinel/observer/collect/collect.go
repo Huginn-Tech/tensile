@@ -206,6 +206,13 @@ func (c *Collector) Pass(ctx context.Context, now time.Time) []string {
 		c.logf("%s: %v", what, err)
 		passErrs = append(passErrs, fmt.Sprintf("%s: %v", what, err))
 	}
+	// A line that cannot be decoded is stepped over (ingest.ErrBadRecord) and never read again: the journal is the
+	// one place that says so, for every file, the replayed ones too.
+	skipped := func(what string, r ingest.Result) {
+		if r.Skipped > 0 {
+			c.logf("%s: WARNING skipped %d undecodable line(s); last: %s", what, r.Skipped, r.LastSkipped)
+		}
+	}
 	// What each successful Fibre transaction cost, before the publications,
 	// the escrow movements and the endpoint registrations: the scanner writes
 	// a block's cost lines with its other records, and read first they are in
@@ -250,13 +257,19 @@ func (c *Collector) Pass(ctx context.Context, now time.Time) []string {
 	// correction that lifts it can never be half-applied in one pass.
 	if r, err := ingest.ParamUncertainty(st, c.Paths.ParamUncertainty, now); err != nil {
 		fail("param uncertainty", err)
-	} else if r.Inserted > 0 {
-		c.logf("param uncertainty: +%d range(s) (read %d, line %d)", r.Inserted, r.Read, r.Line)
+	} else {
+		skipped("param uncertainty", r)
+		if r.Inserted > 0 {
+			c.logf("param uncertainty: +%d range(s) (read %d, line %d)", r.Inserted, r.Read, r.Line)
+		}
 	}
 	if r, err := ingest.Corrections(st, c.Paths.Corrections, now); err != nil {
 		fail("corrections", err)
-	} else if r.Inserted > 0 {
-		c.logf("corrections: +%d deadline/verdict correction(s) replayed (read %d, line %d)", r.Inserted, r.Read, r.Line)
+	} else {
+		skipped("corrections", r)
+		if r.Inserted > 0 {
+			c.logf("corrections: +%d deadline/verdict correction(s) replayed (read %d, line %d)", r.Inserted, r.Read, r.Line)
+		}
 	}
 	if r, err := ingest.Measurements(st, c.Paths.Measurements, now); err != nil {
 		fail("measurements", err)
@@ -343,6 +356,7 @@ func (c *Collector) Pass(ctx context.Context, now time.Time) []string {
 		fail("registry", err)
 	} else {
 		c.registryReplayed = true
+		skipped("registry", r)
 		if r.Inserted > 0 {
 			c.logf("registry: +%d endpoint event(s) replayed (read %d, line %d)", r.Inserted, r.Read, r.Line)
 		}
@@ -362,18 +376,27 @@ func (c *Collector) Pass(ctx context.Context, now time.Time) []string {
 	}
 	if r, err := ingest.Runs(st, c.Paths.Runs, now); err != nil {
 		fail("runs", err)
-	} else if r.Inserted > 0 {
-		c.logf("runs: +%d run event(s) replayed (read %d, line %d)", r.Inserted, r.Read, r.Line)
+	} else {
+		skipped("runs", r)
+		if r.Inserted > 0 {
+			c.logf("runs: +%d run event(s) replayed (read %d, line %d)", r.Inserted, r.Read, r.Line)
+		}
 	}
 	if r, err := ingest.SamplingSecrets(st, c.Paths.SamplingSecrets, now); err != nil {
 		fail("sampling secrets", err)
-	} else if r.Inserted > 0 {
-		c.logf("sampling secrets: +%d day(s) revealed (read %d, line %d)", r.Inserted, r.Read, r.Line)
+	} else {
+		skipped("sampling secrets", r)
+		if r.Inserted > 0 {
+			c.logf("sampling secrets: +%d day(s) revealed (read %d, line %d)", r.Inserted, r.Read, r.Line)
+		}
 	}
 	if r, err := ingest.HostEvents(st, c.Paths.HostHistory, now); err != nil {
 		fail("host history", err)
-	} else if r.Inserted > 0 {
-		c.logf("host history: +%d registration(s) (read %d, line %d)", r.Inserted, r.Read, r.Line)
+	} else {
+		skipped("host history", r)
+		if r.Inserted > 0 {
+			c.logf("host history: +%d registration(s) (read %d, line %d)", r.Inserted, r.Read, r.Line)
+		}
 	}
 	// The accounts the final failures stored before migration 31 was applied
 	// are listed under: written once per application of the migration, from
@@ -405,6 +428,7 @@ func (c *Collector) Pass(ctx context.Context, now time.Time) []string {
 		// A line deferred for a row not ingested yet leaves the lines
 		// after it unread too.
 		c.amendmentsReplayed = r.Deferred == ""
+		skipped("amendments", r)
 		if r.Inserted > 0 {
 			c.logf("amendments: +%d late verdict(s) replayed (read %d, line %d)", r.Inserted, r.Read, r.Line)
 		}
