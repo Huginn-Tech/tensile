@@ -442,7 +442,7 @@ function boot() {
   const h1 = $(".bar h1"), period = $(".bar .ctl-l");
   h1.addEventListener("click", () => { if ($(".bar").classList.contains("stuck")) scrollTo({ top: 0, behavior: calm ? "auto" : "smooth" }); });
   h1.addEventListener("mousemove", (e) => showTip(tipHead("Analytics") + tipRow("What goes through Fibre, what it costs, who pays and who hosts it"), e.clientX, e.clientY));
-  period.addEventListener("mousemove", (e) => showTip(tipHead("Period") + tipRow("Moves usage, cost and publishers. Hosting keeps its own periods"), e.clientX, e.clientY));
+  period.addEventListener("mousemove", (e) => showTip(tipHead("Period") + tipRow("Moves usage, cost and publishers. Hosting shows the current state"), e.clientX, e.clientY));
   const fresh = () => tipHead("Updated") + tipRow("Settlements", stamp(U().read_at)) + tipRow("Hosting", stamp(N().read_at));
   $$(".upd .dt").forEach((n) => { n.addEventListener("mousemove", (e) => showTip(fresh(), e.clientX, e.clientY)); n.addEventListener("mouseleave", hideTip); });
   for (const n of [h1, period]) n.addEventListener("mouseleave", hideTip);
@@ -692,7 +692,7 @@ function drawRate() {
 function rateTip(t) {
   const d = dayAt(t), s = dailyRate().find((x) => x.day === d.day), o = others();
   return tipHead(day(d.day)) + (s ? tipRow("TIA per MiB", tiaN(s.rate, 2)) + tipRow("Data", size(s.bytes)) + tipRow("Fees paid", tia(s.fees)) + tipRow("Price range", `${range()} TIA`) : tipRow("No settlements"))
-    + (o ? tipHead(Period()) + tipRow("Average paid", tiaN(market().paid_per_mib_utia, 2)) + tipRow(`Without ${o.top.display}, ${pct(o.share)} of data`, tiaN(o.rate, 2)) : "");
+    + (o ? tipHead(Period()) + tipRow("Average paid", tiaN(market().paid_per_mib_utia, 2)) + tipRow(`Without ${o.top.display} (${pct(o.share)} of data)`, tiaN(o.rate, 2)) : "");
 }
 
 /* ---------- active days: a tick a day, lit or quiet ---------- */
@@ -913,7 +913,7 @@ function draw() {
   if (!small) for (const b of list) {
     const s = b.tick, end = !b.i || b.i === n - 1, x = X(s);
     label(svg, x, ty, bytes(s), "middle", tone(b));
-    label(svg, x, ty + 16, end ? tia(fee(s), 2) : tiaN(fee(s), 2), "middle", tone(b));
+    label(svg, x, ty + 16, end ? tia(fee(s), fee(s) % 10000 ? 3 : 2) : tiaN(fee(s), fee(s) % 10000 ? 3 : 2), "middle", tone(b));
   }
 
   G.cells = new Map(list.map((b) => [b, []]));
@@ -937,7 +937,7 @@ function draw() {
   // The columns have no room on a phone, so their figures stand in a table, every size on its own line.
   q(".ctab").innerHTML = !small ? "" : `<table><thead><tr><th>Size</th><th>Fee per blob</th><th><span class="dt" data-h>Share of settlements</span></th><th><span class="dt" data-h>Share of data</span></th></tr></thead><tbody>${list.map((b) => {
     const peak = (share) => { const all = list.map(share), most = Math.max(...all); return share(b) === most && most && all.indexOf(most) === all.lastIndexOf(most) ? ' class="lead"' : ""; };
-    return `<tr data-b="${b.i}"><td>${bytes(b.tick)}</td><td>${tiaN(fee(b.tick), 2)}</td><td${peak((x) => x.nShare)}>${b.n ? sharePct(b.nShare) : "0%"}</td><td${peak((x) => x.dShare)}>${b.n ? sharePct(b.dShare) : "0%"}</td></tr>`;
+    return `<tr data-b="${b.i}"><td>${bytes(b.tick)}</td><td>${tiaN(fee(b.tick), fee(b.tick) % 10000 ? 3 : 2)}</td><td${peak((x) => x.nShare)}>${b.n ? sharePct(b.nShare) : "0%"}</td><td${peak((x) => x.dShare)}>${b.n ? sharePct(b.dShare) : "0%"}</td></tr>`;
   }).join("")}</tbody></table>`;
 
   G.cross = el("line", { class: "cross", visibility: "hidden" }, svg);
@@ -979,8 +979,8 @@ const SHARES = () => tipHead("Share rows") + tipRow("Each settlement counts at t
 
 function hook() {
   const svg = q(".plot"), tab = q(".ctab");
-  const curveTip = (s) => tipHead(`${size(s)} blob`) + tipRow("Fee", tia(fee(s), 2)) + tipRow("TIA per MiB", tiaN(perMib(s), 2)) + (s === G.hi ? tipRow("Largest blob allowed") : "");
-  const paidTip = () => { const m = market(), o = others(); return tipHead("Average paid") + tipRow("TIA per MiB", tiaN(m.paid_per_mib_utia, 2)) + tipRow("Fees paid", tia(m.fees_utia)) + tipRow("Data", size(m.bytes)) + (o ? tipRow(`Without ${o.top.display}, ${sharePct(o.share)} of data`, tiaN(o.rate, 2)) : ""); };
+  const curveTip = (s) => tipHead(`${size(s)} blob`) + tipRow("Fee", tia(fee(s), fee(s) % 10000 ? 3 : 2)) + tipRow("TIA per MiB", tiaN(perMib(s), 2)) + (s === G.hi ? tipRow("Largest blob allowed") : "");
+  const paidTip = () => { const m = market(), o = others(); return tipHead("Average paid") + tipRow("TIA per MiB", tiaN(m.paid_per_mib_utia, 2)) + tipRow("Fees paid", tia(m.fees_utia)) + tipRow("Data", size(m.bytes)) + (o ? tipRow(`Without ${o.top.display} (${sharePct(o.share)} of data)`, tiaN(o.rate, 2)) : ""); };
   const leave = () => { rest(); hideTip(); };
   const onPaid = (x, y) => { const p = G.paid, b = p?.box; return p && ((x > p.x0 && x < p.x1 && y > p.y - 5 && y < p.y + PAID_H + 2) || (x > b.x && x < b.x + b.width && y > b.y && y < b.y + b.height)); };
 
@@ -1057,10 +1057,10 @@ const COLS = [
 const HEAD = {
   activity: () => tipHead("Activity") + tipRow("Strokes mark the hours with settlements") + (M.narrow() ? "" : tipRow(`${M.touch() ? "Tap" : "Click"} to sort by first settlement, newest first`)),
   settlements: () => tipHead("Settlements") + tipRow("Blobs paid for on chain; a blob paid for twice counts twice"),
-  bytes: () => tipHead("Data · share") + tipRow("Data settled by this account and its share of all data"),
+  bytes: () => tipHead("Data · share") + tipRow("Data settled by this account and its share of all data") + tipRow("Data is the size paid for: Celestia's upload size, with header and padding, without parity"),
   paid_per_mib_utia: () => tipHead("TIA per MiB") + tipRow("Fees paid divided by data"),
   avg_blob_bytes: () => tipHead("Avg blob") + tipRow("Data divided by settlements"),
-  left: () => tipHead("Blobs left in escrow") + tipRow("What the balance pays for at the account's average blob since launch. 0 means too little for one such blob"),
+  left: () => tipHead("Blobs left in escrow") + tipRow("What the available balance pays for at the account's average blob since launch. 0 means too little for one such blob"),
 };
 // What the narrow list's sort offers, in the columns' words.
 const SORTS = [["bytes", "Data · share"], ["name", "Publisher"], ["settlements", "Settlements"], ["since", "First settlement"], ["paid_per_mib_utia", "TIA per MiB"], ["avg_blob_bytes", "Avg blob"], ["left", "Blobs left in escrow"]];
@@ -1360,9 +1360,9 @@ function cellTip(p, c) {
   if (c === "mib") return h + tipRow("Fees paid", tia(p.fees_utia)) + tipRow("Data", size(p.bytes));
   if (c === "avg") return h + tipRow("Avg blob", size(p.avg_blob_bytes)) + tipRow("Largest blob", size(p.largest_blob_bytes)) + tipRow("Settlements", int(p.settlements));
   if (c === "n") return h + tipRow("Settlements", int(p.settlements));
-  if (p.others && c === "left") return tailLeft(p) == null ? "" : h + tipRow("Balance", tia(p.escrow_available_utia)) + tipRow("Each account at its own average blob, added up");
+  if (p.others && c === "left") return tailLeft(p) == null ? "" : h + tipRow("Available balance", tia(p.escrow_available_utia)) + tipRow("Each account at its own average blob, added up");
   // A pace needs a few active days behind it, and a balance that can pay for a blob at all.
-  if (c === "left") return h + tipRow("Balance", tia(p.escrow_available_utia)) + tipRow("Average blob since launch", size(blobEver(p) ?? 0))
+  if (c === "left") return h + tipRow("Available balance", tia(p.escrow_available_utia)) + tipRow("Average blob since launch", size(blobEver(p) ?? 0))
     + (blobsLeft(p) === 0 ? tipRow("Not enough for one blob") : days == null || D.active < 3 ? "" : tipRow(days < 1 ? "Under a day at this pace" : `About ${count(Math.floor(days), "day")} at this pace`));
   return "";
 }
@@ -1579,7 +1579,7 @@ function setHot(f) {
   lit(f && prov() && f.key && !f.key.startsWith("__") ? f.key : null);
   paint();
 }
-const paintLine = () => { const t = N().totals; line.textContent = `${t.hosts} of ${t.validators_bonded} validators run a Fibre host, ${sharePct(t.host_vp_share)} of voting power.`; };
+const paintLine = () => { const t = N().totals; line.textContent = `${t.hosts} of ${t.validators_bonded} validators have registered a Fibre host, ${sharePct(t.host_vp_share)} of voting power.`; };
 
 /* ---------- the card answers in words: who, where ---------- */
 const sayWho = $(".say-who", root), sayWhere = $(".say-where", root);
@@ -2072,7 +2072,7 @@ const TIP = {
 };
 const HEAD = {
   vp: () => tipHead("Voting power") + tipRow("Share of all voting power, bonded TIA"),
-  hosts: () => tipHead("Fibre hosts") + tipRow(`A server a validator runs for Fibre.${keptFor() ? ` It keeps a blob's shards for ${keptFor()}.` : ""}`),
+  hosts: () => tipHead("Fibre hosts") + tipRow(`A server a validator has registered for Fibre.${keptFor() ? ` It keeps a blob's shards for at least ${keptFor()}.` : ""}`),
   ready: () => tipHead("Hosts ready now") + tipRow("Hosts that say they can take uploads now") + tipRow("Hosts that do not report are not counted as failing"),
 };
 // A narrow row has no heads: its figures say what the head would.

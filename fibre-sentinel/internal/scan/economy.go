@@ -86,7 +86,7 @@ type Payment struct {
 	// or a timeout is the module's charge, always utia. A deposit, a
 	// withdrawal request and a payout are in the escrow's own denomination:
 	// x/fibre in v10 takes a deposit in any denomination (no denom check in
-	// the module until celestia-app PR #8143, in v11; since v10.6.0 the ante
+	// the module until celestia-app PR #8143, on main, planned for v12; since v10.6.0 the ante
 	// handler rejects one in CheckTx and PrepareProposal but not in
 	// ProcessProposal, so a block can still carry one) and creates the
 	// escrow in its first deposit's, so AmountUtia is an amount of utia
