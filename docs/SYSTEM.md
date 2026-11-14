@@ -816,7 +816,7 @@ already has.
 
 **Escrow in another denomination.** x/fibre in v10 takes a
 deposit in any denomination (no denom check in `MsgDepositToEscrow` until
-celestia-app PR #8143, in v11; since v10.6.0, PR #8401, the ante handler
+celestia-app PR #8143, on main, planned for v12; since v10.6.0, PR #8401, the ante handler
 rejects a deposit in another denomination or with a non-canonical signer in
 CheckTx and PrepareProposal, but not in ProcessProposal, so a block can
 still carry one and the handling here stays) and creates the escrow in its first

@@ -337,7 +337,7 @@ export default function Methodology() {
           <p>Those carry Tensile&rsquo;s eye: <strong>Available</strong> on a publisher&rsquo;s page, and the <strong>Tensile</strong> column beside its blobs, as defined under <a href="#available">Available</a>.</p>
           <dl className="ref-terms">
             <Term id="fees" term="Fees">
-              The module&rsquo;s charge for a blob, taken from the publisher&rsquo;s escrow; not the settlement transaction&rsquo;s own fee. No event carries the amount, so it is recomputed with the module&rsquo;s formula, at one utia per gas:
+              The module&rsquo;s charge for a blob, taken from the publisher&rsquo;s escrow; not the settlement transaction&rsquo;s own fee. The module&rsquo;s own event carries no amount, so it is recomputed with the module&rsquo;s formula, at one utia per gas:
               <Formula note="the same charge when a promise times out">650,000 + 45,000 × ceil(blob size / 256 KiB) gas</Formula>
               The transaction fee is separate: the fee payer pays it from its bank balance, and it is in no figure.
             </Term>

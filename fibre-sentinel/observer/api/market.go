@@ -64,7 +64,7 @@ type sum struct {
 
 // utiaDenom is the one denomination a utia figure counts. x/fibre in v10
 // takes an escrow deposit in any denomination (the module has no denom
-// check in MsgDepositToEscrow until celestia-app PR #8143, in v11). Since
+// check in MsgDepositToEscrow until celestia-app PR #8143, on main, planned for v12). Since
 // v10.6.0 (PR #8401) the ante handler rejects a deposit in another
 // denomination, or with a non-canonical signer, in CheckTx and
 // PrepareProposal, but not in ProcessProposal, so a block proposed without

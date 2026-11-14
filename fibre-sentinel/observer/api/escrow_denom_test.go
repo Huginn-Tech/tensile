@@ -17,7 +17,7 @@ import (
 
 // otherDenom is an IBC denomination. x/fibre in v10 takes an escrow deposit
 // in any denomination (no denom check in the module until celestia-app PR
-// #8143, in v11; since v10.6.0 the ante handler rejects one in CheckTx and
+// #8143, on main, planned for v12; since v10.6.0 the ante handler rejects one in CheckTx and
 // PrepareProposal, not in ProcessProposal, so a block can still carry one)
 // and creates the escrow in its first deposit's; every later
 // movement of that escrow is in the same one, and the record keeps each as
