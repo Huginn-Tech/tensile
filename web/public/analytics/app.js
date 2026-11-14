@@ -478,7 +478,7 @@ const unit = (value, u) => `${esc(value)}<small>${esc(u)}</small>`;
 const side = (t) => (t ? `<span>${esc(t)}</span>` : "");
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
-const AXIS = 10, FLUSH = 36, FEW = 24, FEW_NEW = 8, NEAR = 10, TICKS = 6, BAND = 28, QUIET = 8, BAR = 12, DAY = 86400, DOT = 3, FLOOR_RISE = 5, RAIL_W = 26, RAIL_GAP = 6;
+const AXIS = 10, FLUSH = 36, FEW = 24, FEW_NEW = 8, NEAR = 10, TICKS = 6, BAND = 28, QUIET = 8, BAR = 8, DAY = 86400, DOT = 3, FLOOR_RISE = 5, RAIL_W = 26, RAIL_GAP = 6;
 // The small tiles share one frame: chart from T to B, axis ends under it. The inset is the tile's own, which narrows with the page.
 const frame = (svg, hero) => {
   const L = parseFloat(getComputedStyle(q(hero ? ".main" : ".tile:not(.main)")).paddingLeft), W = svg.clientWidth, H = svg.clientHeight;
@@ -592,7 +592,12 @@ function bars(rows) {
     at.set(d.day, { x, w, node });
   }
   // A rule's value is written over the bars, on the card's own ground, so a tall last day never hides it.
-  for (const g of rules) el("text", { class: "over", x: end, y: g.y + 14, "text-anchor": "end" }, svg).textContent = g.t;
+  for (const g of rules) {
+    const t = el("text", { class: "over", x: end, y: g.y + 14, "text-anchor": "end" }, svg);
+    t.textContent = g.t;
+    const w = t.getComputedTextLength();
+    if (w) svg.insertBefore(el("rect", { class: "plate", x: end - w - 4, y: g.y + 2, width: w + 8, height: 16, rx: 3 }), t);
+  }
   // A publisher lit on the New publishers tile: its own part of each day, outlined on that day's bar.
   const part = el("g", {}, svg);
   const path = (list) => {
@@ -657,7 +662,9 @@ function drawRate() {
   const svg = wipe(c("rate")), g = dayAxis(svg, RAIL_W + RAIL_GAP), P = U().params, days = dailyRate(), right = frame(svg).R;
   const hi = perMib(P.price_formula.chunk_bytes), lo = perMib(P.max_blob_size_bytes), floor = g.B - FLOOR_RISE;
   const Y = (v) => +(g.T + ((floor - g.T) * Math.log(hi / v)) / Math.log(hi / lo)).toFixed(1);
-  const cx = (s) => clamp(g.x(s.i), g.L + DOT, g.R - DOT);
+  // A dot never outgrows its day: a long period's days stand closer than a full dot is wide.
+  const r = +clamp(g.per * .45, 1.5, DOT).toFixed(2);
+  const cx = (s) => clamp(g.x(s.i), g.L + r, g.R - r);
   for (const [y, v] of [[g.T, hi], [floor, lo]]) {
     el("line", { class: "base", x1: g.L, x2: g.R, y1: y + .5, y2: y + .5 }, svg);
     // The protocol's two prices stand in their own gutter, so no dot ever meets them.
@@ -670,9 +677,9 @@ function drawRate() {
   let d = "";
   for (const s of days) d += `${s.joined ? "L" : "M"}${cx(s)} ${Y(s.rate)}`;
   if (d.includes("L")) el("path", { class: "rate", d }, svg);
-  for (const s of days) el("circle", { class: "dot", cx: cx(s), cy: Y(s.rate), r: DOT }, svg);
+  for (const s of days) el("circle", { class: "dot", cx: cx(s), cy: Y(s.rate), r }, svg);
   const cross = el("line", { class: "cross", y1: g.T, y2: floor, visibility: "hidden" }, svg);
-  const cur = el("circle", { class: "cursor", r: DOT + .5, visibility: "hidden" }, svg);
+  const cur = el("circle", { class: "cursor", r: r + 1, visibility: "hidden" }, svg);
   const at = (t) => {
     const d = t == null ? null : dayAt(t), on = d && days.find((s) => s.day === d.day);
     cross.setAttribute("visibility", d ? "visible" : "hidden"); cur.setAttribute("visibility", on ? "visible" : "hidden");
@@ -711,7 +718,7 @@ function daysTip(t) {
 }
 
 /* ---------- escrow: deposited = paid + held + withdrawn, whatever the window ---------- */
-const PARTS = [["paid", "Paid"], ["held", "Unspent"], ["withdrawn", "Withdrawn"]], SWATCH = 8, BAR_Y = 3, KEY_Y = 27, LAST_MIN = 3, KEY_COLS_MIN = 160, KEY_ROW = 15;
+const PARTS = [["paid", "Paid"], ["held", "Unspent"], ["withdrawn", "Withdrawn"]], SWATCH = 8, BAR_Y = 5, KEY_Y = 27, LAST_MIN = 3, KEY_COLS_MIN = 160, KEY_ROW = 15;
 
 function drawEscrow() {
   const svg = wipe(c("escrow")), F = escrowFlow(), { L, R } = frame(svg), snap = snapper(svg), W = R - L, used = PARTS.filter(([k]) => F[k]);
