@@ -182,7 +182,8 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 .bar .seg { height: 36px; }
 .jump button { padding: 0 12px; color: var(--ink2); }
 .jump button:hover, .jump button.on { color: var(--ink); }
-.bar + .sec { margin-top: 0; }
+/* the period control ends as far above the first card as a section's control does above its own */
+.bar + .sec { margin-top: 8px; }
 /* a desktop has the room for the time in the bar, beside the period */
 @media (min-width: 1024px) {
   .bar .upd { display: block; }
@@ -196,6 +197,9 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 .seg button { position: relative; padding: 0 13px; border-radius: 999px; font-size: var(--fs-lab); font-weight: 500; color: var(--ink3); white-space: nowrap; transition: color .15s; }
 .seg button:hover { color: var(--ink2); }
 .seg button.on { color: var(--ink); }
+/* the ring stays inside the pill */
+.seg button:focus-visible { outline-offset: -2px; }
+.seg button.on:focus-visible { outline-color: currentColor; }
 /* the page's main control carries the site's selected teal */
 #seg-win i { background: var(--t-on); }
 #seg-win button.on, #seg-win button.on:hover { color: var(--t-on-ink); }
@@ -268,11 +272,11 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 
 #top .rate { fill: none; stroke: var(--acc); stroke-width: 1.5; stroke-linejoin: round; }
 #top .dot { fill: var(--acc); stroke: var(--card); stroke-width: 1; paint-order: stroke; }
-#top .level { stroke: var(--rule3); stroke-dasharray: 3 3; }
+#top .level { stroke: var(--mark); stroke-dasharray: 4 3; }
 
 #top .dbar { fill: var(--acc); }
 #top .dbar.cur { fill: var(--ink); }
-#top text.over { stroke: var(--card); stroke-width: 4px; stroke-linejoin: round; paint-order: stroke; }
+#top .plate { fill: var(--card); }
 #top .tick { fill: var(--rule3); }
 #top .tick.on { fill: var(--acc); }
 #top .tick.cur { fill: var(--ink); }
@@ -306,10 +310,10 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #cost .grid { stroke: var(--rule1); }
 #cost .base { stroke: var(--rule2); }
 #cost .curve { fill: none; stroke: var(--acc); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-/* the stroke sits under the fill, so 4 draws a 2px ring */
-#cost .dot { stroke: var(--card); stroke-width: 4; paint-order: stroke; }
+/* the stroke sits under the fill, so 2 draws a 1px ring */
+#cost .dot { stroke: var(--card); stroke-width: 2; paint-order: stroke; }
 
-#cost .level { stroke: var(--rule3); stroke-dasharray: 3 3; }
+#cost .level { stroke: var(--mark); stroke-dasharray: 4 3; }
 #cost text.level-say { stroke: var(--card); stroke-width: 4; paint-order: stroke; }
 
 #cost .fade { transition: opacity .12s; }
@@ -416,6 +420,10 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #publishers .pb-ring { position: absolute; left: 0; top: 0; border: 1px solid var(--ink); border-radius: 3px; display: none; pointer-events: none; }
 #publishers .pb-n { position: absolute; right: 0; top: 50%; transform: translateY(-50%); font-size: var(--fs-lab); line-height: 18px; color: var(--ink2); pointer-events: none; }
 #publishers [data-sort="settlements"] .pb-n { color: var(--ink); }
+/* the table's figures are the size Hosting's are; the cards a narrow page has keep their own */
+@media (min-width: 980px) {
+  #publishers tbody td, #publishers .pb-n { font-size: var(--fs-row); }
+}
 /* the height scale: a key under the table, real heights in a neutral mark, clear of the last row */
 #publishers .pb-key td { height: 54px; padding: 6px 0 0; font-size: var(--fs-note); color: var(--ink2); vertical-align: middle; white-space: nowrap; }
 #publishers .pb-key td:first-child { padding-left: 30px; }
@@ -542,7 +550,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 #hosting .tr { display: grid; grid-template-columns: var(--cols); column-gap: var(--gap); align-items: center; padding: 0 12px; }
 #hosting .tb-list > .top { position: sticky; top: var(--stick); z-index: 4; background: var(--card); }
 /* every label on the head's foot */
-#hosting .th { align-items: end; height: var(--th); margin: 0 -12px; padding: 0 24px; border-bottom: 1px solid var(--line); font-size: var(--fs-lab); color: var(--ink2); }
+#hosting .th { align-items: end; height: var(--th); margin: 0 -12px; padding: 0 24px; border-bottom: 1px solid var(--line); font-size: var(--fs-note); color: var(--ink2); }
 #hosting .th .k-a { display: flex; align-items: baseline; gap: 8px; padding: 0 0 8px 22px; line-height: 14px; white-space: nowrap; }
 #hosting .h { display: flex; align-items: flex-end; justify-content: flex-end; min-width: 0; padding-bottom: 8px; font-weight: 400; line-height: 14px; text-align: right; white-space: nowrap; transition: color .12s; }
 #hosting .h1 { position: relative; display: block; }
@@ -931,7 +939,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   .bar.hs .ctl > :not(.hold) { visibility: visible; }
   .bar.hs .hold { display: none; }
   /* the parts hang under the bar, so they take no room before the pin and the page does not move when they come */
-  .jump { position: absolute; top: 100%; left: 0; right: 0; display: flex; margin-left: 0; background: var(--bg); }
+  .jump { position: absolute; top: 100%; left: 0; right: 0; display: flex; margin-left: 0; border-radius: 0; background: var(--bg); }
   .bar.stuck .jump { box-shadow: 0 1px 0 var(--line); }
   .jump button { flex: 1 1 auto; padding: 0 4px; }
   .seg button { min-width: 44px; padding: 0 9px; }
@@ -946,7 +954,9 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #top .grid { grid-template-rows: auto repeat(2, 144px); }
   #top .main { display: flex; flex-direction: column; padding-bottom: 0; }
   #top .main h3 span { position: static; display: block; margin-top: 2px; }
-  #top .main h3 .swap { margin: 0 0 0 8px; }
+  #top .main h3 .swap { position: relative; margin: 0 0 0 8px; }
+  /* a finger's reach around the switch, with nothing drawn */
+  #top .main h3 .swap::after { content: ""; position: absolute; inset: -10px -6px; }
   #top .hero { flex-wrap: wrap; gap: 8px 12px; }
   #top .main .plot { position: relative; flex: none; width: calc(100% + 2 * var(--pad)); height: 190px; margin: 8px calc(-1 * var(--pad)) 0; }
 
@@ -1010,6 +1020,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
 
 /* a phone's cards: a shorter strip, the four figure names on one line, the key's five marks in one row across the card */
 @media (max-width: 599px) {
+  #publishers tbody tr[data-i] { column-gap: 6px; }
   #publishers td.a canvas { height: 28px; }
   #publishers tbody [data-l]::before { overflow: hidden; line-height: 12px; text-overflow: ellipsis; white-space: nowrap; }
   #publishers .pb-who code { line-height: 12px; }
