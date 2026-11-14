@@ -1484,13 +1484,11 @@ area("publishers", (why) => {
 
 /* ---------- hosting ---------- */
 try {
-const { $, $$, el, esc, sum, calm, keptFor, token, pct, readyPct, sharePct, int, count, N, U, TAIL, RANKS, inkOn, agg, regions, regionOf, seg, showTip, tipAt, hideTip, tipHead, tipRow, area, on, state, lit, pin, MAX_PINS } = M;
+const { $, $$, el, esc, sum, calm, keptFor, token, pct, sharePct, int, count, N, U, TAIL, RANKS, inkOn, agg, regions, regionOf, seg, showTip, tipAt, hideTip, tipHead, tipRow, area, on, state, lit, pin, MAX_PINS } = M;
 
 const root = $("#hosting"), box = $(".tb", root), list = $(".tb-list", root), vs = $(".tb-vs", root), line = $(".sec-h p", root);
 // SUB_NAMES: validators a row names when they fit. KEY_NAMES: the most the ring's key has room for.
 const SUB_NAMES = 3, KEY_NAMES = 11, VS_NAMES = 8, TAU = Math.PI * 2, DEG = Math.PI / 180;
-// Under this share ready, with hosts that do not report, a row has no reading worth printing.
-const READY_MIN = .001;
 // hot is what the pointer lights: { key, vs, name, share, hosts, colour, from }.
 // q is what the find field holds; found is what it lights, held like a pick until the field is cleared.
 const S = { by: "provider", weigh: "vp", sort: "vp", dir: -1, open: false, picks: [], hot: null, city: null, region: null, sig: "", kbd: false, width: 0, q: "", found: null };
@@ -1522,9 +1520,6 @@ const weight = (g) => (S.weigh === "vp" ? g.vp : g.hosts);
 // Shares are rounded, so a small holder can read 0. It still counts: sharePct prints it as <0.01%.
 const shareOf = (g) => g.share || (g.vp > 0 ? 1e-9 : 0);
 const finePct = (x) => (x < 1e-4 ? "<0.01%" : pct(x, 2));
-// What reports ready is a floor while any host stays silent.
-const silent = (g) => g.not_reported_hosts > 0;
-const readyKnown = (g) => !silent(g) || g.ready_share >= READY_MIN;
 
 const SORT = {
   vp: (g) => g.vp, hosts: (g) => g.hosts,
@@ -1543,7 +1538,7 @@ function members(g) {
 function model() {
   const n = N(), key = keyFn[S.by], hosted = n.validators.filter((v) => v.has_host), mem = new Map();
   hosted.forEach((v) => { const k = key(v); (mem.get(k) || mem.set(k, []).get(k)).push(v); });
-  const src = srcOf().map((g) => { const k = keyOf(g), vs = mem.get(k) || []; return { ...g, key: k, rep: sum(vs.filter((v) => v.readiness !== "not_reported"), (v) => v.vp) }; });
+  const src = srcOf().map((g) => ({ ...g, key: keyOf(g) }));
   // The weighing ranks the ring's groups. The table is one list, largest first in whatever column it is sorted by.
   // The list and the key run to the two thirds of all voting power a settlement needs; a third is what can hold one back.
   // Validators with no Fibre host hold part of that power, so the hosted groups may never pass a limit: then no line says they do, and the list holds them all.
@@ -1553,7 +1548,7 @@ function model() {
   // The rows above the fold are the weighing's largest whatever the sort, as on Publishers; the sort orders them and the tail.
   const resting = S.sort === S.weigh && S.dir < 0, top = ordered(ranked.slice(0, cut)), shown = new Set(top.map((g) => g.key));
   const tail = src.filter((g) => !shown.has(g.key));
-  const rest = { ...agg(tail, "__rest", `${tail.length} more`), sum: true, rep: sum(tail, (g) => g.rep) };
+  const rest = { ...agg(tail, "__rest", `${tail.length} more`), sum: true };
   // The scale is the weighing's, so a bar keeps its length through every sort. The others are a figure, or their bar would halve every other.
   const scale = weight(ranked[0]);
   // A line says the rows above it hold more than a third, or two thirds, of voting power, only while they run down voting power, and counted down the rows shown: weighed by hosts, they are not voting power's largest.
@@ -1859,10 +1854,6 @@ function vsNames(g, k = VS_NAMES) {
 /* ---------- rows ---------- */
 // A narrow row has no heads over it, so each figure carries its own name.
 const labelOf = () => { const vp = S.weigh === "vp"; return { own: vp ? "Voting power" : "Fibre hosts", other: vp ? "Fibre hosts" : "Voting power" }; };
-// A share ready is a floor while any host stays silent, and says so in words. With next to nothing ready it gives no figure: 0.0% would read as a failure.
-const unheard = (g) => silent(g) && !g.ready_hosts && !g.not_ready_hosts;
-const readyParts = (g) => (!silent(g) ? ["", readyPct(g.ready_share)] : readyKnown(g) ? ["at least ", readyPct(Math.min(g.ready_share, .999))] : unheard(g) ? ["", "not reported"] : ["under ", "0.1%"]);
-const readyText = (g) => readyParts(g).join("");
 const weighText = (g) => (S.weigh === "vp" ? sharePct(shareOf(g)) : g.hosts);
 const otherText = (g) => (S.weigh === "vp" ? g.hosts : sharePct(shareOf(g)));
 const cells = (g) => { const o = S.weigh === "vp" ? "hosts" : "vp"; return `<span class="k-n${S.sort === o ? " srt" : ""}" data-t="${o}" data-l="${labelOf().other}">${otherText(g)}</span>`; };
@@ -2008,14 +1999,13 @@ function paintRows() {
 /* ---------- head to head ---------- */
 const VS_ROW = 54, VS_NAMES_PHONE = 3;
 // The table's own heads, so one figure never has two names.
-const METRIC = () => [["vp", "Voting power"], ["hosts", "Fibre hosts"], ["geo", ""], ["ready", "Hosts ready now"]];
+const METRIC = () => [["vp", "Voting power"], ["hosts", "Fibre hosts"], ["geo", ""]];
 const label = (m) => m[1] || (prov() ? "Countries" : "Providers");
 // Value and its mark. Voting power is on the list's scale, its largest group's, and as long as the list's bars (fitVs): one share is one length on the screen.
 function vsCell(k, g, ps) {
   if (k === "vp") return [sharePct(shareOf(g)), bar(shareOf(g) / Math.max(...V.src.map(shareOf)))];
   if (k === "hosts") return [g.hosts, `<small class="vn" data-t="list">${vsNames(g)}</small>`];
-  if (k === "geo") return [geoOf(g).length, prov() ? `<span class="chips">${g.countries.map((x) => `<code>${x}</code>`).join("")}</span>` : `<span class="mk dots">${g.companies.map(() => `<u class="c"></u>`).join("")}</span>`];
-  return [`${g.ready_hosts} of ${g.hosts}`, `<small>${unheard(g) ? "Voting power not reported" : `${readyText(g)} of its voting power`}</small>`];
+  return [geoOf(g).length, prov() ? `<span class="chips">${g.countries.map((x) => `<code>${x}</code>`).join("")}</span>` : `<span class="mk dots">${g.companies.map(() => `<u class="c"></u>`).join("")}</span>`];
 }
 function renderVs(keys) {
   if (keys.length < 2) { vs.innerHTML = ""; return; }
@@ -2069,14 +2059,10 @@ const TIP = {
   vp: (g) => hd(g) + tipRow("Voting power", int(g.vp)) + tipRow("Share", finePct(shareOf(g))),
   hosts: (g) => hd(g) + tipRow("Fibre hosts", String(g.hosts)) + tipRow("Of all Fibre hosts", pct(g.host_share)),
   geo: (g) => hd(g) + geoOf(g).slice(0, 8).map((x) => tipRow(short(prov() ? ccName(x) : x))).join("") + (geoOf(g).length > 8 ? tipRow(`+${geoOf(g).length - 8} more`) : ""),
-  ready: (g) => hd(g) + tipRow("Hosts ready", `${g.ready_hosts} of ${g.hosts}`) + (g.not_ready_hosts ? tipRow("Not ready", String(g.not_ready_hosts)) : "") + (g.not_reported_hosts ? tipRow("Hosts not reported", String(g.not_reported_hosts)) : "")
-    + (unheard(g) ? "" : tipRow("Of its voting power, ready", readyText(g))) + (g.rep < g.vp ? tipRow("Voting power not reported", readyPct(1 - g.rep / g.vp)) : "")
-    + (silent(g) && !unheard(g) ? tipRow("The share may be higher") : "") + (silent(g) ? tipRow("Not reported is not the same as down") : ""),
 };
 const HEAD = {
   vp: () => tipHead("Voting power") + tipRow("Share of all voting power, bonded TIA"),
   hosts: () => tipHead("Fibre hosts") + tipRow(`A server a validator has registered for Fibre.${keptFor() ? ` It keeps a blob's shards for at least ${keptFor()}.` : ""}`),
-  ready: () => tipHead("Hosts ready now") + tipRow("Hosts that say they can take uploads now") + tipRow("Hosts that do not report are not counted as failing"),
 };
 // A narrow row has no heads: its figures say what the head would.
 const meaning = (t) => (M.narrow() && HEAD[t] ? HEAD[t]().replace(/^<h4>[^]*?<\/h4>/, "") : "");
