@@ -1005,7 +1005,7 @@ h2 { margin: 0; font-family: "IBM Plex Sans", var(--f); font-size: var(--fs-sec)
   #hosting .vs-col .vs-hd { order: 1; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; height: auto; gap: 0; padding-bottom: 8px; }
   #hosting .vs-l .vs-m { grid-column: 1 / -1; padding: 10px 0 0; border-top: 1px solid var(--line); }
   #hosting .vs-col .vs-m { min-width: 0; padding: 2px 0 10px; border-top: 0; }
-  #hosting .vs-m.vp { --o: 2; } #hosting .vs-m.hosts { --o: 4; } #hosting .vs-m.geo { --o: 6; } #hosting .vs-m.ready { --o: 8; }
+  #hosting .vs-m.vp { --o: 2; } #hosting .vs-m.hosts { --o: 4; } #hosting .vs-m.geo { --o: 6; }
   #hosting .vs-l .vs-m { order: var(--o); }
   #hosting .vs-col .vs-m { order: calc(var(--o) + 1); }
   #hosting .vs-col .vs-hd b { grid-column: 1 / -1; grid-row: 2; display: block; font-size: var(--fs-lab); line-height: 16px; white-space: normal; overflow-wrap: anywhere; }
