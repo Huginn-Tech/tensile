@@ -133,8 +133,8 @@ type paramsResponse struct {
 	Changes  int               `json:"changes"`
 	Protocol protocolConstants `json:"protocol"`
 	// PriceFormula is x/fibre's charge for a blob, from which every fee on
-	// /v1/market, /v1/publishers and /v1/blobs is recomputed: no chain
-	// event carries the amount.
+	// /v1/market, /v1/publishers and /v1/blobs is recomputed: the
+	// module's own event carries no amount.
 	PriceFormula priceFormula `json:"price_formula"`
 }
 

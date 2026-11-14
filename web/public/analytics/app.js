@@ -947,16 +947,19 @@ function draw() {
   svg.setAttribute("aria-label", `TIA per MiB falls from ${tiaN(perMib(lo), 2)} to ${tiaN(perMib(hi), 2)} TIA as blobs grow. ${spoken}`);
 }
 
+// A fee is a multiple of 5,000 utia, so a third decimal says it whole where two would round it: 0.695 TIA.
+const feeD = (u) => (u % 10000 ? 3 : 2);
 function tipBand(b) {
-  if (!b.n) return tipHead(`Around ${bytes(b.tick)}`) + tipRow("No settlements") + tipRow("Fee", tia(fee(b.tick), 2)) + tipRow("TIA per MiB", tiaN(perMib(b.tick), 2));
+  const lo = fee(b.min), hi = fee(b.max);
+  if (!b.n) return tipHead(`Around ${bytes(b.tick)}`) + tipRow("No settlements") + tipRow("Fee", tia(fee(b.tick), feeD(fee(b.tick)))) + tipRow("TIA per MiB", tiaN(perMib(b.tick), 2));
   const one = b.min === b.max, [cheap, dear] = [tiaN(perMib(b.max), 2), tiaN(perMib(b.min), 2)];
   return tipHead(one ? size(b.min) : `Around ${bytes(b.tick)}`, DOT) + (one ? "" : tipRow("Sizes", sizeRange(b.min, b.max))) + tipRow("Settlements", int(b.n))
-    + tipRow("Share of settlements", sharePct(b.nShare)) + tipRow("Share of data", sharePct(b.dShare)) + tipRow("Fee", tiaRange(fee(b.min), fee(b.max))) + tipRow("TIA per MiB", cheap === dear ? cheap : `${cheap}–${dear}`);
+    + tipRow("Share of settlements", sharePct(b.nShare)) + tipRow("Share of data", sharePct(b.dShare)) + tipRow("Fee", lo === hi ? tia(lo, feeD(lo)) : `${tiaN(lo, feeD(lo))}–${tia(hi, feeD(hi))}`) + tipRow("TIA per MiB", cheap === dear ? cheap : `${cheap}–${dear}`);
 }
 
 // One settled size: its own count and fee, inside the band it lights.
 function tipDot(k) {
-  return tipHead(size(k.s), DOT) + tipRow("Settlements", int(k.n)) + tipRow("Share of settlements", sharePct(k.n / market().settlements)) + tipRow("Fee", tia(fee(k.s), 2)) + tipRow("TIA per MiB", tiaN(perMib(k.s), 2));
+  return tipHead(size(k.s), DOT) + tipRow("Settlements", int(k.n)) + tipRow("Share of settlements", sharePct(k.n / market().settlements)) + tipRow("Fee", tia(fee(k.s), feeD(fee(k.s)))) + tipRow("TIA per MiB", tiaN(perMib(k.s), 2));
 }
 
 function rest() {
