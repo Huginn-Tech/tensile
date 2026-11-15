@@ -1772,16 +1772,15 @@ function placeNames() {
   names = items;
   alignRail();
 }
-// The region rail opens on the key's first line, in a pitch that keeps its frame inside the band.
-const RAIL_ROW = 20;
+// The region rail opens under the count of cities and countries, in a pitch that keeps its frame inside the band, and
+// stays there in every grouping: the key's rows centre on the ring, so its first line moves with how many names it has.
+const RAIL_ROW = 20, RAIL_UNDER = 12;
 function alignRail() {
-  const first = namesBox.firstElementChild, rows = regBox.children.length;
   // A narrow page has the regions under the map, in their own rows.
   if (M.narrow()) { side.style.top = ""; side.style.setProperty("--pitch", "40px"); return; }
-  if (!first || !rows) return;
-  const c = first.getBoundingClientRect(), m = mp.getBoundingClientRect(), y = c.top + c.height / 2 - m.top;
+  if (!regBox.children.length) return;
+  const top = sayWhere.getBoundingClientRect().bottom - mp.getBoundingClientRect().top + RAIL_UNDER;
   side.style.setProperty("--pitch", RAIL_ROW + "px");
-  const top = y - RAIL_ROW / 2 - side.clientTop - parseFloat(getComputedStyle(side).paddingTop);
   side.style.top = Math.min(top, mp.clientHeight - side.offsetHeight) + "px";
 }
 let names = [];
