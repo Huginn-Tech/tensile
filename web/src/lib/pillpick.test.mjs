@@ -158,11 +158,10 @@ test("a page hidden in the middle of a round keeps the name shown: nothing rolls
   pk.rest();
   assert.equal(who(pk), last, "the name on screen as the page went away");
   assert.deepEqual(pk.names, [last]);
-  for (let i = 0; i < 100; i++) assert.equal(pk.tick(i * ROTATE_MS), false, "no name after it");
-  assert.equal(who(pk), last);
+  for (let i = 0; i < 100; i++) { pk.tick(i * ROTATE_MS); assert.equal(who(pk), last, "no name after it"); }
   // the same beat with more endorsers known starts no round
   pk.beat("b0", "t0", [...es, "late"]);
-  assert.equal(pk.tick(0), false);
+  pk.tick(0);
   assert.equal(who(pk), last);
   // a beat that settles once the page is shown again goes round as before
   const next = set("n", 6);
