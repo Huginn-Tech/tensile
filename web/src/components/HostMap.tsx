@@ -274,7 +274,8 @@ function useReducedMotion(): boolean {
  * new beat takes the pill in the frame the grid moves, and its dot pops (not for what the grid opened with); a
  * validator's new or changed endpoint takes it for HOLD_MS (ev, at epAt) and pops it too. A beat whose endorsers are
  * not known yet is named once they are; until then the pill keeps what it names, its beat with it (named), or waits
- * empty as before the tip answers.
+ * empty as before the tip answers. A page that was hidden is as one just opened: no round goes on, or starts, for
+ * what settled behind the tab; the newest beat is named still, with its age, when the page is shown again.
  *
  * Under the pointer or with focus in it, the pill holds still, its beat and its name as they were, so the name can be
  * read, clicked or kept focused; let go, it shows the newest. Ages are by the observer's clock (skew, the tip's).
@@ -297,7 +298,8 @@ function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost, motion, skew }: {
   heldRef.current = held;
   // fed before the paint, so a new beat is named in the frame the grid moves
   useLayoutEffect(() => {
-    if (beat) { pk.beat(beat.key, beat.at, beat.endorsers, beat.live); render((n) => n + 1); }
+    // a beat that reaches the pill behind the tab (a read or its endorsers answering late) is at rest at once
+    if (beat) { pk.beat(beat.key, beat.at, beat.endorsers, beat.live); if (document.hidden) pk.rest(); render((n) => n + 1); }
   }, [beat, pk]);
   useLayoutEffect(() => {
     if (ev && epAt) { pk.endpoint(ev, epAt); render((n) => n + 1); }
@@ -660,7 +662,7 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
     const nb = block.reduce((m, b) => ((b.settlement_tx_index ?? 0) > (m.settlement_tx_index ?? 0) ? b : m));
     // settled while the page was hidden: it comes onto the grid as the page is shown again, and the pill names it
     // still, by one endorser with its age, as it names what the page opened with; no round for what is not news
-    const live = a.live && !missed(nb.settlement_time ?? "", shownAt.current, skew.current);
+    const live = a.live && !document.hidden && !missed(nb.settlement_time ?? "", shownAt.current, skew.current);
     const beat: PillBeat = { key: nb.promise_hash, at: nb.settlement_time ?? "", height: top, blobs: block.length, endorsers: unionOf(block), live };
     setBeatNow(beat);
     // a block on the grid without its endorsers: what the grid opened with, and what a re-read of the whole grid for
