@@ -13,7 +13,7 @@ import { type EndpointState, endpointState, isDown, readiness } from "@/componen
 import { Flasher, burstsOf, onArrival, placesOf, type Arrival, type ArrivedBlob, type Flash } from "@/lib/mapflash";
 import { Burst, type BurstPlace, type Where, type Els } from "@/lib/mapburst";
 import { slide } from "@/lib/conveyor";
-import { PillPicker, HOLD_MS, ROTATE_MS } from "@/lib/pillpick";
+import { PillPicker, HOLD_MS, ROTATE_MS, missed } from "@/lib/pillpick";
 
 /**
  * The overview's host map: every registered Fibre host of the bonded set,
@@ -279,7 +279,8 @@ function useReducedMotion(): boolean {
  * new beat takes the pill in the frame the grid moves, and its dot pops (not for what the grid opened with); a
  * validator's new or changed endpoint takes it for HOLD_MS (ev, at epAt) and pops it too. A beat whose endorsers are
  * not known yet is named once they are; until then the pill keeps what it names, its beat with it (named), or waits
- * empty as before the tip answers.
+ * empty as before the tip answers. A page that was hidden is as one just opened: no round goes on, or starts, for
+ * what settled behind the tab; the newest beat is named still, with its age, when the page is shown again.
  *
  * Under the pointer or with focus in it, the pill holds still, its beat and its name as they were, so the name can be
  * read, clicked or kept focused; let go, it shows the newest. Ages are by the observer's clock (skew, the tip's).
@@ -302,7 +303,8 @@ function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost, motion, skew }: {
   heldRef.current = held;
   // fed before the paint, so a new beat is named in the frame the grid moves
   useLayoutEffect(() => {
-    if (beat) { pk.beat(beat.key, beat.at, beat.endorsers, beat.live); render((n) => n + 1); }
+    // a beat that reaches the pill behind the tab (a read or its endorsers answering late) is at rest at once
+    if (beat) { pk.beat(beat.key, beat.at, beat.endorsers, beat.live); if (document.hidden) pk.rest(); render((n) => n + 1); }
   }, [beat, pk]);
   useLayoutEffect(() => {
     if (ev && epAt) { pk.endpoint(ev, epAt); render((n) => n + 1); }
@@ -319,6 +321,12 @@ function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost, motion, skew }: {
     }, motion ? ROTATE_MS : 15000);
     return () => window.clearInterval(t);
   }, [pk, motion]);
+  // hidden: the round under way ends on the name shown, so nothing rolls on when the page is shown again
+  useEffect(() => {
+    const onVis = () => { if (document.hidden) { pk.rest(); render((n) => n + 1); } };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [pk]);
   const router = useRouter();
   const open = (e: React.MouseEvent, href: string) => {
     // a plain click stays in the app; a modified or middle click is the browser's
@@ -606,6 +614,13 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
   // (/v1/tip), which holds the pill for 12 s when it comes while the page is open and is under 30 s old ----
   const calm = useReducedMotion();
   const [beatNow, setBeatNow] = useState<PillBeat | null>(null);
+  // when the page was last shown again after being hidden, for what settled meanwhile (0: never hidden)
+  const shownAt = useRef(0);
+  useEffect(() => {
+    const onVis = () => { if (!document.hidden) shownAt.current = Date.now(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
   // the observer's clock against the reader's (the tip's server_time), for the pill's ages and an endpoint's
   const skew = useRef(0);
   useEffect(() => onTip((f) => {
@@ -657,7 +672,10 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
     const top = a.blobs.reduce((m, b) => Math.max(m, b.settlement_height), 0);
     const block = a.blobs.filter((b) => b.settlement_height === top);
     const nb = block.reduce((m, b) => ((b.settlement_tx_index ?? 0) > (m.settlement_tx_index ?? 0) ? b : m));
-    const beat: PillBeat = { key: nb.promise_hash, at: nb.settlement_time ?? "", height: top, blobs: block.length, endorsers: unionOf(block), live: a.live, heard: a.live ? (a.came ?? Date.now()) + skew.current : undefined };
+    // settled while the page was hidden: it comes onto the grid as the page is shown again, and the pill names it
+    // still, by one endorser with its age, as it names what the page opened with; no round for what is not news
+    const live = a.live && !document.hidden && !missed(nb.settlement_time ?? "", shownAt.current, skew.current);
+    const beat: PillBeat = { key: nb.promise_hash, at: nb.settlement_time ?? "", height: top, blobs: block.length, endorsers: unionOf(block), live, heard: live ? (a.came ?? Date.now()) + skew.current : undefined };
     setBeatNow(beat);
     // a block on the grid without its endorsers: what the grid opened with, and what a re-read of the whole grid for
     // its statuses brought in (those reads go without, RecentBlobs' readPage), as a page shown again after a while
