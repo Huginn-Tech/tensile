@@ -13,7 +13,7 @@ const load = (file) => {
   const js = ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 } }).outputText;
   return import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
 };
-const { PillPicker, HOLD_MS, ROTATE_MS } = await load("./pillpick.ts");
+const { PillPicker, HOLD_MS, ROTATE_MS, FRESH_MS, missed } = await load("./pillpick.ts");
 
 const seeded = (s) => () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296;
 const set = (p, n, from = 0) => Array.from({ length: n }, (_, i) => `${p}${String(from + i).padStart(2, "0")}`);
@@ -148,4 +148,48 @@ test("what the page opened with names one endorser, still, and an endorser known
   // the next block while the page is open goes round as before
   pk.beat("b1", "t1", set("n", 5));
   assert.equal(new Set(run(pk, 5)).size, 5);
+});
+
+test("a page hidden in the middle of a round keeps the name shown: nothing rolls on when it is shown again", () => {
+  const pk = new PillPicker(seeded(11));
+  const es = set("h", 30);
+  pk.beat("b0", "t0", es);
+  const seen = run(pk, 5), last = seen.at(-1);
+  pk.rest();
+  assert.equal(who(pk), last, "the name on screen as the page went away");
+  assert.deepEqual(pk.names, [last]);
+  for (let i = 0; i < 100; i++) assert.equal(pk.tick(i * ROTATE_MS), false, "no name after it");
+  assert.equal(who(pk), last);
+  // the same beat with more endorsers known starts no round
+  pk.beat("b0", "t0", [...es, "late"]);
+  assert.equal(pk.tick(0), false);
+  assert.equal(who(pk), last);
+  // a beat that settles once the page is shown again goes round as before
+  const next = set("n", 6);
+  pk.beat("b1", "t1", next);
+  assert.deepEqual([...run(pk, 6)].sort(), next);
+  // nothing named yet: nothing to keep
+  const empty = new PillPicker(seeded(12));
+  empty.rest();
+  assert.equal(empty.show(0), null);
+});
+
+test("a beat that settled while the page was hidden is not news; one that settles as it is shown again is", () => {
+  const shown = Date.parse("2026-11-15T10:10:00Z");
+  assert.equal(missed("2026-11-15T10:00:00Z", shown, 0), true, "ten minutes before the page came back");
+  assert.equal(missed("2026-11-15T10:09:44Z", shown, 0), true, "just over FRESH_MS before");
+  assert.equal(missed(new Date(shown - FRESH_MS + 1).toISOString(), shown, 0), false, "within FRESH_MS: its block's time runs behind");
+  assert.equal(missed("2026-11-15T10:10:05Z", shown, 0), false, "after the page came back");
+  assert.equal(missed("2026-11-15T10:00:00Z", 0, 0), false, "a page never hidden missed nothing");
+  assert.equal(missed("", shown, 0), false, "no time on the block: taken as news, as before");
+  // the observer's clock ahead of the reader's by a minute: the block's time is read against the observer's
+  assert.equal(missed("2026-11-15T10:10:30Z", shown, 60000), true);
+  assert.equal(missed("2026-11-15T10:10:50Z", shown, 60000), false);
+  // named still, as what the page opened with
+  const pk = new PillPicker(seeded(13));
+  const es = set("m", 20);
+  pk.beat("old", "t0", es, false);
+  const one = who(pk);
+  for (let i = 0; i < 50; i++) pk.tick(i * ROTATE_MS);
+  assert.equal(who(pk), one);
 });
