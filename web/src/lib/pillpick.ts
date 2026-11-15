@@ -9,12 +9,24 @@
  * names, or waits, empty, when it names nothing yet. Endorsers that become known later join the names still to come.
  * A validator's new or changed endpoint takes the pill for HOLD_MS when it happens; the endorsers come back after,
  * where they were.
+ * A page that was hidden is like one just opened: the round under way ends on the name shown (rest), and a beat that
+ * settled while it was hidden is named still, by one endorser with its age, when the page is shown again (missed).
  */
 
 /** ms between two endorsers named */
 export const ROTATE_MS = 200;
 /** ms a new or changed endpoint holds the pill */
 export const HOLD_MS = 12000;
+/** a beat this fresh when the page is shown again is still news: a block's time runs a few seconds behind the clock */
+export const FRESH_MS = 15000;
+
+/**
+ * Whether a beat settled while the page was hidden: its block's time (settledAt) is more than FRESH_MS before the
+ * page was last shown again (shownAt, the reader's clock; 0 when it never was hidden), by the observer's clock (skew).
+ */
+export function missed(settledAt: string, shownAt: number, skew: number): boolean {
+  return shownAt > 0 && Date.parse(settledAt) <= shownAt + skew - FRESH_MS;
+}
 
 export type Shown<E> =
   | { kind: "endorser"; who: string; key: string; at: string }
@@ -78,6 +90,14 @@ export class PillPicker<E> {
     this.order = live ? shuffle(endorsers, this.rand) : [endorsers[Math.floor(this.rand() * endorsers.length)]];
     this.i = 0;
     this.waiting = false;
+  }
+
+  /** the page is hidden: the round ends on the name shown, which stays, and endorsers known later start none */
+  rest(): void {
+    if (!this.order) return;
+    this.order = [this.order[this.i]];
+    this.i = 0;
+    this.live = false;
   }
 
   /** a validator's new or changed endpoint, as it happens: the pill is its for HOLD_MS from now */
