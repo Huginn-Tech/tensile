@@ -149,14 +149,16 @@ func decodeTxMsgs(txBytes []byte) []txMsg {
 	return out
 }
 
-// minGasPriceAppVersion is the app version from which the module charges a
-// promise's gas at the minimum gas price, 0.004 utia per gas rounded up to a
-// whole utia (celestia-app #7931); earlier versions charged one utia per
-// gas. A block keeps the rate of the version it ran under, so a rescan of an
-// older block records what was charged then. It is also the newest version
-// whose charge has been checked: a later one is charged at its rate, with a
-// warning (recordEconomy).
-const minGasPriceAppVersion = 11
+// minGasPriceAppVersion is the app version from which the module is expected
+// to charge a promise's gas at the minimum gas price, 0.004 utia per gas
+// rounded up to a whole utia (celestia-app #7931, on its main branch and in
+// no release yet); earlier versions charge one utia per gas. App version 11
+// is not it: v11.0.0 is an emergency release cut from v10.x, and its
+// PaymentAmount is v10's, one utia per gas. A block keeps the rate of the
+// version it ran under, so a rescan of an older block records what was
+// charged then. No release at this version has been checked yet: its blocks
+// are charged at the new rate, with a warning (recordEconomy), until one is.
+const minGasPriceAppVersion = 12
 
 // chargeUtia is what the module charges, in utia, for a promise's gas in a
 // block that ran under appVersion.
@@ -323,9 +325,9 @@ func withdrawalsExecuted(evs []abci.Event, blk *Block, now time.Time) ([]Payment
 // are skipped: they move nothing. Decode errors are logged, not fatal, so an
 // unexpected message shape cannot stop the scan of publications.
 func (s *Scanner) recordEconomy(blk *Block, res *BlockResults, h int64) int {
-	if blk.AppVersion > minGasPriceAppVersion && blk.AppVersion != s.chargeWarnedFor {
+	if blk.AppVersion >= minGasPriceAppVersion && blk.AppVersion != s.chargeWarnedFor {
 		s.chargeWarnedFor = blk.AppVersion
-		s.log.Printf("WARNING h=%d ran under app v%d: escrow charges are recorded at v%d's rate (0.004 utia per gas, rounded up) until v%d's charge is checked", h, blk.AppVersion, minGasPriceAppVersion, blk.AppVersion)
+		s.log.Printf("WARNING h=%d ran under app v%d: escrow charges are recorded at 0.004 utia per gas, rounded up, the rate expected from v%d, until v%d's charge is checked against its release", h, blk.AppVersion, minGasPriceAppVersion, blk.AppVersion)
 	}
 	now := time.Now().UTC()
 	recorded := 0
