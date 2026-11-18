@@ -514,7 +514,10 @@ function hoverTime(name, tip, leave) {
     const t = ch.tAt ? ch.tAt(x) : ch.t0 + ((ch.t1 - ch.t0) * (x - ch.pad)) / (ch.end - ch.pad);
     cursor(t);
     // A small tile's figure stays in sight: the box may not climb past the plot's top.
-    showTip(tip(t, x), e.clientX, e.clientY, r.top + ch.base, plot.closest(".main") ? undefined : r.top);
+    // No box where the chart has nothing to say (the part-day a period opens on, in the per-day view).
+    const html = tip(t, x);
+    if (!html) { hideTip(); return; }
+    showTip(html, e.clientX, e.clientY, r.top + ch.base, plot.closest(".main") ? undefined : r.top);
   });
   tile.addEventListener("mouseleave", () => { cursor(null); hideTip(); leave?.(); });
 }
@@ -641,7 +644,8 @@ function newTip(t, x) {
 function dataTip(t, x) {
   const ch = CH.data;
   // A bar is its own day, not the total through it.
-  if (ch.daily) { const d = dayAt(t); return tipHead(day(d.day)) + (d.settlements ? tipRow("Data", size(d.bytes)) + tipRow("Fees paid", tia(d.fees)) + tipRow("Settlements", int(d.settlements)) : tipRow("No settlements")); }
+  // The part-day a period opens on is no day of the view (activeDays): nothing to name there.
+  if (ch.daily) { const d = dayAt(t); if (!d) return ""; return tipHead(day(d.day)) + (d.settlements ? tipRow("Data", size(d.bytes)) + tipRow("Fees paid", tia(d.fees)) + tipRow("Settlements", int(d.settlements)) : tipRow("No settlements")); }
   const s = nearest(ch, x);
   if (s) return tipHead(s.pub.display, s.pub.colour) + tipRow("Time", stamp(s.t * 1e3)) + tipRow("Size", size(s.size)) + tipRow("Fee", tia(s.fee));
   const done = ch.rows.filter((r) => r.t < dayEnd(t)), h = tipHead(through(t));
