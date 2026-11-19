@@ -1217,6 +1217,8 @@ body { background: var(--canvas); }
 /* the map's name and the key of Tensile's check, in its top-left corner; the view buttons in the other */
 .cm-title { position: absolute; left: 24px; top: 18px; z-index: 6; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px; pointer-events: none; }
 .cm-key { display: inline-flex; align-items: center; gap: 12px; margin: 0; font-size: var(--t-tiny); color: var(--text-3); pointer-events: auto; white-space: nowrap; }
+/* a narrow box: the key keeps its old width, so its plate covers no place it cleared before */
+@container (max-width: 880px) { .cm-key .k-also { display: none; } }
 .cm-key svg { flex: none; margin-right: -5px; color: var(--accent-ink); }
 .cm-key i { display: inline-block; margin-right: 5px; vertical-align: 0; }
 .cm-key .k-ok { width: 7px; height: 7px; border-radius: 50%; background: var(--cm-dot); vertical-align: .5px; }

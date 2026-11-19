@@ -11,7 +11,7 @@ import { Eye } from "@/components/Metrics";
 import { type EndpointState, endpointState, isDown, readiness } from "@/components/Readiness";
 import { Flasher, onArrival, placesOf, type Arrival, type ArrivedBlob, type Flash } from "@/lib/mapflash";
 import { Burst, type BurstPlace, type Where, type Els } from "@/lib/mapburst";
-import { PillPicker, HOLD_MS, ROTATE_MS, missed } from "@/lib/pillpick";
+import { PillPicker, FRESH_MS, HOLD_MS, ROTATE_MS, missed } from "@/lib/pillpick";
 
 /**
  * The overview's host map: every registered Fibre host of the bonded set,
@@ -23,10 +23,12 @@ import { PillPicker, HOLD_MS, ROTATE_MS, missed } from "@/lib/pillpick";
  *
  * Every place is a disc ringed in its state's colour carrying its count; a
  * lone host is a solid dot. Hosts close together on screen share one badge
- * (badges never touch). A badge with a host that is unreachable or answers
- * with a wrong certificate (one a publisher rejects) carries an amber pip on
- * its rim, and one whose hosts all are turns amber; the map shows
- * reachability only, what was served is on each validator's page. Names
+ * (badges never touch). A badge with a host that is unreachable, answers
+ * with a wrong certificate (one a publisher rejects) or reported itself not
+ * ready for uploads (the list's Not ready: two checks in a row) carries an
+ * amber pip on its rim, and one whose hosts all are turns amber; the map
+ * shows whether a host can take an upload now, what was served is on each
+ * validator's page. Names
  * appear only on hover, focus or tap, in the place's popover (its amber hosts
  * first), and the other badges step back
  * while one is open. A badge that holds several places zooms in on them; the
@@ -48,14 +50,19 @@ import { PillPicker, HOLD_MS, ROTATE_MS, missed } from "@/lib/pillpick";
  * hosts give it, so it never opens at one size and steps back to another.
  */
 
-type Host = { v: Validator; state: EndpointState; share: number; cc: string; city: string; loc: string; lon: number; lat: number; ux: number; uy: number; provider: string };
+type Host = { v: Validator; state: EndpointState; /** reachable, its certificate accepted, and its server reported itself not ready (as the dial's Not ready) */ notReady: boolean; share: number; cc: string; city: string; loc: string; lon: number; lat: number; ux: number; uy: number; provider: string };
 type Cluster = { id: string; hosts: Host[]; ux: number; uy: number; locs: number; ccs: string[] };
 /** the visible part of the map, in map units: top-left corner and width (height follows the box) */
 type View = { x: number; y: number; w: number };
 
 const STATE_WORD: Record<EndpointState, string> = { reachable: "reachable", unreachable: "unreachable", cert: "wrong certificate", none: "not checked yet" };
 const STATE_VAR: Record<EndpointState, string> = { reachable: "var(--accent)", unreachable: "var(--hold)", cert: "var(--hold)", none: "var(--pending)" };
-const ORDER: EndpointState[] = ["reachable", "unreachable", "cert", "none"];
+/** amber on the map: a publisher will not upload to it, or its upload may fail, whichever the reason */
+const amber = (h: Host) => isDown(h.state) || h.notReady;
+/** a host's standing in words, and its colour */
+const wordOf = (h: Host) => (h.notReady ? "not ready" : STATE_WORD[h.state]);
+const colourOf = (h: Host) => (h.notReady ? "var(--hold)" : STATE_VAR[h.state]);
+const WORDS = ["reachable", "unreachable", "wrong certificate", "not ready", "not checked yet"];
 
 /** the home view's top is 72°N, above every city anyone hosts in; a phone's crop runs from there to 50°S */
 const TOP = project(0, 72)[1], BOTTOM = project(0, -50)[1];
@@ -164,7 +171,7 @@ function cluster(hosts: Host[], pxPerUnit: number, narrow: boolean): Cluster[] {
   // a place's hosts as its popover lists them: the amber ones first, so a badge opened for its amber pip shows them at
   // once, then the rest; each group by voting power
   return cs.map((c) => {
-    const hosts = [...c.hosts].sort((x, y) => Number(isDown(y.state)) - Number(isDown(x.state)) || (y.v.voting_power || 0) - (x.v.voting_power || 0));
+    const hosts = [...c.hosts].sort((x, y) => Number(amber(y)) - Number(amber(x)) || (y.v.voting_power || 0) - (x.v.voting_power || 0));
     const n = new Map<string, number>();
     for (const h of hosts) if (h.cc) n.set(h.cc, (n.get(h.cc) ?? 0) + 1);
     const ccs = [...n.entries()].sort((p, q) => q[1] - p[1]).map(([cc]) => cc);
@@ -226,8 +233,10 @@ function EventPill({ ev, pulse, v, place }: { ev: TipEndpointEvent; pulse: boole
   useEvery(30000);
   const who = v ? name(v) : ev.moniker || ev.operator_address || ev.address;
   const did = ev.outcome === "changed" ? "changed its endpoint" : "registered its endpoint";
-  // its dot says what the endpoint's check found: the map's reachable, or amber when unreachable or a wrong certificate
-  const down = !!v && isDown(endpointState(v));
+  // its dot says what the endpoint's check found, in the map's colours: amber when unreachable, a wrong certificate or
+  // not ready for uploads (the list's Not ready), as its host is on the map
+  const st = v ? endpointState(v) : "none";
+  const down = isDown(st) || (st === "reachable" && v?.readiness === "not_ready");
   return (
     <p className="cm-ev">
       <i className={`cm-ev-dot${down ? " hold" : ""}${pulse ? " pop" : ""}`} aria-hidden="true" />
@@ -275,8 +284,10 @@ function useReducedMotion(): boolean {
  * new beat takes the pill in the frame the grid moves, and its dot pops (not for what the grid opened with); a
  * validator's new or changed endpoint takes it for HOLD_MS (ev, at epAt) and pops it too. A beat whose endorsers are
  * not known yet is named once they are; until then the pill keeps what it names, its beat with it (named), or waits
- * empty as before the tip answers. A page that was hidden is as one just opened: no round goes on, or starts, for
- * what settled behind the tab; the newest beat is named still, with its age, when the page is shown again.
+ * empty as before the tip answers. A page that was hidden is as one just opened: no round goes on behind the tab, and
+ * what settled there is named still, with its age, when the page is shown again. One exception: a beat still within
+ * FRESH_MS of its block's time when the page is shown again goes on then, from the name shown, through the endorsers
+ * not named yet (wake), without the dot's pop and without a burst.
  *
  * Under the pointer or with focus in it, the pill holds still, its beat and its name as they were, so the name can be
  * read, clicked or kept focused; let go, it shows the newest. Ages are by the observer's clock (skew, the tip's).
@@ -319,9 +330,18 @@ function StreamPill({ beat, ev, epAt, nameOf, evVal, evHost, motion, skew }: {
     const el = whoRef.current, on = el?.querySelector<HTMLElement>(":scope > .on");
     if (el && on) el.style.width = `${Math.ceil(on.getBoundingClientRect().width)}px`;
   });
-  // hidden: the round under way ends on the name shown, so nothing rolls on when the page is shown again
+  // hidden: the round under way ends on the name shown, so nothing old rolls on when the page is shown again. Shown
+  // again with its beat still fresh (a blob that settled seconds ago is the news of the moment): its round goes
+  const beatRef = useRef(beat);
+  beatRef.current = beat;
+  const skewRef = useRef(skew);
+  skewRef.current = skew;
   useEffect(() => {
-    const onVis = () => { if (document.hidden) { pk.rest(); render((n) => n + 1); } };
+    const onVis = () => {
+      if (document.hidden) pk.rest();
+      else { const b = beatRef.current; if (b && Date.parse(b.at) > Date.now() + skewRef.current() - FRESH_MS) pk.wake(b.key, b.endorsers); }
+      render((n) => n + 1);
+    };
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [pk]);
@@ -438,7 +458,7 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
       const city = hasLL ? (g!.city ?? "") : "";
       // One place per named city: DB-IP gives districts of one city (and hosts in it) slightly different points.
       const loc = city ? `${cc}/${city}` : hasLL ? `${ll[1].toFixed(1)},${ll[0].toFixed(1)}` : `cc:${cc}`;
-      hs.push({ v, state: endpointState(v), share: total > 0 ? (v.voting_power || 0) / total : 0, cc, city, loc, lon: ll[0], lat: ll[1], ux, uy, provider: providerOf(v.hosting) });
+      hs.push({ v, state: endpointState(v), notReady: endpointState(v) === "reachable" && v.readiness === "not_ready", share: total > 0 ? (v.voting_power || 0) / total : 0, cc, city, loc, lon: ll[0], lat: ll[1], ux, uy, provider: providerOf(v.hosting) });
     }
     return { hosts: hs, unplaced: un };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -695,7 +715,9 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
         .then((j) => {
           const list = Array.isArray(j?.blobs) ? (j.blobs as ArrivedBlob[]).filter((b) => b.settlement_height === top) : [];
           const es = unionOf(list);
-          if (es) setBeatNow((p) => (p && p.key === beat.key ? { ...p, endorsers: es } : p));
+          // announced behind the tab, its endorsers in once the page is shown again and it is still fresh: news after all
+          const liveNow = a.live && !document.hidden && !missed(beat.at, shownAt.current, skew.current) && Date.parse(beat.at) > Date.now() + skew.current - FRESH_MS;
+          if (es) setBeatNow((p) => (p && p.key === beat.key ? { ...p, endorsers: es, live: p.live || liveNow } : p));
         }, () => {});
     }
   });
@@ -773,10 +795,10 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
         </div>
         {/* no heading of its own: the counts on the bar say what the map shows, and "Current Fibre providers" below is the one heading */}
         <div className="cm-title">
-          <p className="cm-key" title="Observed by Tensile: whether each registered host answered its latest endpoint check with a certificate a publisher accepts">
+          <p className="cm-key" title="Observed by Tensile: whether each registered host answered its latest endpoint check with a certificate a publisher accepts, and whether its server reported itself not ready for uploads at its last two checks">
             <Eye />
             <span><i className="k-ok" />reachable</span>
-            <span><i className="k-hold" />unreachable</span>
+            <span><i className="k-hold" />unreachable<span className="k-also"> or not ready</span></span>
             {unchecked && <span><i className="k-none" />not checked yet</span>}
           </p>
         </div>
@@ -786,8 +808,8 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
           {placed.map(({ c, x, y, bw, bh, hit }) => {
             const isOpen = open === c.id;
             const place = placeLabel(c);
-            const tally = ORDER.map((s) => [s, c.hosts.filter((h) => h.state === s).length] as const).filter(([, n]) => n > 0);
-            const unreach = c.hosts.filter((h) => isDown(h.state)).length;
+            const tally = WORDS.map((w) => [w, c.hosts.filter((h) => wordOf(h) === w).length] as const).filter(([, n]) => n > 0);
+            const unreach = c.hosts.filter(amber).length;
             const none = c.hosts.filter((h) => h.state === "none").length;
             const n = c.hosts.length;
             const tone = unreach === n ? "hold" : none === n ? "none" : "ok";
@@ -819,7 +841,7 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
                 {/* the place's warmth from its bursts, under its badge (lib/mapburst.ts) */}
                 <i className="cm-trace" aria-hidden="true" style={{ width: Math.max(bw, bh) + (narrow ? 12 : 18), height: Math.max(bw, bh) + (narrow ? 12 : 18), left: -(Math.max(bw, bh) + (narrow ? 12 : 18)) / 2, top: -(Math.max(bw, bh) + (narrow ? 12 : 18)) / 2 }} />
                 <button type="button" className="cm-b" aria-expanded={split ? undefined : isOpen} aria-describedby="cm-pins-keys"
-                  aria-label={`${place}${cities.length ? ` (${cities.map(([k, m]) => (m > 1 ? `${k} ${m}` : k)).join(", ")})` : ""}: ${n} Fibre provider${one ? "" : "s"}, ${tally.map(([s, k]) => `${k} ${STATE_WORD[s]}`).join(", ")}${split ? ". Zoom in" : ""}`}
+                  aria-label={`${place}${cities.length ? ` (${cities.map(([k, m]) => (m > 1 ? `${k} ${m}` : k)).join(", ")})` : ""}: ${n} Fibre provider${one ? "" : "s"}, ${tally.map(([w, k]) => `${k} ${w}`).join(", ")}${split ? ". Zoom in" : ""}`}
                   style={{ width: hit, height: hit }}
                   tabIndex={c.id === (placed.some((q) => q.c.id === roving) ? roving : placed[0]?.c.id) ? 0 : -1}
                   onFocus={() => { setRoving(c.id); openNow(c.id); }} onKeyDown={walk} onClick={() => activate(c)}>
@@ -834,11 +856,11 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
                     <ul ref={scrollFade} onScroll={(e) => scrollFade(e.currentTarget)}>
                       {c.hosts.map((h) => (
                         <li key={h.v.address}>
-                          <i className="cm-dot" style={{ background: STATE_VAR[h.state] }} title={STATE_WORD[h.state]} />
+                          <i className="cm-dot" style={{ background: colourOf(h) }} title={wordOf(h)} />
                           <Link href={valLink(h.v)} className="cm-name">{name(h.v)}</Link>
                           <span className="cm-share">{fmtShare(h.share)}</span>
                           <span className="cm-meta">
-                            {[multi ? h.cc : "", h.provider, c.locs > 1 && h.city ? h.city : multi && !h.city ? countryName(h.cc) : "", h.state !== "reachable" ? STATE_WORD[h.state] : ""].filter(Boolean).join(" · ")}
+                            {[multi ? h.cc : "", h.provider, c.locs > 1 && h.city ? h.city : multi && !h.city ? countryName(h.cc) : "", amber(h) || h.state !== "reachable" ? wordOf(h) : ""].filter(Boolean).join(" · ")}
                           </span>
                         </li>
                       ))}
