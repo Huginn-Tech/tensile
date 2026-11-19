@@ -545,31 +545,41 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
   };
   // The wheel zooms about the pointer, following the hand: a notch of a mouse wheel a step, a pinch on a trackpad
   // (it arrives as a wheel with ctrlKey) by its fingers. Wheeling out on the whole map is left to the page, so a
-  // reader scrolling down past the map is never held by it; so is a wheel over a popover's own scrolling list.
+  // reader scrolling down past the map is never held by it; so is a wheel over a popover's own scrolling list, and a
+  // scroll of the page that began off the map and brought the map under the pointer, which stays the page's.
   const wheeled = useRef(0);
+  const pageWheel = useRef(-1e9);
   useEffect(() => {
     const el = box.current;
     if (!el) return;
+    const onPage = (e: WheelEvent) => { if (!el.contains(e.target as Node)) pageWheel.current = e.timeStamp; };
     const onWheel = (e: WheelEvent) => {
-      if ((e.target as Element).closest?.(".cm-pop, .cm-tools")) return;
+      const mode = e.deltaMode; // read before deltaY: Firefox then reports a mouse wheel in lines
+      if (!e.ctrlKey && e.timeStamp - pageWheel.current < 200) { pageWheel.current = e.timeStamp; return; }
+      if ((e.target as Element).closest?.(".cm-pop, .cm-tools")) { if (e.ctrlKey) e.preventDefault(); return; }
       const t = viewRef.current;
       // the tail of the gesture that brought the map back whole is not the page's either
       if (e.deltaY > 0 && isHome(t.w)) { if (e.ctrlKey || e.timeStamp - wheeled.current < 300) e.preventDefault(); return; }
       if (e.deltaY === 0) return;
       e.preventDefault();
       wheeled.current = e.timeStamp;
+      if (drag.current) return;
       const b = el.getBoundingClientRect(), px = e.clientX - b.left, py = e.clientY - b.top;
       const s = b.width / t.w, ux = t.x + px / s, uy = t.y + py / s;
       // lines (Firefox's mouse wheel) and pages to px; one event moves the view by 1.35x at most
-      const d = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 300 : 1);
+      const d = e.deltaY * (mode === 1 ? 33 : mode === 2 ? 300 : 1);
       const k = e.ctrlKey ? d * 0.01 : Math.max(-0.3, Math.min(0.3, d * 0.002));
-      const w0 = Math.max(FRAME.w / MAX_ZOOM, Math.min(home.w, t.w * Math.exp(k)));
+      // a home view wider than the world is whole down to the world's width: the way in starts from there
+      const from = k < 0 ? Math.min(t.w, FRAME.w - 1) : t.w;
+      const w0 = Math.max(FRAME.w / MAX_ZOOM, Math.min(home.w, from * Math.exp(k)));
       const nv = isHome(w0) ? home : clampView({ w: w0, x: ux - (px / b.width) * w0, y: uy - (py / b.width) * w0 }, aspect);
       cancelAnimationFrame(raf.current);
+      viewRef.current = nv; // two events may land before a render
       setView(nv); setTarget(nv);
     };
+    window.addEventListener("wheel", onPage, { passive: true, capture: true });
     el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
+    return () => { window.removeEventListener("wheel", onPage, { capture: true }); el.removeEventListener("wheel", onWheel); };
   }, [home, aspect]);
 
   // ---- the badges are one stop in the tab order: the arrow keys walk them, west to east ----
