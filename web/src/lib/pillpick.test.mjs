@@ -243,3 +243,17 @@ test("a beat still fresh when the page is shown again goes its round from the na
   const a3 = run(p4, 23);
   assert.deepEqual([...a1.slice(0, 3), ...a2.slice(0, 4), ...a3].sort(), es, "each once across two returns");
 });
+
+test("the same beat fed again after a return adds no name already shown", () => {
+  const pk = new PillPicker(seeded(4));
+  const es = set("r", 12);
+  pk.beat("b", "2026-11-19T10:00:00Z", es);
+  const a = run(pk, 4);
+  pk.rest();
+  pk.wake("b", es);
+  pk.beat("b", "2026-11-19T10:00:00Z", es);
+  const b = run(pk, 9);
+  assert.deepEqual([...a.slice(0, 3), ...b].sort(), es, "each once");
+  pk.tick(0);
+  assert.equal(who(pk), b[8], "and the round ends");
+});

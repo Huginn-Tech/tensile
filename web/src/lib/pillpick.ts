@@ -80,7 +80,7 @@ export class PillPicker<E> {
     const order = this.order;
     if (key === this.key && order) {
       if (!this.live) return;
-      const fresh = (endorsers ?? []).filter((e) => !order.includes(e));
+      const seen = this.seen, fresh = (endorsers ?? []).filter((e) => !order.includes(e) && !seen.includes(e));
       if (fresh.length) order.splice(this.i + 1, 0, ...shuffle(fresh, this.rand));
       return;
     }

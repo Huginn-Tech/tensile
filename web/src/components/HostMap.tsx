@@ -292,7 +292,7 @@ function useReducedMotion(): boolean {
  * empty as before the tip answers. A page that was hidden is as one just opened: no round goes on behind the tab, and
  * what settled there is named still, with its age, when the page is shown again. One exception: a beat still within
  * FRESH_MS of its block's time when the page is shown again goes on then, from the name shown, through the endorsers
- * not named yet (wake); one that came behind the tab does so without the dot's pop and without a burst.
+ * not named yet (wake), without the dot's pop and without a burst.
  *
  * Under the pointer or with focus in it, the pill holds still, its beat and its name as they were, so the name can be
  * read, clicked or kept focused; let go, it shows the newest. Ages are by the observer's clock (skew, the tip's).
