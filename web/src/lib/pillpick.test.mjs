@@ -194,3 +194,31 @@ test("a beat that settled while the page was hidden is not news; one that settle
   for (let i = 0; i < 50; i++) pk.tick(i * ROTATE_MS);
   assert.equal(who(pk), one);
 });
+
+test("a beat still fresh when the page is shown again goes its round from the name shown", () => {
+  const pk = new PillPicker(seeded(11));
+  const es = set("w", 30);
+  pk.beat("b1", "2026-11-19T10:00:00Z", es, false); // it came behind the tab: one name, still
+  const first = who(pk);
+  pk.tick(0);
+  assert.equal(who(pk), first, "at rest while hidden");
+  pk.wake("other", es);
+  pk.tick(0);
+  assert.equal(who(pk), first, "another beat's wake is not this one's");
+  pk.wake("b1", es);
+  assert.equal(who(pk), first, "the name shown stays first");
+  const named = run(pk, 30);
+  assert.deepEqual([...named].sort(), es, "every endorser, each once");
+  pk.wake("b1", es);
+  pk.tick(0);
+  assert.equal(who(pk), named[29], "a round under way or over is not started again");
+  // a round cut short by hiding the page starts over on a fresh return
+  const p2 = new PillPicker(seeded(5));
+  p2.beat("b2", "2026-11-19T10:00:00Z", es);
+  p2.tick(0); p2.tick(0);
+  p2.rest();
+  const at = who(p2);
+  p2.wake("b2", es);
+  assert.deepEqual([...run(p2, 30)].sort(), es, "all of them again, from the name it rested on");
+  assert.equal(run(p2, 1)[0] !== undefined && at !== undefined, true);
+});

@@ -11,6 +11,7 @@
  * where they were.
  * A page that was hidden is like one just opened: the round under way ends on the name shown (rest), and a beat that
  * settled while it was hidden is named still, by one endorser with its age, when the page is shown again (missed).
+ * A beat still fresh when the page is shown again is news all the same: its round goes then (wake).
  */
 
 /** ms between two endorsers named */
@@ -98,6 +99,19 @@ export class PillPicker<E> {
     this.order = [this.order[this.i]];
     this.i = 0;
     this.live = false;
+  }
+
+  /**
+   * the page is shown again and the beat it names (key) is still fresh: its endorsers go their round after all, from
+   * the name shown. Nothing for another beat, one already going round, or one with a single endorser known.
+   */
+  wake(key: string, endorsers: string[] | null): void {
+    if (key !== this.key || !this.order || this.live || !endorsers) return;
+    const cur = this.order[this.i], rest = endorsers.filter((e) => e !== cur);
+    if (rest.length === 0) return;
+    this.order = [cur, ...shuffle(rest, this.rand)];
+    this.i = 0;
+    this.live = true;
   }
 
   /** a validator's new or changed endpoint, as it happens: the pill is its for HOLD_MS from now */
