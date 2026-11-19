@@ -194,3 +194,66 @@ test("a beat that settled while the page was hidden is not news; one that settle
   for (let i = 0; i < 50; i++) pk.tick(i * ROTATE_MS);
   assert.equal(who(pk), one);
 });
+
+test("a beat still fresh when the page is shown again goes its round from the name shown", () => {
+  const pk = new PillPicker(seeded(11));
+  const es = set("w", 30);
+  pk.beat("b1", "2026-11-19T10:00:00Z", es, false); // it came behind the tab: one name, still
+  const first = who(pk);
+  pk.tick(0);
+  assert.equal(who(pk), first, "at rest while hidden");
+  pk.wake("other", es);
+  pk.tick(0);
+  assert.equal(who(pk), first, "another beat's wake is not this one's");
+  pk.wake("b1", es);
+  assert.equal(who(pk), first, "the name shown stays first");
+  const named = run(pk, 30);
+  assert.deepEqual([...named].sort(), es, "every endorser, each once");
+  pk.wake("b1", es);
+  pk.tick(0);
+  assert.equal(who(pk), named[29], "a round under way or over is not started again");
+  // a round cut short by hiding the page goes on with those not named yet on a fresh return
+  const p2 = new PillPicker(seeded(5));
+  p2.beat("b2", "2026-11-19T10:00:00Z", es);
+  const before = run(p2, 3);
+  p2.rest();
+  const at = who(p2);
+  assert.equal(at, before[2]);
+  p2.wake("b2", es);
+  const again = run(p2, 28);
+  assert.equal(again[0], at, "from the name it rested on");
+  assert.deepEqual([...before.slice(0, 2), ...again].sort(), es, "the rest of them, none named twice");
+  p2.tick(0);
+  assert.equal(who(p2), again[27], "and it ends there");
+  // a round that ran to its end is not run again
+  const p3 = new PillPicker(seeded(8));
+  p3.beat("b3", "2026-11-19T10:00:00Z", es);
+  const all = run(p3, 30);
+  p3.rest();
+  p3.wake("b3", es);
+  p3.tick(0);
+  assert.equal(who(p3), all[29], "it stays on its last name");
+  // hidden and shown twice within the fresh time: still none named twice
+  const p4 = new PillPicker(seeded(2));
+  p4.beat("b4", "2026-11-19T10:00:00Z", es);
+  const a1 = run(p4, 4);
+  p4.rest(); p4.wake("b4", es);
+  const a2 = run(p4, 5);
+  p4.rest(); p4.rest(); p4.wake("b4", es);
+  const a3 = run(p4, 23);
+  assert.deepEqual([...a1.slice(0, 3), ...a2.slice(0, 4), ...a3].sort(), es, "each once across two returns");
+});
+
+test("the same beat fed again after a return adds no name already shown", () => {
+  const pk = new PillPicker(seeded(4));
+  const es = set("r", 12);
+  pk.beat("b", "2026-11-19T10:00:00Z", es);
+  const a = run(pk, 4);
+  pk.rest();
+  pk.wake("b", es);
+  pk.beat("b", "2026-11-19T10:00:00Z", es);
+  const b = run(pk, 9);
+  assert.deepEqual([...a.slice(0, 3), ...b].sort(), es, "each once");
+  pk.tick(0);
+  assert.equal(who(pk), b[8], "and the round ends");
+});
