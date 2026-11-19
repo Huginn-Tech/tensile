@@ -22,6 +22,7 @@ var pinsOnRecord = []string{
 	"5187d2fb5eb8bc4b534c74724882943c54253ae9", // v10.4.0-mocha (= v10.4.0): mocha from 2026-10-06, mainnet from 2026-10-20
 	"6013e758d5dceb75827ad191c8d739d7c43cfa04", // v10.5.0: both, from the deploy after 2026-10-27
 	"25f09cab3f8912bbe78c62909e8d39d8fa8b3fc0", // v10.6.0 (= v10.6.0-mocha): both, from the deploy after 2026-11-11
+	"58be8ae90d00518800df5506b3a1e988f009c1c6", // v11.0.0-mocha (= v11.0.0-corto): mocha, from the deploy after 2026-11-19
 }
 
 func TestEveryPinOnRecordIsReproduced(t *testing.T) {

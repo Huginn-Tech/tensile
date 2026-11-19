@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/celestiaorg/celestia-app/v10/pkg/rsema1d/field"
-	fibretypes "github.com/celestiaorg/celestia-app/v10/x/fibre/types"
+	"github.com/celestiaorg/celestia-app/v11/pkg/rsema1d/field"
+	fibretypes "github.com/celestiaorg/celestia-app/v11/x/fibre/types"
 )
 
 // The verifier rejects a row whose index is outside [0, K+N) and a proof

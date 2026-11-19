@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	celfibre "github.com/celestiaorg/celestia-app/v10/fibre"
-	fibretypes "github.com/celestiaorg/celestia-app/v10/x/fibre/types"
-	valaddrtypes "github.com/celestiaorg/celestia-app/v10/x/valaddr/types"
+	celfibre "github.com/celestiaorg/celestia-app/v11/fibre"
+	fibretypes "github.com/celestiaorg/celestia-app/v11/x/fibre/types"
+	valaddrtypes "github.com/celestiaorg/celestia-app/v11/x/valaddr/types"
 	squaretx "github.com/celestiaorg/go-square/v4/tx"
 	abci "github.com/cometbft/cometbft/abci/types"
 	cmttypes "github.com/cometbft/cometbft/types"

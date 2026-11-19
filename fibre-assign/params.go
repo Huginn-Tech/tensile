@@ -13,21 +13,25 @@ import (
 // server RPC, so the only way to confirm a network matches is to diff those
 // files at its release tag. See ProtocolParams and Fingerprint.
 const (
-	PinnedCelestiaAppVersion = "v10"
-	// v10.6.0 (5 November 2026 UTC; the same commit as v10.6.0-mocha), the
-	// release mainnet and Mocha run. Against v10.5.0 (6013e758) it changes
-	// celestia-core (v0.42.8), the hyperlane-cosmos and IBC capability forks,
-	// ShareProof/RowProof verification, the ante handler (escrow deposits in
-	// another denomination or with a non-canonical signer rejected in
-	// CheckTx and PrepareProposal), x/fibre's promise cache and the Fibre
-	// client's host lookup, and not fibre/protocol_params.go, fibre/blob.go,
-	// fibre/validator, x/valaddr or the shard download; reftest is
+	PinnedCelestiaAppVersion = "v11"
+	// v11.0.0-mocha (15 November 2026 UTC; the same commit as v11.0.0-corto),
+	// the release Mocha runs since its upgrade to app version 11 on
+	// 19 November 2026 (first block 2,760,281); mainnet runs v10.6.0 (25f09cab),
+	// the pin before this one. The release is an emergency one, cut from
+	// v10.x: against v10.6.0 it renames the module to celestia-app/v11, sets
+	// the app version to 11, restricts accounts with exposed keys to a
+	// whitehat address (app/frozen, with a signer check on x/fibre's
+	// ValidatePaymentPromise query), bounds MsgModuleQuerySafe, proof and
+	// TxStatusBatch requests, and changes the ABCI multiplexer's Info across
+	// an upgrade and Corto's unbonding time. Apart from the module path it
+	// changes nothing in fibre/, x/valaddr, pkg/rsema1d or proto, and the
+	// charge stays one utia per gas (x/fibre/types/gas.go); reftest is
 	// bit-identical across the two.
-	PinnedCelestiaAppCommit = "25f09cab3f8912bbe78c62909e8d39d8fa8b3fc0"
+	PinnedCelestiaAppCommit = "58be8ae90d00518800df5506b3a1e988f009c1c6"
 	// PinnedCelestiaAppMajor is PinnedCelestiaAppVersion as the number the
 	// chain reports in abci_info app_version. A chain above it may assign
 	// rows differently from this package.
-	PinnedCelestiaAppMajor uint64 = 10
+	PinnedCelestiaAppMajor uint64 = 11
 )
 
 // Fraction is a rational number. It matches cometbft/libs/math.Fraction: both

@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	fibretypes "github.com/celestiaorg/celestia-app/v10/x/fibre/types"
+	fibretypes "github.com/celestiaorg/celestia-app/v11/x/fibre/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"

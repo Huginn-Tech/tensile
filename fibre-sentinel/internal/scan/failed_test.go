@@ -16,8 +16,8 @@ import (
 	"time"
 
 	errorsmod "cosmossdk.io/errors"
-	fibretypes "github.com/celestiaorg/celestia-app/v10/x/fibre/types"
-	valaddrtypes "github.com/celestiaorg/celestia-app/v10/x/valaddr/types"
+	fibretypes "github.com/celestiaorg/celestia-app/v11/x/fibre/types"
+	valaddrtypes "github.com/celestiaorg/celestia-app/v11/x/valaddr/types"
 	"github.com/celestiaorg/go-square/v4/share"
 	squaretx "github.com/celestiaorg/go-square/v4/tx"
 	abci "github.com/cometbft/cometbft/abci/types"
@@ -404,7 +404,8 @@ func TestAFailedTxCarriesItsBlocksAppVersion(t *testing.T) {
 		explain failedtx.Explanation
 	}{
 		{FibreAppVersion, failedtx.Explanation{Reason: "Insufficient funds", MsgIndex: 1}},
-		{FibreAppVersion + 1, failedtx.Explanation{Reason: "", MsgIndex: -1}},
+		{FibreAppVersion + 1, failedtx.Explanation{Reason: "Insufficient funds", MsgIndex: 1}},
+		{FibreAppVersion + 2, failedtx.Explanation{Reason: "", MsgIndex: -1}},
 	} {
 		dir := t.TempDir()
 		s := failScannerAt(t, dir, w.app, [][]byte{c.raw}, []*abci.ExecTxResult{c.res}, nil)

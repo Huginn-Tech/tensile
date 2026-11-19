@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"time"
 
-	fibretypes "github.com/celestiaorg/celestia-app/v10/x/fibre/types"
+	fibretypes "github.com/celestiaorg/celestia-app/v11/x/fibre/types"
 )
 
 // ParamEntry is one fibre-params value together with the exact point in chain

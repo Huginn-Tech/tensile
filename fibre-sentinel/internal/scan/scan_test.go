@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	fibretypes "github.com/celestiaorg/celestia-app/v10/x/fibre/types"
+	fibretypes "github.com/celestiaorg/celestia-app/v11/x/fibre/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/ed25519"

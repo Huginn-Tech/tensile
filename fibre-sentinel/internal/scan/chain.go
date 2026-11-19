@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	fibretypes "github.com/celestiaorg/celestia-app/v10/x/fibre/types"
-	signaltypes "github.com/celestiaorg/celestia-app/v10/x/signal/types"
-	valaddrtypes "github.com/celestiaorg/celestia-app/v10/x/valaddr/types"
+	fibretypes "github.com/celestiaorg/celestia-app/v11/x/fibre/types"
+	signaltypes "github.com/celestiaorg/celestia-app/v11/x/signal/types"
+	valaddrtypes "github.com/celestiaorg/celestia-app/v11/x/valaddr/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 	cmtbytes "github.com/cometbft/cometbft/libs/bytes"
 	rpcclient "github.com/cometbft/cometbft/rpc/client"

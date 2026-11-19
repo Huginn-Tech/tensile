@@ -9,7 +9,7 @@ import (
 	"sort"
 	"testing"
 
-	refval "github.com/celestiaorg/celestia-app/v10/fibre/validator"
+	refval "github.com/celestiaorg/celestia-app/v11/fibre/validator"
 	cmted25519 "github.com/cometbft/cometbft/crypto/ed25519"
 	cmtmath "github.com/cometbft/cometbft/libs/math"
 	core "github.com/cometbft/cometbft/types"

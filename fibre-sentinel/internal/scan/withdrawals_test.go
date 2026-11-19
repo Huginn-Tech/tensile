@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	fibretypes "github.com/celestiaorg/celestia-app/v10/x/fibre/types"
+	fibretypes "github.com/celestiaorg/celestia-app/v11/x/fibre/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkquery "github.com/cosmos/cosmos-sdk/types/query"
 )

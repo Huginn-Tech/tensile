@@ -15,7 +15,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/bech32"
 	"go.yaml.in/yaml/v3"
 
-	"github.com/celestiaorg/celestia-app/v10/pkg/appconsts"
+	"github.com/celestiaorg/celestia-app/v11/pkg/appconsts"
 
 	"github.com/plsgiveup/fibre/fibre-sentinel/internal/scan"
 )

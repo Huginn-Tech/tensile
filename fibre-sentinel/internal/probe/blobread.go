@@ -57,7 +57,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/celestiaorg/celestia-app/v10/pkg/rsema1d"
+	"github.com/celestiaorg/celestia-app/v11/pkg/rsema1d"
 
 	"github.com/plsgiveup/fibre/fibre-sentinel/internal/scan"
 )

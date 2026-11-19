@@ -406,7 +406,7 @@ in, so a record derives them only when the celestia-app pin it names
 (`assignment.protocol_params.pinned_celestia_app_commit`) is one this build
 reproduces: its own `PinnedCelestiaAppCommit`, or an earlier pin whose
 assignment code did not change (`assignPins` in `internal/slim`; today
-v10.2.0-mocha, v10.4.0-mocha and v10.5.0). A record of any other pin keeps every
+v10.2.0-mocha, v10.4.0-mocha, v10.5.0 and v10.6.0). A record of any other pin keeps every
 validator's rows whole. A build that does not list the pin a record was
 derived under refuses it (`slim.ErrAssignmentPin`) rather than compute its
 rows with another assignment, and the API publishes that row with the part

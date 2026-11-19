@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	errorsmod "cosmossdk.io/errors"
-	fibretypes "github.com/celestiaorg/celestia-app/v10/x/fibre/types"
-	valaddrtypes "github.com/celestiaorg/celestia-app/v10/x/valaddr/types"
+	fibretypes "github.com/celestiaorg/celestia-app/v11/x/fibre/types"
+	valaddrtypes "github.com/celestiaorg/celestia-app/v11/x/valaddr/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/x/authz"
 )
@@ -25,10 +25,14 @@ type Explanation struct {
 }
 
 // pinnedAppVersions are the app versions whose registered errors and runMsgs
-// log prefix the tests check against the pinned module (celestia-app v10.6.0).
+// log prefix the tests check against the pinned module (celestia-app v11.0.0-mocha,
+// whose x/ modules register the errors v10.6.0 does). App version 11 adds one
+// error outside them, frozen/2 (app/frozen: an account with an exposed key may
+// only move funds to the whitehat address); the table does not hold it, so such
+// a failure shows its code and no reason.
 // A new chain version is added only after its errors and the prefix are
 // checked again.
-var pinnedAppVersions = map[uint64]bool{10: true}
+var pinnedAppVersions = map[uint64]bool{10: true, 11: true}
 
 // Explain reads a record:
 //
@@ -77,7 +81,7 @@ type reasonKey struct {
 
 // reasonErrs are the registered errors whose description is the reason, in
 // this order: cosmos-sdk's root errors (codes 2-41), x/valaddr's, x/fibre's
-// (genesis-only at v10.6.0, listed for completeness) and x/authz's.
+// (genesis-only at v11.0.0-mocha, listed for completeness) and x/authz's.
 var reasonErrs = []*errorsmod.Error{
 	sdkerrors.ErrTxDecode, sdkerrors.ErrInvalidSequence, sdkerrors.ErrUnauthorized,
 	sdkerrors.ErrInsufficientFunds, sdkerrors.ErrUnknownRequest, sdkerrors.ErrInvalidAddress,

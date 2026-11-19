@@ -17,7 +17,7 @@ import (
 	"time"
 
 	errorsmod "cosmossdk.io/errors"
-	fibretypes "github.com/celestiaorg/celestia-app/v10/x/fibre/types"
+	fibretypes "github.com/celestiaorg/celestia-app/v11/x/fibre/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 	cmtjson "github.com/cometbft/cometbft/libs/json"
 	cmtversion "github.com/cometbft/cometbft/proto/tendermint/version"
