@@ -32,8 +32,9 @@ import { PillPicker, HOLD_MS, ROTATE_MS, missed } from "@/lib/pillpick";
  * appear only on hover, focus or tap, in the place's popover (its amber hosts
  * first), and the other badges step back
  * while one is open. A badge that holds several places zooms in on them; the
- * corner buttons, a double click, a pinch on a trackpad and a drag (once
- * zoomed) move the view, each in one eased flight.
+ * corner buttons, a double click, the wheel, a pinch on a trackpad and a drag
+ * (once zoomed) move the view; the buttons and the double click in one eased
+ * flight, the wheel and the pinch following the hand.
  *
  * Across the map's foot, two small pills: the stream at the left, the three
  * counts in the centre. With each beat of the recent blobs (a block's blobs,
@@ -554,23 +555,43 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
     const b = box.current!.getBoundingClientRect();
     zoomAt(2, e.clientX - b.left, e.clientY - b.top);
   };
-  // a pinch on a trackpad arrives as a wheel with ctrlKey: zoom about the pointer, following the fingers.
-  // A plain wheel is left to the page, so the map never takes the page's scroll.
+  // The wheel zooms about the pointer, following the hand: a notch of a mouse wheel a step, a pinch on a trackpad
+  // (it arrives as a wheel with ctrlKey) by its fingers. Wheeling out on the whole map is left to the page, so a
+  // reader scrolling down past the map is never held by it; so is a wheel over a popover's own scrolling list, and a
+  // scroll of the page that began off the map and brought the map under the pointer, which stays the page's.
+  const wheeled = useRef(0);
+  const pageWheel = useRef(-1e9);
   useEffect(() => {
     const el = box.current;
     if (!el) return;
+    const onPage = (e: WheelEvent) => { if (!el.contains(e.target as Node)) pageWheel.current = e.timeStamp; };
     const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey) return;
+      const mode = e.deltaMode; // read before deltaY: Firefox then reports a mouse wheel in lines
+      if (!e.ctrlKey && e.timeStamp - pageWheel.current < 200) { pageWheel.current = e.timeStamp; return; }
+      if ((e.target as Element).closest?.(".cm-pop, .cm-tools")) { if (e.ctrlKey) e.preventDefault(); return; }
+      const t = viewRef.current;
+      // the tail of the gesture that brought the map back whole is not the page's either
+      if (e.deltaY > 0 && isHome(t.w)) { if (e.ctrlKey || e.timeStamp - wheeled.current < 300) e.preventDefault(); return; }
+      if (e.deltaY === 0) return;
       e.preventDefault();
+      wheeled.current = e.timeStamp;
+      if (drag.current) return;
       const b = el.getBoundingClientRect(), px = e.clientX - b.left, py = e.clientY - b.top;
-      const t = viewRef.current, s = b.width / t.w, ux = t.x + px / s, uy = t.y + py / s;
-      const w0 = Math.min(home.w, t.w * Math.exp(e.deltaY * 0.01));
+      const s = b.width / t.w, ux = t.x + px / s, uy = t.y + py / s;
+      // lines (Firefox's mouse wheel) and pages to px; one event moves the view by 1.35x at most
+      const d = e.deltaY * (mode === 1 ? 33 : mode === 2 ? 300 : 1);
+      const k = e.ctrlKey ? d * 0.01 : Math.max(-0.3, Math.min(0.3, d * 0.002));
+      // a home view wider than the world is whole down to the world's width: the way in starts from there
+      const from = k < 0 ? Math.min(t.w, FRAME.w - 1) : t.w;
+      const w0 = Math.max(FRAME.w / MAX_ZOOM, Math.min(home.w, from * Math.exp(k)));
       const nv = isHome(w0) ? home : clampView({ w: w0, x: ux - (px / b.width) * w0, y: uy - (py / b.width) * w0 }, aspect);
       cancelAnimationFrame(raf.current);
+      viewRef.current = nv; // two events may land before a render
       setView(nv); setTarget(nv);
     };
+    window.addEventListener("wheel", onPage, { passive: true, capture: true });
     el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
+    return () => { window.removeEventListener("wheel", onPage, { capture: true }); el.removeEventListener("wheel", onWheel); };
   }, [home, aspect]);
 
   // ---- the badges are one stop in the tab order: the arrow keys walk them, west to east ----
