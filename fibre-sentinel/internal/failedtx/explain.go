@@ -26,7 +26,10 @@ type Explanation struct {
 
 // pinnedAppVersions are the app versions whose registered errors and runMsgs
 // log prefix the tests check against the pinned module (celestia-app v11.0.0-mocha,
-// whose x/ modules register the errors v10.6.0 does).
+// whose x/ modules register the errors v10.6.0 does). App version 11 adds one
+// error outside them, frozen/2 (app/frozen: an account with an exposed key may
+// only move funds to the whitehat address); the table does not hold it, so such
+// a failure shows its code and no reason.
 // A new chain version is added only after its errors and the prefix are
 // checked again.
 var pinnedAppVersions = map[uint64]bool{10: true, 11: true}

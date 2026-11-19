@@ -36,7 +36,7 @@ var (
 	ftxOpen   = ftxHash("open")   // a settlement stopped before it ran: not final, nothing taken
 	ftxExec   = ftxHash("exec")   // MsgExec[a host registration, a send], no grant: final, a zero fee
 	ftxGas    = ftxHash("gas")    // out of gas: names no message
-	ftxLater  = ftxHash("later")  // at app version 11, which no reason is pinned to
+	ftxLater  = ftxHash("later")  // at app version 12, which no reason is pinned to
 	ftxPanic  = ftxHash("panic")  // a panic, its stack cut
 	ftxTwice  = ftxHash("twice")  // failed before the ante, then again after it: the newer wins
 	ftxBroken = ftxHash("broken") // a row whose record does not decode
@@ -106,7 +106,7 @@ func ftxRecords() []failedtx.Record {
 	alone.Index = 0
 	exec := failedtx.Msg{Index: 0, TypeURL: failedtx.ExecTypeURL, Inner: []failedtx.Msg{host, {Index: 1, TypeURL: ftxURLSend}}}
 	later := ftxRecord(ftxLater, 124, 0, ftxAtMessage(short, 0), true, "2000utia", alone)
-	later.AppVersion = 11
+	later.AppVersion = 12
 	return []failedtx.Record{
 		ftxRecord(ftxFinal, 120, 3, ftxAtMessage(short, 1), true, "2000utia", send, deposit),
 		ftxRecord(ftxOpen, 121, 0, invalid, false, "", pff),
@@ -334,7 +334,7 @@ func TestAFailedTransactionsReasonAndMessageAreExplainsReading(t *testing.T) {
 		{"stopped before the ante", ftxOpen, "Invalid request", -1},
 		{"a delegated registration: the outer message", ftxExec, "Authorization not found", 0},
 		{"out of gas", ftxGas, "Out of gas", -1},
-		{"app version 11", ftxLater, "", -1},
+		{"app version 12", ftxLater, "", -1},
 		{"a panic", ftxPanic, "Execution panicked", -1},
 	} {
 		t.Run(c.name, func(t *testing.T) {

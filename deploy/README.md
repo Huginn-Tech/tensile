@@ -2081,7 +2081,7 @@ can go: `sudo rm -r /var/lib/fibre-observer/mocha-txbackfill`.
   and refuses a record derived under any other rather than compute other
   rows (`docs/SYSTEM.md`, "The slim record").
   `pin_status` compares only the major version: a new release of the same
-  major (v10.x) reads `matches` whatever it changed. So the same diff is
+  major (v11.x) reads `matches` whatever it changed. So the same diff is
   done by hand for every release a network moves to, and before mainnet
   starts ("7d. Mainnet: a fresh install", step 1).
 - **The scanner refuses `START_HEIGHT`, or waits for the node's history.**

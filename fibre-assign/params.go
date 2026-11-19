@@ -16,8 +16,8 @@ const (
 	PinnedCelestiaAppVersion = "v11"
 	// v11.0.0-mocha (15 November 2026 UTC; the same commit as v11.0.0-corto),
 	// the release Mocha runs since its upgrade to app version 11 on
-	// 19 November 2026 (height 2,760,281); mainnet runs v10.6.0 (25f09cab),
-	// the pin before this one. v11.0.0 is an emergency release cut from
+	// 19 November 2026 (first block 2,760,281); mainnet runs v10.6.0 (25f09cab),
+	// the pin before this one. The release is an emergency one, cut from
 	// v10.x: against v10.6.0 it renames the module to celestia-app/v11, sets
 	// the app version to 11, restricts accounts with exposed keys to a
 	// whitehat address (app/frozen, with a signer check on x/fibre's

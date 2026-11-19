@@ -164,7 +164,7 @@ func TestACodeNotInTheTableHasNoReason(t *testing.T) {
 // A record from an app version the table is not pinned to gets neither a
 // reason nor an index, whatever its log says.
 func TestAnUnpinnedAppVersionGetsNoReading(t *testing.T) {
-	for _, v := range []uint64{11, 0, 9} {
+	for _, v := range []uint64{12, 0, 9} {
 		r := result(inMessage(depositErr, 1), sendDeposit...)
 		r.AppVersion = v
 		if got := Explain(r); got != (Explanation{Reason: "", MsgIndex: -1}) {

@@ -404,7 +404,8 @@ func TestAFailedTxCarriesItsBlocksAppVersion(t *testing.T) {
 		explain failedtx.Explanation
 	}{
 		{FibreAppVersion, failedtx.Explanation{Reason: "Insufficient funds", MsgIndex: 1}},
-		{FibreAppVersion + 1, failedtx.Explanation{Reason: "", MsgIndex: -1}},
+		{FibreAppVersion + 1, failedtx.Explanation{Reason: "Insufficient funds", MsgIndex: 1}},
+		{FibreAppVersion + 2, failedtx.Explanation{Reason: "", MsgIndex: -1}},
 	} {
 		dir := t.TempDir()
 		s := failScannerAt(t, dir, w.app, [][]byte{c.raw}, []*abci.ExecTxResult{c.res}, nil)
