@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	celfibre "github.com/celestiaorg/celestia-app/v10/fibre"
-	fibretypes "github.com/celestiaorg/celestia-app/v10/x/fibre/types"
+	celfibre "github.com/celestiaorg/celestia-app/v11/fibre"
+	fibretypes "github.com/celestiaorg/celestia-app/v11/x/fibre/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 	assign "github.com/plsgiveup/fibre/fibre-assign"
 	"github.com/plsgiveup/fibre/fibre-sentinel/internal/failedtx"

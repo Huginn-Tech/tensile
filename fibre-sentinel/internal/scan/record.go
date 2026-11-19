@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"time"
 
-	fibretypes "github.com/celestiaorg/celestia-app/v10/x/fibre/types"
+	fibretypes "github.com/celestiaorg/celestia-app/v11/x/fibre/types"
 	assign "github.com/plsgiveup/fibre/fibre-assign"
 )
 

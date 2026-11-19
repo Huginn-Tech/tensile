@@ -13,7 +13,7 @@ module github.com/plsgiveup/fibre/fibre-assign/reftest
 go 1.26.10
 
 require (
-	github.com/celestiaorg/celestia-app/v10 v10.6.0
+	github.com/celestiaorg/celestia-app/v11 v11.0.0-mocha
 	github.com/cometbft/cometbft v1.0.1
 	github.com/plsgiveup/fibre/fibre-assign v0.0.0
 )

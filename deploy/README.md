@@ -2382,14 +2382,15 @@ above holds for it with `mainnet` as the instance; these are the steps that
 differ from Mocha's, in order.
 
 1. **Check the celestia-app release.** The row assignment is pinned to the
-   release both networks run (`PinnedCelestiaAppCommit` in `fibre-assign/params.go`,
-   `v10.6.0`). `pin_status` compares only the major version, so any
-   v10 release reads `matches`, whatever it changed. Before mainnet starts,
+   release Mocha runs (`PinnedCelestiaAppCommit` in `fibre-assign/params.go`,
+   `v11.0.0-mocha`; mainnet's `v10.6.0` assigns rows the same way). `pin_status`
+   compares only the major version, so any v11 release reads `matches`,
+   whatever it changed. Before mainnet starts,
    diff the release tag mainnet runs against the pinned commit, in a
    celestia-app checkout:
 
    ```bash
-   git diff 25f09cab3f8912bbe78c62909e8d39d8fa8b3fc0 <mainnet tag> -- fibre x/fibre x/valaddr proto specs
+   git diff 58be8ae90d00518800df5506b3a1e988f009c1c6 <mainnet tag> -- fibre x/fibre x/valaddr proto specs
    ```
 
    Then run the reference test against that tag: in

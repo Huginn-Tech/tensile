@@ -105,6 +105,10 @@ var reproducedUnder = map[string][]string{
 	// 2026-10-27, and v10.2.0-mocha, the pin until 2026-10-06: no step changes fibre/protocol_params.go,
 	// fibre/blob.go or fibre/validator, and v10.6.0's x/fibre changes (ante, promise cache) are not the assignment
 	// (fibre-assign/params.go)
+	// v11.0.0-mocha reproduces v10.6.0, the pin until 2026-11-19 and the release mainnet still runs, and through it
+	// the three before: apart from the module path it changes nothing in fibre/, x/valaddr or pkg/rsema1d
+	// (fibre-assign/params.go)
+	"58be8ae90d00518800df5506b3a1e988f009c1c6": {"25f09cab3f8912bbe78c62909e8d39d8fa8b3fc0", "6013e758d5dceb75827ad191c8d739d7c43cfa04", "5187d2fb5eb8bc4b534c74724882943c54253ae9", "3b77dc2f5b00e1a646a2e9dd98b5c024a0d9ad8a"},
 	"25f09cab3f8912bbe78c62909e8d39d8fa8b3fc0": {"6013e758d5dceb75827ad191c8d739d7c43cfa04", "5187d2fb5eb8bc4b534c74724882943c54253ae9", "3b77dc2f5b00e1a646a2e9dd98b5c024a0d9ad8a"},
 }
 

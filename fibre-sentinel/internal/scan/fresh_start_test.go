@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	fibretypes "github.com/celestiaorg/celestia-app/v10/x/fibre/types"
-	valaddrtypes "github.com/celestiaorg/celestia-app/v10/x/valaddr/types"
+	fibretypes "github.com/celestiaorg/celestia-app/v11/x/fibre/types"
+	valaddrtypes "github.com/celestiaorg/celestia-app/v11/x/valaddr/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 	cmtjson "github.com/cometbft/cometbft/libs/json"
 	coretypes "github.com/cometbft/cometbft/rpc/core/types"

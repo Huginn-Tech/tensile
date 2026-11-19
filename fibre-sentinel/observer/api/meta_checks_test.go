@@ -26,7 +26,7 @@ func TestMetaCarriesNoCopyOfTheHealthChecks(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st.Close()
-	if err := st.SetMeta("app_version", "11", time.Now()); err != nil {
+	if err := st.SetMeta("app_version", "12", time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	for _, c := range []string{"scanner", "prober", "heartbeat", "collector"} {

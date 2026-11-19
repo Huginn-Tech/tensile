@@ -62,7 +62,7 @@ func TestHealthReadsStatusFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st.Close()
-	if err := st.SetMeta("app_version", "10", time.Now()); err != nil {
+	if err := st.SetMeta("app_version", "11", time.Now()); err != nil {
 		t.Fatal(err)
 	}
 
@@ -117,7 +117,7 @@ func TestHealthReadsStatusFiles(t *testing.T) {
 		t.Fatalf("disk check: found=%v with the disk measured=%v: %q", found, measured, detail)
 	}
 	if h.PinStatus != "matches" {
-		t.Fatalf("pin status with app_version 10: %s", h.PinStatus)
+		t.Fatalf("pin status with app_version 11: %s", h.PinStatus)
 	}
 	present := 0
 	for _, c := range h.Components {
@@ -142,7 +142,7 @@ func TestHealthReadsStatusFiles(t *testing.T) {
 	}
 
 	// Chain ahead of the pin is a health failure with a named check.
-	if err := st.SetMeta("app_version", "11", time.Now()); err != nil {
+	if err := st.SetMeta("app_version", "12", time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	getAny(t, ts, "/v1/health", &h)

@@ -16,7 +16,7 @@ import (
 	"time"
 
 	errorsmod "cosmossdk.io/errors"
-	valaddrtypes "github.com/celestiaorg/celestia-app/v10/x/valaddr/types"
+	valaddrtypes "github.com/celestiaorg/celestia-app/v11/x/valaddr/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/x/authz"
 

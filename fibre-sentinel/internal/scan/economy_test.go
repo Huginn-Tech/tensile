@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	celfibre "github.com/celestiaorg/celestia-app/v10/fibre"
-	fibretypes "github.com/celestiaorg/celestia-app/v10/x/fibre/types"
+	celfibre "github.com/celestiaorg/celestia-app/v11/fibre"
+	fibretypes "github.com/celestiaorg/celestia-app/v11/x/fibre/types"
 	"github.com/celestiaorg/go-square/v4/share"
 	abci "github.com/cometbft/cometbft/abci/types"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"

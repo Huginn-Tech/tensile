@@ -104,7 +104,7 @@ func TestParamsV10BlobV0_Fingerprint(t *testing.T) {
 }
 
 func TestPinnedConstants(t *testing.T) {
-	if PinnedCelestiaAppVersion != "v10" {
+	if PinnedCelestiaAppVersion != "v11" {
 		t.Errorf("PinnedCelestiaAppVersion = %q", PinnedCelestiaAppVersion)
 	}
 	if len(PinnedCelestiaAppCommit) != 40 {

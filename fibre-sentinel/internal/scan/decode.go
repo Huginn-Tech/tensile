@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	fibretypes "github.com/celestiaorg/celestia-app/v10/x/fibre/types"
+	fibretypes "github.com/celestiaorg/celestia-app/v11/x/fibre/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 	cosmostx "github.com/cosmos/cosmos-sdk/types/tx"
 	gogojsonpb "github.com/cosmos/gogoproto/jsonpb"

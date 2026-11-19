@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	celfibre "github.com/celestiaorg/celestia-app/v10/fibre"
+	celfibre "github.com/celestiaorg/celestia-app/v11/fibre"
 	assign "github.com/plsgiveup/fibre/fibre-assign"
 	"github.com/plsgiveup/fibre/fibre-sentinel/internal/record"
 	"github.com/plsgiveup/fibre/fibre-sentinel/internal/scan"

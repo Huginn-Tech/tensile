@@ -18,7 +18,7 @@ go 1.26.10
 
 require (
 	cosmossdk.io/errors v1.0.2
-	github.com/celestiaorg/celestia-app/v10 v10.6.0
+	github.com/celestiaorg/celestia-app/v11 v11.0.0-mocha
 	github.com/celestiaorg/go-square/v4 v4.0.1
 	github.com/cometbft/cometbft v1.0.1
 	github.com/cosmos/cosmos-sdk v0.52.11

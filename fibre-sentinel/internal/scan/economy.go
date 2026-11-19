@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	celfibre "github.com/celestiaorg/celestia-app/v10/fibre"
-	fibretypes "github.com/celestiaorg/celestia-app/v10/x/fibre/types"
+	celfibre "github.com/celestiaorg/celestia-app/v11/fibre"
+	fibretypes "github.com/celestiaorg/celestia-app/v11/x/fibre/types"
 	abci "github.com/cometbft/cometbft/abci/types"
 	cmttypes "github.com/cometbft/cometbft/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
