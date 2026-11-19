@@ -212,13 +212,34 @@ test("a beat still fresh when the page is shown again goes its round from the na
   pk.wake("b1", es);
   pk.tick(0);
   assert.equal(who(pk), named[29], "a round under way or over is not started again");
-  // a round cut short by hiding the page starts over on a fresh return
+  // a round cut short by hiding the page goes on with those not named yet on a fresh return
   const p2 = new PillPicker(seeded(5));
   p2.beat("b2", "2026-11-19T10:00:00Z", es);
-  p2.tick(0); p2.tick(0);
+  const before = run(p2, 3);
   p2.rest();
   const at = who(p2);
+  assert.equal(at, before[2]);
   p2.wake("b2", es);
-  assert.deepEqual([...run(p2, 30)].sort(), es, "all of them again, from the name it rested on");
-  assert.equal(run(p2, 1)[0] !== undefined && at !== undefined, true);
+  const again = run(p2, 28);
+  assert.equal(again[0], at, "from the name it rested on");
+  assert.deepEqual([...before.slice(0, 2), ...again].sort(), es, "the rest of them, none named twice");
+  p2.tick(0);
+  assert.equal(who(p2), again[27], "and it ends there");
+  // a round that ran to its end is not run again
+  const p3 = new PillPicker(seeded(8));
+  p3.beat("b3", "2026-11-19T10:00:00Z", es);
+  const all = run(p3, 30);
+  p3.rest();
+  p3.wake("b3", es);
+  p3.tick(0);
+  assert.equal(who(p3), all[29], "it stays on its last name");
+  // hidden and shown twice within the fresh time: still none named twice
+  const p4 = new PillPicker(seeded(2));
+  p4.beat("b4", "2026-11-19T10:00:00Z", es);
+  const a1 = run(p4, 4);
+  p4.rest(); p4.wake("b4", es);
+  const a2 = run(p4, 5);
+  p4.rest(); p4.rest(); p4.wake("b4", es);
+  const a3 = run(p4, 23);
+  assert.deepEqual([...a1.slice(0, 3), ...a2.slice(0, 4), ...a3].sort(), es, "each once across two returns");
 });

@@ -11,7 +11,8 @@
  * where they were.
  * A page that was hidden is like one just opened: the round under way ends on the name shown (rest), and a beat that
  * settled while it was hidden is named still, by one endorser with its age, when the page is shown again (missed).
- * A beat still fresh when the page is shown again is news all the same: its round goes then (wake).
+ * A beat still fresh when the page is shown again is news all the same: its round goes on then, through the
+ * endorsers not named yet (wake).
  */
 
 /** ms between two endorsers named */
@@ -56,6 +57,8 @@ export class PillPicker<E> {
   private epUntil = 0;
   /** a beat came before any was taken up, its endorsers not known yet: the pill waits for them, empty */
   private waiting = false;
+  /** this beat's names shown before a rest: a return to the page names none of them again */
+  private seen: string[] = [];
   private rand: () => number;
 
   constructor(rand: () => number = Math.random) {
@@ -91,23 +94,26 @@ export class PillPicker<E> {
     this.order = live ? shuffle(endorsers, this.rand) : [endorsers[Math.floor(this.rand() * endorsers.length)]];
     this.i = 0;
     this.waiting = false;
+    this.seen = [];
   }
 
   /** the page is hidden: the round ends on the name shown, which stays, and endorsers known later start none */
   rest(): void {
     if (!this.order) return;
+    for (const e of this.order.slice(0, this.i + 1)) if (!this.seen.includes(e)) this.seen.push(e);
     this.order = [this.order[this.i]];
     this.i = 0;
     this.live = false;
   }
 
   /**
-   * the page is shown again and the beat it names (key) is still fresh: its endorsers go their round after all, from
-   * the name shown. Nothing for another beat, one already going round, or one with a single endorser known.
+   * the page is shown again and the beat it names (key) is still fresh: its round goes on, from the name shown through
+   * the endorsers not named yet. Nothing for another beat, one going round, or one whose endorsers were all named (a
+   * round that ran to its end before the page was hidden is not run again).
    */
   wake(key: string, endorsers: string[] | null): void {
     if (key !== this.key || !this.order || this.live || !endorsers) return;
-    const cur = this.order[this.i], rest = endorsers.filter((e) => e !== cur);
+    const cur = this.order[this.i], seen = this.seen, rest = endorsers.filter((e) => e !== cur && !seen.includes(e));
     if (rest.length === 0) return;
     this.order = [cur, ...shuffle(rest, this.rand)];
     this.i = 0;

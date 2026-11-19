@@ -59,7 +59,7 @@ type View = { x: number; y: number; w: number };
 
 const STATE_WORD: Record<EndpointState, string> = { reachable: "reachable", unreachable: "unreachable", cert: "wrong certificate", none: "not checked yet" };
 const STATE_VAR: Record<EndpointState, string> = { reachable: "var(--accent)", unreachable: "var(--hold)", cert: "var(--hold)", none: "var(--pending)" };
-/** amber on the map: a publisher's upload does not get through, whichever the reason */
+/** amber on the map: a publisher will not upload to it, or its upload may fail, whichever the reason */
 const amber = (h: Host) => isDown(h.state) || h.notReady;
 /** a host's standing in words, and its colour */
 const wordOf = (h: Host) => (h.notReady ? "not ready" : STATE_WORD[h.state]);
@@ -235,8 +235,10 @@ function EventPill({ ev, pulse, v, place }: { ev: TipEndpointEvent; pulse: boole
   useEvery(30000);
   const who = v ? name(v) : ev.moniker || ev.operator_address || ev.address;
   const did = ev.outcome === "changed" ? "changed its endpoint" : "registered its endpoint";
-  // its dot says what the endpoint's check found: the map's reachable, or amber when unreachable or a wrong certificate
-  const down = !!v && isDown(endpointState(v));
+  // its dot says what the endpoint's check found, in the map's colours: amber when unreachable, a wrong certificate or
+  // not ready for uploads (the list's Not ready), as its host is on the map
+  const st = v ? endpointState(v) : "none";
+  const down = isDown(st) || (st === "reachable" && v?.readiness === "not_ready");
   return (
     <p className="cm-ev">
       <i className={`cm-ev-dot${down ? " hold" : ""}${pulse ? " pop" : ""}`} aria-hidden="true" />
@@ -287,8 +289,10 @@ function useReducedMotion(): boolean {
  * new beat takes the pill in the frame the grid moves, and its dot pops (not for what the grid opened with); a
  * validator's new or changed endpoint takes it for HOLD_MS (ev, at epAt) and pops it too. A beat whose endorsers are
  * not known yet is named once they are; until then the pill keeps what it names, its beat with it (named), or waits
- * empty as before the tip answers. A page that was hidden is as one just opened: no round goes on, or starts, for
- * what settled behind the tab; the newest beat is named still, with its age, when the page is shown again.
+ * empty as before the tip answers. A page that was hidden is as one just opened: no round goes on behind the tab, and
+ * what settled there is named still, with its age, when the page is shown again. One exception: a beat still within
+ * FRESH_MS of its block's time when the page is shown again goes on then, from the name shown, through the endorsers
+ * not named yet (wake); one that came behind the tab does so without the dot's pop and without a burst.
  *
  * Under the pointer or with focus in it, the pill holds still, its beat and its name as they were, so the name can be
  * read, clicked or kept focused; let go, it shows the newest. Ages are by the observer's clock (skew, the tip's).
@@ -723,7 +727,9 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
         .then((j) => {
           const list = Array.isArray(j?.blobs) ? (j.blobs as ArrivedBlob[]).filter((b) => b.settlement_height === top) : [];
           const es = unionOf(list);
-          if (es) setBeatNow((p) => (p && p.key === beat.key ? { ...p, endorsers: es } : p));
+          // announced behind the tab, its endorsers in once the page is shown again and it is still fresh: news after all
+          const liveNow = a.live && !document.hidden && !missed(beat.at, shownAt.current, skew.current) && Date.parse(beat.at) > Date.now() + skew.current - FRESH_MS;
+          if (es) setBeatNow((p) => (p && p.key === beat.key ? { ...p, endorsers: es, live: p.live || liveNow } : p));
         }, () => {});
     }
   });
@@ -801,10 +807,10 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
         </div>
         {/* no heading of its own: the counts on the bar say what the map shows, and "Current Fibre providers" below is the one heading */}
         <div className="cm-title">
-          <p className="cm-key" title="Observed by Tensile: whether each registered host answered its latest endpoint check with a certificate a publisher accepts, and whether its server reported itself ready for uploads">
+          <p className="cm-key" title="Observed by Tensile: whether each registered host answered its latest endpoint check with a certificate a publisher accepts, and whether its server reported itself not ready for uploads at its last two checks">
             <Eye />
             <span><i className="k-ok" />reachable</span>
-            <span><i className="k-hold" />unreachable or not ready</span>
+            <span><i className="k-hold" />unreachable<span className="k-also"> or not ready</span></span>
             {unchecked && <span><i className="k-none" />not checked yet</span>}
           </p>
         </div>
