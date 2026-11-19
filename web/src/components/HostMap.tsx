@@ -32,8 +32,9 @@ import { PillPicker, HOLD_MS, ROTATE_MS, missed } from "@/lib/pillpick";
  * appear only on hover, focus or tap, in the place's popover (its amber hosts
  * first), and the other badges step back
  * while one is open. A badge that holds several places zooms in on them; the
- * corner buttons, a double click, a pinch on a trackpad and a drag (once
- * zoomed) move the view, each in one eased flight.
+ * corner buttons, a double click, the wheel, a pinch on a trackpad and a drag
+ * (once zoomed) move the view; the buttons and the double click in one eased
+ * flight, the wheel and the pinch following the hand.
  *
  * Across the map's foot, two small pills: the stream at the left, the three
  * counts in the centre. With each beat of the recent blobs (a block's blobs,
@@ -554,17 +555,27 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
     const b = box.current!.getBoundingClientRect();
     zoomAt(2, e.clientX - b.left, e.clientY - b.top);
   };
-  // a pinch on a trackpad arrives as a wheel with ctrlKey: zoom about the pointer, following the fingers.
-  // A plain wheel is left to the page, so the map never takes the page's scroll.
+  // The wheel zooms about the pointer, following the hand: a notch of a mouse wheel a step, a pinch on a trackpad
+  // (it arrives as a wheel with ctrlKey) by its fingers. Wheeling out on the whole map is left to the page, so a
+  // reader scrolling down past the map is never held by it; so is a wheel over a popover's own scrolling list.
+  const wheeled = useRef(0);
   useEffect(() => {
     const el = box.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey) return;
+      if ((e.target as Element).closest?.(".cm-pop, .cm-tools")) return;
+      const t = viewRef.current;
+      // the tail of the gesture that brought the map back whole is not the page's either
+      if (e.deltaY > 0 && isHome(t.w)) { if (e.ctrlKey || e.timeStamp - wheeled.current < 300) e.preventDefault(); return; }
+      if (e.deltaY === 0) return;
       e.preventDefault();
+      wheeled.current = e.timeStamp;
       const b = el.getBoundingClientRect(), px = e.clientX - b.left, py = e.clientY - b.top;
-      const t = viewRef.current, s = b.width / t.w, ux = t.x + px / s, uy = t.y + py / s;
-      const w0 = Math.min(home.w, t.w * Math.exp(e.deltaY * 0.01));
+      const s = b.width / t.w, ux = t.x + px / s, uy = t.y + py / s;
+      // lines (Firefox's mouse wheel) and pages to px; one event moves the view by 1.35x at most
+      const d = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 300 : 1);
+      const k = e.ctrlKey ? d * 0.01 : Math.max(-0.3, Math.min(0.3, d * 0.002));
+      const w0 = Math.max(FRAME.w / MAX_ZOOM, Math.min(home.w, t.w * Math.exp(k)));
       const nv = isHome(w0) ? home : clampView({ w: w0, x: ux - (px / b.width) * w0, y: uy - (py / b.width) * w0 }, aspect);
       cancelAnimationFrame(raf.current);
       setView(nv); setTarget(nv);
