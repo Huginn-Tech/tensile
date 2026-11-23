@@ -32,7 +32,7 @@ func TestTheCeilingSpreadsABurst(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			release, load, err := p.admitBy(context.Background(), time.Time{}, each, each)
+			release, load, err := p.admitBy(context.Background(), time.Time{}, "", each, each)
 			if err != nil {
 				t.Error(err)
 				return
@@ -251,7 +251,7 @@ func TestNoCeilingAtZero(t *testing.T) {
 	}
 	start := time.Now()
 	for i := 0; i < 3; i++ {
-		release, load, err := p.admitBy(context.Background(), time.Now().Add(time.Second), 1<<30, 1<<30)
+		release, load, err := p.admitBy(context.Background(), time.Now().Add(time.Second), "", 1<<30, 1<<30)
 		if err != nil || load.RateWaitMS != 0 {
 			t.Fatalf("request %d: %v, load %+v", i, err, load)
 		}

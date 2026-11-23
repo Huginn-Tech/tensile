@@ -25,7 +25,10 @@ package probe
 // its reading-rate ceiling (admitBy; the byte budget is charged its own
 // verifier too, the ceiling its shard alone), whose rows are verified against
 // the commitment on their own (a Reconstructor of that request alone, let
-// go when it ends), and it appends its own row.
+// go when it ends), and it appends its own row. It takes one of the
+// connections the prober holds to its validator's server, the slots the
+// readings' requests take too (endpoints.go), at the host it is made at
+// (currentHost).
 //
 // At most one attempt is in flight to a validator at a time: the attempts
 // due wait in the validator's lane, and one worker per lane makes them, the
@@ -586,7 +589,7 @@ func (p *Prober) attempt(ctx context.Context, j *retryJob) (Measurement, bool) {
 	// the most the request may receive (and the rest of a wider bound when
 	// it asks for an answer again under one: Prober.widen), the ceiling
 	// what its shard should weigh (blobReading.ask).
-	release, load, err := p.admitBy(ctx, j.cutoff, int64(recvLimitFor(in))+verifierBytes(pp.OriginalRows, pp.TotalRows), in.ExpectedShardBytes)
+	release, load, err := p.admitBy(ctx, j.cutoff, in.Target.Host, int64(recvLimitFor(in))+verifierBytes(pp.OriginalRows, pp.TotalRows), in.ExpectedShardBytes)
 	if err != nil {
 		if ctx.Err() != nil {
 			return Measurement{}, false

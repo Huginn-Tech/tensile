@@ -31,8 +31,15 @@ package probe
 // let go at (Config.MaxReadMbps, ceiling.go) only delay a request: its time
 // starts once it is let go, it is never dropped, and it carries the phase
 // the reading started in (Input.ReadingPhase), so a request held back is
-// judged as the client, which asks at once, would have made it. The client
-// has no limit per validator, and neither has the reading.
+// judged as the client, which asks at once, would have made it.
+//
+// The client has no limit per validator: it keeps one connection to each
+// and sends every request over it. This observer opens one connection per
+// request, and from celestia-app v12 a server allows 16 connections per
+// source address and closes the rest at once, so the prober holds at most
+// Config.EndpointConcurrency (12) connections to one server at a time, the
+// readings' requests and the later attempts together (endpoints.go). That
+// limit only delays a request too, in the same way.
 //
 // With Config.AskEveryEndorser the reading is a full one (FullReadLabel): it
 // asks every endorsing validator for its own rows, all of them, instead of
@@ -285,6 +292,10 @@ func (b *blobReading) record(a *answer) {
 // end well before must_serve_until). It is charged to the ceiling again
 // only when the first try had its session (TLS up), so its shard may have
 // begun to move; that wait is this observer's own, added to the row's load.
+// It goes out under the room the request already holds, the server's
+// connection slot with it (endpoints.go): the first try's connection is
+// closed by then, so the re-dial takes no second slot and never waits for
+// one its own request holds.
 func (b *blobReading) ask(ctx context.Context, v readTarget) *answer {
 	p := b.p
 	a := &answer{t: v}
@@ -299,7 +310,7 @@ func (b *blobReading) ask(ctx context.Context, v readTarget) *answer {
 	// is: Prober.widen), the reading-rate ceiling what its shard should
 	// weigh: the budget bounds memory whatever a server sends, the ceiling
 	// paces honest traffic.
-	release, load, err := p.admitBy(ctx, by, int64(recvLimitFor(in)), in.ExpectedShardBytes)
+	release, load, err := p.admitBy(ctx, by, in.Target.Host, int64(recvLimitFor(in)), in.ExpectedShardBytes)
 	if err != nil {
 		// Only a stopped run ends the wait of a reading without a cutoff;
 		// its rows are not written.

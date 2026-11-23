@@ -15,9 +15,10 @@ package probe
 // the default, at most 62.5 MB in any second, half of a 1 Gbit/s port.
 //
 // The ceiling is the last of this observer's limits a request passes
-// (Prober.admitBy), after a request slot and the byte budget, so the bytes
-// are let go when they are charged and requests that waited for room do
-// not leave together. Like the other limits it only delays: the wait is
+// (Prober.admitBy), after its server's connection slot (endpoints.go), a
+// request slot and the byte budget, so the bytes are let go when they are
+// charged and requests that waited for room do not leave together. Like
+// the other limits it only delays: the wait is
 // bounded by the request's start cutoff (a full reading's request or later
 // attempt, must_serve_until less RequestStartMargin), a request whose turn
 // would come at or after it is not made and is not charged (NOT_PROBED,
@@ -63,8 +64,9 @@ func ReadCeiling(mbps int) (rate, burst float64) {
 // The reasons a request did not get through this observer's limits before
 // its start cutoff, as the NOT_PROBED row gives them.
 var (
-	errLimitsFull = errors.New("this observer's own request limits were full")
-	errRateHeld   = errors.New("this observer's own reading-rate ceiling (-max-read-mbps) could not let it go in time")
+	errLimitsFull   = errors.New("this observer's own request limits were full")
+	errRateHeld     = errors.New("this observer's own reading-rate ceiling (-max-read-mbps) could not let it go in time")
+	errEndpointFull = errors.New("this observer's own limit on connections to one server (-endpoint-concurrency) was full")
 )
 
 // readCeiling is a token bucket of shard bytes. tokens is what the bucket

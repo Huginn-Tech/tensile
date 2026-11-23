@@ -187,9 +187,10 @@ type Measurement struct {
 // LoadInfo is this observer's load at the moment a request was let go
 // (Prober.admitBy): the requests and shard bytes in flight then, this one
 // included (not those the reading-rate ceiling was still holding), how long
-// the request waited for that room, and how much of that wait was the
-// ceiling's (Config.MaxReadMbps). None of the wait is the request's own
-// time, which starts once it is let go.
+// the request waited for that room, its server's connection slot included
+// (Config.EndpointConcurrency), and how much of that wait was the ceiling's
+// (Config.MaxReadMbps). None of the wait is the request's own time, which
+// starts once it is let go.
 type LoadInfo struct {
 	RequestsInFlight   int   `json:"requests_in_flight"`
 	ShardBytesInFlight int64 `json:"shard_bytes_in_flight"`

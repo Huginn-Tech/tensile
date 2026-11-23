@@ -70,9 +70,25 @@ type Config struct {
 	// holds a request for the whole 15 s (30 with the re-dial), so the
 	// count is set well above what the healthy requests need: memory is
 	// bounded by InFlightBytes, and the load on any one validator by
-	// BlobConcurrency, not by this.
+	// EndpointConcurrency, not by this.
 	Concurrency     int
 	BlobConcurrency int
+
+	// EndpointConcurrency is how many connections this prober holds at once
+	// to one validator's server, the registered host:port its requests are
+	// dialled at (0: no limit; sentinel-probe sets
+	// DefaultEndpointConcurrency, 12). Every request opens a connection of
+	// its own, and from celestia-app v12 a server allows 16 connections per
+	// source address and closes the rest at once, which reads here as the
+	// validator's handshake failing. BlobConcurrency alone lets one server
+	// have a request of each of 16 readings open at once, beside the one
+	// later attempt in flight to it (retry.go) and the endpoint check's
+	// connection from the same address. The readings' requests with their
+	// re-dials, the later attempts and the connect checks of this
+	// observer's own side (networkUp) share the limit, and like the limits
+	// above it only delays: the wait is this observer's own, before the
+	// request's time starts (endpoints.go).
+	EndpointConcurrency int
 
 	// AskEveryEndorser reads every validator the settled promise names as a
 	// signer (Prober.wants), each for its own rows, instead of stopping once
@@ -162,6 +178,9 @@ func (c Config) withDefaults() Config {
 	}
 	if c.BlobConcurrency <= 0 {
 		c.BlobConcurrency = 16
+	}
+	if c.EndpointConcurrency < 0 {
+		c.EndpointConcurrency = 0
 	}
 	if c.InFlightBytes <= 0 {
 		c.InFlightBytes = defaultInFlightBytes
@@ -266,6 +285,9 @@ type Prober struct {
 	pacedBytes atomic.Int64
 	sched      *readQueue
 	counters   readCounters
+	// endpoints bounds the connections held at once to one validator's
+	// server (endpoints.go); nil is no limit.
+	endpoints *endpointSlots
 	// retries are the later attempts of full readings (retry.go).
 	retries *retryQueue
 	// reach is when this observer's requests last reached a server and its
@@ -311,6 +333,7 @@ func (p *Prober) initPace() {
 	p.reqs = make(chan struct{}, p.cfg.Concurrency)
 	p.bytes = newByteSem(p.cfg.InFlightBytes)
 	p.ceiling = newReadCeiling(ReadCeiling(p.cfg.MaxReadMbps))
+	p.endpoints = newEndpointSlots(p.cfg.EndpointConcurrency)
 	p.sched = newReadQueue()
 	p.retries = newRetryQueue()
 }
@@ -1014,16 +1037,22 @@ func (p *Prober) widen(extra int64) (release func(), ok bool) {
 }
 
 // admitBy waits for room for one request under this observer's limits, in
-// this order: a request slot, the byte budget (budgetBytes: the shard, and
-// a later attempt's own verifier), and the reading-rate ceiling (wireBytes:
-// the shard alone, charged last, so it is let go when it is charged). It
-// waits only until by (a zero by is no bound) or until ctx ends: when room
-// did not come in time it returns the reason, errLimitsFull or errRateHeld
-// (ctx's error when it ended), and holds nothing. Otherwise the request is
-// let go, its own time starts now, and release gives the room back. load is
-// this observer's load once it is let go and how long it waited, the
-// ceiling's part apart (recorded on the row, and in the status file).
-func (p *Prober) admitBy(ctx context.Context, by time.Time, budgetBytes, wireBytes int64) (release func(), load *LoadInfo, err error) {
+// this order: a connection slot at the server it goes to (host: the
+// registered host:port it is dialled at, endpoints.go), a request slot, the
+// byte budget (budgetBytes: the shard, and a later attempt's own verifier),
+// and the reading-rate ceiling (wireBytes: the shard alone, charged last,
+// so it is let go when it is charged). The server's slot comes first, so a
+// request waiting for a busy server holds none of the room the requests to
+// other servers wait for. It waits only until by (a zero by is no bound) or
+// until ctx ends: when room did not come in time it returns the reason,
+// errEndpointFull, errLimitsFull or errRateHeld (ctx's error when it
+// ended), and holds nothing. Otherwise the request is let go, its own time
+// starts now, and release gives the room back, the server's slot with it:
+// the caller holds it until the request has ended and its connection is
+// closed, a re-dial included. load is this observer's load once it is let
+// go and how long it waited, the ceiling's part apart (recorded on the row,
+// and in the status file).
+func (p *Prober) admitBy(ctx context.Context, by time.Time, host string, budgetBytes, wireBytes int64) (release func(), load *LoadInfo, err error) {
 	start := time.Now()
 	bounded := !by.IsZero()
 	if bounded && !start.Before(by) {
@@ -1035,16 +1064,27 @@ func (p *Prober) admitBy(ctx context.Context, by time.Time, budgetBytes, wireByt
 		defer t.Stop()
 		expired = t.C
 	}
+	freeHost, ok := p.endpoints.acquire(ctx, host, expired)
+	if !ok {
+		if ctx.Err() != nil {
+			return nil, nil, ctx.Err()
+		}
+		p.counters.admitWait(start, time.Since(start), 0)
+		return nil, nil, errEndpointFull
+	}
 	select {
 	case p.reqs <- struct{}{}:
 	case <-ctx.Done():
+		freeHost()
 		return nil, nil, ctx.Err()
 	case <-expired:
+		freeHost()
 		p.counters.admitWait(start, time.Since(start), 0)
 		return nil, nil, errLimitsFull
 	}
 	if !p.bytes.acquireBy(ctx, budgetBytes, by) {
 		<-p.reqs
+		freeHost()
 		if ctx.Err() != nil {
 			return nil, nil, ctx.Err()
 		}
@@ -1054,6 +1094,7 @@ func (p *Prober) admitBy(ctx context.Context, by time.Time, budgetBytes, wireByt
 	release = func() {
 		p.bytes.release(budgetBytes)
 		<-p.reqs
+		freeHost()
 	}
 	paced := time.Now()
 	wait, charged, ok := p.ceiling.reserve(wireBytes, by)

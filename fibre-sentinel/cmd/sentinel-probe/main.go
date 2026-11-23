@@ -15,9 +15,12 @@
 //
 // Every request waits for room under this observer's limits, and its shard
 // bytes are let go no faster than -max-read-mbps (default 400 Mbit/s), so
-// the readings leave room on the observer's port. A wait is never part of a
-// request's time; one that would pass the request's start cutoff makes it
-// NOT_PROBED, this observer's gap.
+// the readings leave room on the observer's port. Every request opens a
+// connection of its own, and at most -endpoint-concurrency (default 12) are
+// held to one validator's server at once: from celestia-app v12 a server
+// allows 16 per source address and closes the rest at once. A wait is never
+// part of a request's time; one that would pass the request's start cutoff
+// makes it NOT_PROBED, this observer's gap.
 //
 // The queue of readings is never persisted: it is re-derived from the
 // publications and the existing measurements every cycle, so a restart
@@ -77,6 +80,7 @@ func main() {
 		rpcTO       = flag.Duration("rpc-timeout", 15*time.Second, "per-RPC-call timeout")
 		concurrency = flag.Int("concurrency", probe.DefaultConcurrency, "requests in flight at once, across every reading; a request past it waits (a full reading's until -request-start-margin, then NOT_PROBED)")
 		blobs       = flag.Int("blob-concurrency", 16, "blobs being read at once")
+		perEndpoint = flag.Int("endpoint-concurrency", probe.DefaultEndpointConcurrency, "connections held at once to one validator's Fibre server (its registered host:port), across every reading, re-dial and later attempt; a request past it waits, and the wait is not the request's time (a full reading's until -request-start-margin, then NOT_PROBED). Every request opens a connection of its own, and from celestia-app v12 a server allows 16 per source address by default (max_connections_per_ip) and closes the rest at once, which would read as the validator's failed handshake; 12 leaves room for the endpoint check from the same address (0 = no limit)")
 		inFlightMiB = flag.Int64("in-flight-mib", 512, "shard bytes in flight at once, MiB; a count of requests does not bound memory when one shard can be hundreds of MiB")
 		linkMbps    = flag.Int("link-mbps", 0, "this observer's measured receive rate, Mbit/s; when set, the shard bytes in flight are held to what it moves in half a request's time, so a timeout is never this observer's own full link (0 = not set)")
 		maxRead     = flag.Int("max-read-mbps", probe.DefaultMaxReadMbps, "reading-rate ceiling, Mbit/s: every request is charged its shard's bytes against a bucket of this rate (a quarter of a second of it as burst) and waits for them before it is let go, so the readings leave room on the observer's port; the wait is not the request's time, and one that would pass the request's start cutoff is NOT_PROBED (0 = no ceiling)")
@@ -118,6 +122,9 @@ func main() {
 	if *maxRead < 0 || *linkMbps < 0 {
 		log.Fatalf("-max-read-mbps (%d) and -link-mbps (%d) must not be negative (0 = not set)", *maxRead, *linkMbps)
 	}
+	if *perEndpoint < 0 {
+		log.Fatalf("-endpoint-concurrency (%d) must not be negative (0 = no limit)", *perEndpoint)
+	}
 	if *maxRead > 0 && *linkMbps > 0 && *maxRead >= *linkMbps {
 		// -link-mbps bounds what is in flight at once, -max-read-mbps the
 		// rate it is let go at; a ceiling at or above the link leaves the
@@ -157,6 +164,7 @@ func main() {
 		RPCTimeout:           *rpcTO,
 		Concurrency:          *concurrency,
 		BlobConcurrency:      *blobs,
+		EndpointConcurrency:  *perEndpoint,
 		AskEveryEndorser:     *askAll,
 		RequestStartMargin:   *startBy,
 		RetrySpacing:         *spacing,
