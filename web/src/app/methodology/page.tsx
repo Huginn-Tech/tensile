@@ -306,7 +306,7 @@ export default function Methodology() {
             <p>The answer is the server&rsquo;s own and enters no percentage: Reachability and the service rate stay as they are, and Endpoint now keeps showing whether the server is reachable. In the validator list&rsquo;s Upload readiness column:</p>
             <Rules rows={[
               ["Ready", "The server reports that all of its own checks pass: app node, Fibre module, signer, active set, provider registration and store."],
-              ["Not ready", "The server reported at least one of those checks failing, in two checks in a row. The answer does not say which; the operator’s log does. Uploads to it may fail. It still counts as reachable."],
+              ["Not ready", "The server reported at least one of those checks failing, in two checks in a row. The answer does not say which; the operator’s log does. Uploads to it may fail. It still counts as reachable. On the map and the providers dial it is shown in amber, like an unreachable host or one with a wrong certificate, and the answer does not enter the Reachability percentage."],
               ["—", "No answer to show: the server does not answer the question, as one before v10.5 does not; or the newest check could not ask it; or the server answered not ready once; or the endpoint is not reachable. The reason is on hover."],
             ]} />
           </Def>

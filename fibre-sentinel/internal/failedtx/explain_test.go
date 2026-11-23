@@ -10,6 +10,7 @@ import (
 	valaddrtypes "github.com/celestiaorg/celestia-app/v11/x/valaddr/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/cosmos/cosmos-sdk/x/authz"
+	assign "github.com/plsgiveup/fibre/fibre-assign"
 )
 
 // The fixtures here are built from the pinned module's own error values and
@@ -170,6 +171,20 @@ func TestAnUnpinnedAppVersionGetsNoReading(t *testing.T) {
 		if got := Explain(r); got != (Explanation{Reason: "", MsgIndex: -1}) {
 			t.Errorf("app version %d: %+v", v, got)
 		}
+	}
+}
+
+// The highest app version the table is pinned to is the assignment pin's
+// major. A pin bump that leaves this list behind fails here.
+func TestTheHighestPinnedAppVersionIsTheAssignmentPinsMajor(t *testing.T) {
+	var highest uint64
+	for v, pinned := range pinnedAppVersions {
+		if pinned && v > highest {
+			highest = v
+		}
+	}
+	if highest != assign.PinnedCelestiaAppMajor {
+		t.Errorf("pinnedAppVersions goes up to %d and assign.PinnedCelestiaAppMajor is %d", highest, assign.PinnedCelestiaAppMajor)
 	}
 }
 
