@@ -898,7 +898,7 @@ export const GROUPS: Group[] = [
         id: "params",
         path: "/v1/params",
         summary: "x/fibre parameters and their history, protocol constants, the fee formula.",
-        desc: "`derived.must_serve_window_s` is how long endorsing validators owe a blob's rows: the longer of shard retention and the promise timeout.",
+        desc: "`derived.must_serve_window_s` is how long endorsing validators owe a blob's rows: the longer of shard retention and the promise timeout. `price_formula` is the charge for a blob: `base_gas` + `gas_per_chunk` × ceil(blob size / `chunk_bytes`) gas, at `utia_per_gas` utia per gas in blocks through app version 11. Once the chain runs app version 12 it also has `from_app_version`, `utia_per_gas_numerator`, `utia_per_gas_denominator` and `rounding`: from that version the fee is gas × numerator / denominator (0.004 utia per gas), rounded up to the whole utia (`ceil`), and `utia_per_gas` stays the rate of the earlier blocks.",
         params: [],
         example: EX_PARAMS,
       },

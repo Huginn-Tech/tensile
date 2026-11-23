@@ -191,7 +191,7 @@ export type Obligations = {
   /**
    * not served: none of its answers served and none was Tensile's own gap, its last giving the reason (no shard, rows
    * that do not verify or fewer of its own than it holds, a wrong or expired certificate, no registered endpoint, an
-   * endpoint that could not be reached, a timeout, a rate limit or a server error); at a reading before
+   * endpoint that could not be reached, a timeout, a refusal at the server's own limit or a server error); at a reading before
    * FULL_READ_SINCE, its rows did not come back and the blob could not be reconstructed
    */
   broken: number;
@@ -642,7 +642,7 @@ export type EndpointEvent = {
   reason?: string;
 };
 
-export { coins, feeTia, exactCoin, shortCoin } from "./amounts";
+export { coins, feeTia, exactCoin, shortCoin, tia, blobFee } from "./amounts";
 
 /** one validator's reading of a blob, as the blob page lists them */
 export type BlobReading = {
@@ -792,13 +792,29 @@ export type Charge = {
 /** a count and a total in utia, the shape every money figure takes */
 export type Sum = { count: number; utia: number };
 
-/** x/fibre's charge for a blob, on /v1/params: fee = (base_gas + gas_per_chunk × ⌈blob_size / chunk_bytes⌉) × utia_per_gas */
-export type PriceFormula = { base_gas: number; gas_per_chunk: number; chunk_bytes: number; utia_per_gas: number; note: string };
+/**
+ * x/fibre's charge for a blob, on /v1/params. The gas is base_gas + gas_per_chunk × ⌈blob_size / chunk_bytes⌉ at every
+ * app version; what a gas costs follows the app version the chain runs.
+ *
+ * Through app version 11 the fee is gas × utia_per_gas (one utia per gas), and the first five fields are all there is.
+ * From app version 12 the last four are added: from_app_version is the version whose blocks, and every later one's, are
+ * charged gas × utia_per_gas_numerator / utia_per_gas_denominator (4 / 1000: 0.004 utia per gas), rounded as `rounding`
+ * says, "ceil": up to the whole utia. utia_per_gas is a whole number and stays 1, the rate of the blocks before
+ * from_app_version. `note` says the formula in words.
+ */
+export type PriceFormula = {
+  base_gas: number;
+  gas_per_chunk: number;
+  chunk_bytes: number;
+  utia_per_gas: number;
+  note: string;
+  from_app_version?: number;
+  utia_per_gas_numerator?: number;
+  utia_per_gas_denominator?: number;
+  rounding?: string;
+};
 
-/** the fee of one blob of this size, in utia, by the module's price formula */
-export function blobFee(f: PriceFormula, size: number): number {
-  return (f.base_gas + f.gas_per_chunk * Math.ceil(size / f.chunk_bytes)) * f.utia_per_gas;
-}
+// blobFee, the fee of one blob of a size by this formula, is in amounts.ts, beside tia() which writes it.
 
 export type DayBucket = { day: string; fees_utia: number; bytes: number; settlements: number; timeouts: number; timed_out_utia: number };
 
@@ -1221,7 +1237,8 @@ export function subscribe(key: string, path: string, refreshMs: number, fn: (f: 
 
 /**
  * How often the site asks for the newest block (/v1/tip) while the API's stream of it (/v1/tip/stream) is not
- * delivering: every second, so the header's block moves with the chain's own pace (a block about every 3 s). Every
+ * delivering: every second, so the header's block moves with the chain's own pace (a block about every 2.6 s through
+ * app v11; from v12 a block can come every 0.8 s, and a poll then steps over one now and then). Every
  * reader of the tip reads it through useTip (tip.ts), so a page shares one stream and one polling; the API keeps one
  * answer for a quarter of a second, so a reader costs it a small cached reply, and however many readers there are, the
  * node and the database are asked at most four times a second.
@@ -1491,24 +1508,8 @@ export function faultRateUpper(r: Rate | undefined | null): number | null {
 /** one TIA in utia */
 export const UTIA = 1_000_000;
 
-/**
- * utia as TIA with the precision the size of the figure deserves: a fee is
- * 0.695 TIA, a day is 12.4 TIA, an escrow is 6,000 TIA. Three decimals at most
- * from 0.001 TIA up; below it, down to the utia (0.0008 TIA), so every amount
- * is in TIA and none is a bare "0".
- */
-export function tia(utia: number | null | undefined, opts: { unit?: boolean } = {}): string {
-  if (utia == null) return "—";
-  const v = utia / UTIA;
-  let s: string;
-  if (v === 0) s = "0";
-  else if (Math.abs(v) >= 1000) s = Math.round(v).toLocaleString("en-US");
-  else if (Math.abs(v) >= 100) s = v.toFixed(1);
-  else if (Math.abs(v) >= 10) s = v.toFixed(2);
-  else if (Math.abs(v) >= 0.001) s = v.toFixed(3);
-  else s = v.toFixed(6).replace(/\.?0+$/, "");
-  return opts.unit === false ? s : `${s} TIA`;
-}
+// tia(), utia written as TIA, is in amounts.ts with the other amount formats (and its test), and exported from here
+// with them: this module is loaded from a data: URL by streams.test.mjs and can import nothing at run time.
 
 /** the publisher a row belongs to: its registry label if one exists, else the short address */
 export function publisherName(p: { publisher: string; label?: string }): string {

@@ -1985,6 +1985,10 @@ button.pp-params[aria-expanded="true"] .pp-i { color: var(--paper); background: 
   .lg-t.lg-st .tn { padding-left: 10px; padding-right: 10px; }
   .lg-t.lg-st th.c-h { width: 98px; } .lg-t.lg-st th.c-t { width: 124px; } .lg-t.lg-st th.c-b { width: 118px; } .lg-t.lg-st th.c-p { width: 157px; }
   .lg-t.lg-st th.c-sz { width: 80px; } .lg-t.lg-st th.c-fee { width: 77px; } .lg-t.lg-st th.c-st { width: 84px; } .lg-t.lg-st th.c-e { width: 104px; }
+  /* a page that holds a fee under 0.1 TIA (.fee-utia), which is written down to the utia: "0.09476 TIA", two digits
+     past the "23.69 TIA" the column holds. There the column is 16px wider, from the namespace; a page without one
+     keeps its widths */
+  .lg-t.lg-st.fee-utia th.c-fee { width: 93px; }
   .lg-t.lg-st .em { width: 30px; }
   /* the dot hangs in the cell's padding (8px and its 15), so every word starts on one line; the head ("TX status",
      62.6px) starts where the dots do, the only way it stands whole in the column */
@@ -2011,6 +2015,8 @@ button.pp-params[aria-expanded="true"] .pp-i { color: var(--paper); background: 
   .lg-t.lg-st td.c-t .ag { font-size: 12.5px; }
   .lg-t.lg-st th.c-h { width: 103px; } .lg-t.lg-st th.c-t { width: 130px; } .lg-t.lg-st th.c-b { width: 126px; } .lg-t.lg-st th.c-p { width: 165px; }
   .lg-t.lg-st th.c-sz { width: 86px; } .lg-t.lg-st th.c-fee { width: 84px; } .lg-t.lg-st th.c-st { width: 90px; } .lg-t.lg-st th.c-e { width: 109px; }
+  /* with a fee under 0.1 TIA on the page, as above */
+  .lg-t.lg-st.fee-utia th.c-fee { width: 100px; }
 }
 @media (min-width: 1161px) and (max-width: 1220px) {
   .lg-t.lg-st th.c-p { width: 102px; }
@@ -2494,12 +2500,14 @@ button.warn:focus-visible { outline-offset: 0; }
 
 /* ---- its blobs under Blobs, with the Blobs list's TX status column (.pst: one publisher's room for it; .lg-st is the
    Blobs list's). No movement stands in the TX hash column any more (126px, as on the Blobs list), the amounts are fees
-   alone (104px holds "−23.690 TIA"), Endorsed as on the Blobs list (128px); TX status 92px, its dot hung in the cell's
+   alone (104px holds "−23.690 TIA"; 118px on a page with a fee under 0.1 TIA, .fee-utia, whose column is written down
+   to the utia: "−23.69000 TIA"), Endorsed as on the Blobs list (128px); TX status 92px, its dot hung in the cell's
    padding (the 12px gutter and its 15), so every word starts on one line; the head ("TX status", 62.6px) starts where
    the dots do, as on the Blobs list, the only way it stands whole in the column; the time, centred, keeps the rest ---- */
 @media (min-width: 1081px) {
   .lg-one.pst th.c-b { width: 126px; }
   .lg-one.pst th.c-fee { width: 104px; }
+  .lg-one.pst.fee-utia th.c-fee { width: 118px; }
   .lg-one.pst th.c-e { width: 128px; }
   .lg-one.pst th.c-st { width: 92px; }
   .lg-one.pst td.c-st { padding-left: 27px; }
