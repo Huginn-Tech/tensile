@@ -11,8 +11,9 @@ import "time"
 // margin:
 //
 //   - A silent x/fibre params change is noticed at the scanner's next
-//     reconcile, at most paramReconcileEvery (60) blocks later — about six
-//     minutes at mocha's block time — and the range it opens withholds the
+//     reconcile, at most paramReconcileEvery (60) blocks later — under
+//     three minutes at the 2.6 second blocks through app version 11, under
+//     one at the 0.8 second blocks from 12 — and the range it opens withholds the
 //     rows it covers (RETENTION_UNVERIFIED) in the same transaction that
 //     records it. A reading drawn against the stale deadline in between is
 //     withdrawn then.

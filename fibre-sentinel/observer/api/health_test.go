@@ -235,4 +235,34 @@ func TestHealthUnassignableAgesOut(t *testing.T) {
 	if h.Status == "ok" {
 		t.Fatal("a failing check must not leave health ok")
 	}
+
+	// Settled twenty hours ago on a chain of 0.8 second blocks (app version
+	// 12): 90,000 blocks below the tip, deeper than a block a second
+	// reaches, and still inside the 24 hours.
+	insertUnassignable(t, st, 3, tip-90_000, time.Now().Add(-20*time.Hour))
+	getAny(t, ts, "/v1/health", &h)
+	if _, detail, _ = check(h, "unassignable_publications"); !strings.HasPrefix(detail, "2 publication(s) settled in the last 24h") || !strings.Contains(detail, "3 all time") {
+		t.Fatalf("a publication 90,000 blocks and 20 hours back must count: %q", detail)
+	}
+}
+
+// scanner_lag allows at 0.8 second blocks (app version 12) the time 200
+// blocks gave at 2.6: 650 blocks behind passes, 651 fails.
+func TestHealthScannerLagBound(t *testing.T) {
+	f := newHealthFixture(t)
+	f.healthy()
+	ts := f.server()
+	behind := func(n int64) {
+		ok := f.now.Add(-10 * time.Second)
+		f.report(status.Report{Component: "scanner", OK: true, LastOKAt: &ok, Height: 100_000 - n, Detail: map[string]any{status.CadenceKey: 60}})
+		f.report(status.Report{Component: "collector", OK: true, LastOKAt: &ok, Height: 100_000, Detail: map[string]any{status.CadenceKey: 60}})
+	}
+	behind(650)
+	if ok, detail, found := check(f.health(ts), "scanner_lag"); !found || !ok {
+		t.Fatalf("650 blocks behind must pass: found=%v ok=%v %q", found, ok, detail)
+	}
+	behind(651)
+	if ok, detail, found := check(f.health(ts), "scanner_lag"); !found || ok {
+		t.Fatalf("651 blocks behind must fail: found=%v ok=%v %q", found, ok, detail)
+	}
 }

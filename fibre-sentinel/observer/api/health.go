@@ -42,9 +42,12 @@ var expectedComponents = []string{"scanner", "prober", "heartbeat", "collector"}
 const failingAfter = 10 * time.Minute
 
 // scannerLagBlocks is how far the scanner may trail the chain tip the
-// collector sees before health calls it behind. At six seconds a block this
-// is twenty minutes.
-const scannerLagBlocks = 200
+// collector sees before health calls it behind. It is a block count, so the
+// time it allows follows the chain's pace: about 8.7 minutes at the 0.8
+// second blocks of app version 12, about 28 minutes at the 2.6 second
+// blocks before it. It was 200 until the chain's pace was set to change;
+// 650 keeps at 0.8 seconds the 8.7 minutes that 200 gave at 2.6.
+const scannerLagBlocks = 650
 
 // chainStaleAfter is how old the chain's newest block may be before health
 // fails. Every other check here is drawn from the same RPC node the observer
@@ -63,12 +66,14 @@ const chainStaleAfter = 10 * time.Minute
 // short enough that one bad blob does not mask every later failure.
 const unassignableWindow = 24 * time.Hour
 
-// minBlockSeconds is the shortest block interval the height prefilter in
+// minBlockInterval is the shortest block interval the height prefilter in
 // recentUnassignable assumes. It only has to be a floor: a height bound of
-// unassignableWindow / minBlockSeconds blocks below the tip reaches back
-// past the window as long as blocks are at least this far apart, and
-// Celestia's are several seconds apart.
-const minBlockSeconds = 1
+// unassignableWindow / minBlockInterval blocks below the tip reaches back
+// past the window as long as blocks are at least this far apart. Celestia's
+// are about 2.6 seconds apart through app version 11 and at least 0.8
+// seconds apart from 12; at a full second the bound reached back only 19.2
+// of the 24 hours at 0.8 second blocks.
+const minBlockInterval = 500 * time.Millisecond
 
 // diskFloor is the free share of the data disk below which health fails, and
 // the health watcher alerts. Nothing is ever deleted to make room (the prune
@@ -428,14 +433,14 @@ func (s *Server) unassignablePublications(ctx context.Context) int64 {
 // criterion, but it has no index; settlement_height does. So when a tip
 // height is known (the collector's or the scanner's, from the status
 // files) the query is also bounded below by a height that is certainly
-// older than the window — tip minus the window at minBlockSeconds per
-// block — and SQLite walks publications_settlement over roughly the last
-// day instead of the whole table on every health poll. With no tip known
+// older than the window — tip minus the window at minBlockInterval per
+// block — and SQLite walks publications_settlement over the last day or
+// few instead of the whole table on every health poll. With no tip known
 // the height bound is 0 and the time filter alone decides: correct, only
 // slower. The time bound uses store.TS, the fixed-width layout
 // settlement_time is written in, so the string comparison is a time one.
 func (s *Server) recentUnassignable(ctx context.Context, now time.Time, tip int64) int64 {
-	floor := tip - int64(unassignableWindow/time.Second)/minBlockSeconds
+	floor := tip - int64(unassignableWindow/minBlockInterval)
 	if floor < 0 {
 		floor = 0
 	}

@@ -39,21 +39,74 @@ import (
 const MiB = 1 << 20
 
 // priceFormula is the module's charge, published on /v1/params so a reader
-// can recompute every fee on the site from a blob size.
+// can recompute every fee on the site from a blob size. The gas is the same
+// at every app version; what a gas costs is not: one utia per gas in blocks
+// through app version 11; 0.004 utia per gas, rounded up to the whole utia,
+// from app version 12 (scan.MinGasPriceAppVersion).
+//
+// The first five fields are the formula as it was first published, and
+// while the chain runs a version below that one they are served alone,
+// byte for byte as before. From it on the rest are added. UtiaPerGas is a
+// whole number and cannot hold 0.004, so it stays what it was, the rate of
+// the earlier blocks, which a reader still needs for their fees; the rate
+// in force is the fraction beside it.
 type priceFormula struct {
 	BaseGas     uint64 `json:"base_gas"`
 	GasPerChunk uint64 `json:"gas_per_chunk"`
 	ChunkBytes  uint64 `json:"chunk_bytes"`
 	UtiaPerGas  uint64 `json:"utia_per_gas"`
 	Note        string `json:"note"`
+	// FromAppVersion is the app version whose blocks, and every later
+	// one's, are charged at the fraction below; earlier blocks were
+	// charged at UtiaPerGas.
+	FromAppVersion uint64 `json:"from_app_version,omitempty"`
+	// UtiaPerGasNumerator over UtiaPerGasDenominator is what a gas costs
+	// from FromAppVersion, 4/1000, and Rounding how the product becomes
+	// whole utia: "ceil".
+	UtiaPerGasNumerator   uint64 `json:"utia_per_gas_numerator,omitempty"`
+	UtiaPerGasDenominator uint64 `json:"utia_per_gas_denominator,omitempty"`
+	Rounding              string `json:"rounding,omitempty"`
 }
 
+// formula is the charge through app version 11, and what /v1/params serves
+// until the chain is on record at a later one (formulaAt).
 var formula = priceFormula{
 	BaseGas:     uint64(appconsts.PFBFibreGasFixedCost),
 	GasPerChunk: uint64(appconsts.PFBFibreGasPerChunk),
 	ChunkBytes:  uint64(appconsts.PFBFibreChunkSize),
 	UtiaPerGas:  1,
 	Note:        "fee = (base_gas + gas_per_chunk × ⌈blob_size / chunk_bytes⌉) × utia_per_gas; the same charge whether the promise is settled or timed out",
+}
+
+// The gas price from scan.MinGasPriceAppVersion on, 0.004 utia per gas, as
+// the fraction the scanner charges with (scan.chargeUtia in
+// internal/scan/economy.go: (gas×4 + 999) / 1000).
+const (
+	minGasPriceNumerator   = 4
+	minGasPriceDenominator = 1000
+)
+
+// formulaAt is the price formula for a chain on appVersion, the collector's
+// meta app_version: abci_info's answer at its last chain poll (a minute
+// apart by default), kept as it was while a poll fails. The API does not
+// compute a charge from it: every fee it serves is a payment's amount_utia,
+// which the scanner recorded at the rate of the block's own app version.
+// The formula is for what a blob costs now, so it follows the chain's
+// version, a poll behind at most. With no version on record, or one that
+// does not parse, it is the formula through app version 11, as before.
+func formulaAt(appVersion string) priceFormula {
+	v, err := strconv.ParseUint(appVersion, 10, 64)
+	if err != nil || v < scan.MinGasPriceAppVersion {
+		return formula
+	}
+	f := formula
+	f.Note = fmt.Sprintf("gas = base_gas + gas_per_chunk × ⌈blob_size / chunk_bytes⌉; fee = ⌈gas × utia_per_gas_numerator / utia_per_gas_denominator⌉ utia in blocks from app version %d, gas × utia_per_gas utia in blocks through app version %d; the same charge whether the promise is settled or timed out",
+		scan.MinGasPriceAppVersion, scan.MinGasPriceAppVersion-1)
+	f.FromAppVersion = scan.MinGasPriceAppVersion
+	f.UtiaPerGasNumerator = minGasPriceNumerator
+	f.UtiaPerGasDenominator = minGasPriceDenominator
+	f.Rounding = "ceil"
+	return f
 }
 
 // sum is a count and a total, the shape every money figure here takes.
@@ -787,9 +840,15 @@ func (s *Server) paymentRows(ctx context.Context, where string, limit int, args 
 	return out, rows.Err()
 }
 
-// blobCharge is what the payments table knows about one promise. Its gas
-// is fee_utia at /v1/params' utia_per_gas, and the account that submitted
-// a timeout is the payment's, so neither is repeated here.
+// blobCharge is what the payments table knows about one promise. FeeUtia
+// is the payment's amount as the scanner recorded it, the promise's gas at
+// the rate of the app version its block ran under: one utia per gas in
+// blocks through app version 11; 0.004 utia per gas, rounded up to the
+// whole utia, from app version 12. Nothing here is computed from /v1/params'
+// price_formula, so a blob keeps the charge of its own block whatever the
+// chain runs now. The gas follows from blob_size by that formula, and the
+// account that submitted a timeout is the payment's, so neither is repeated
+// here.
 type blobCharge struct {
 	FeeUtia int64 `json:"fee_utia"`
 	// Publisher is the account the chain charged, which the blob row

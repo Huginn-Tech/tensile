@@ -722,7 +722,8 @@ func (s *Scanner) waitForHeight(ctx context.Context, want int64) (int64, error) 
 		s.status.Set("chain_tip", tip)
 		// Caught up, the tip is the block just scanned and its time is known:
 		// the dashboard's block ticker reads both from this file every few
-		// seconds, rather than from state.json, which moves every 20 blocks.
+		// seconds, rather than from state.json, which a catch-up writes only
+		// every CheckpointEvery blocks.
 		if tip == want-1 && !s.lastBlockTime.IsZero() {
 			s.status.Set("tip_block_time", s.lastBlockTime.UTC())
 		}
@@ -774,15 +775,33 @@ func (s *Scanner) pause(ctx context.Context, want int64) error {
 }
 
 // rpcBackoff is the wait before the next attempt at a transient RPC failure:
-// 1, 2, 4, 8, 16, 30, 30, ... seconds. Public endpoints hiccup, and at the
-// tip CometBFT stores the block before the FinalizeBlock response, so
-// block_results for a height /status just reported can be "not found" for a
-// moment.
+// 1, 2, 4, 8, 16, 30, 30, ... seconds. Public endpoints hiccup. The tip race
+// has a shorter start of its own (tipRaceBackoff).
 func rpcBackoff(attempt int) time.Duration {
 	if attempt >= 5 {
 		return 30 * time.Second
 	}
 	return time.Duration(1<<uint(attempt)) * time.Second
+}
+
+// tipRaceBackoff is the wait before the next attempt at a tip race: 250 ms,
+// 500 ms, then rpcBackoff from its start (1, 2, 4, ... seconds). At the tip
+// CometBFT stores the block before the FinalizeBlock response, so
+// block_results for a height /status just reported can be "not found" for a
+// moment, and a query at that height "in the future" a moment longer. The
+// moment is a fraction of a block. A first wait of a full second is under
+// half a block at the 2.6 second blocks through app version 11, and more
+// than one block at the 0.8 second blocks from 12, where the one and two
+// second waits left the scan up to four blocks behind. Any other failure
+// keeps rpcBackoff.
+func tipRaceBackoff(attempt int) time.Duration {
+	switch attempt {
+	case 0:
+		return 250 * time.Millisecond
+	case 1:
+		return 500 * time.Millisecond
+	}
+	return rpcBackoff(attempt - 2)
 }
 
 // unavailableGrace is how long a height that the node says it does not have
@@ -796,8 +815,9 @@ var unavailableGrace = 10 * time.Minute
 // already declared unavailable. The full grace exists to tell a node that is
 // briefly behind from one that will never have the height; once a run has
 // been established, the second answer is known, and paying ten minutes per
-// height meant a thousand-block hole — the span the chain allows between a
-// promise and its settlement — took a week to cross, one height at a time,
+// height meant a thousand-block hole — the span the chain allowed between a
+// promise and its settlement through app version 11, 3,250 blocks from 12 —
+// took a week to cross, one height at a time,
 // with the feed stopped throughout. A hole below the node's oldest block
 // pays no grace at all (retryRPCAt, crossHole).
 var unavailableRunGrace = 20 * time.Second
@@ -900,7 +920,7 @@ func (s *Scanner) retryRPCAt(ctx context.Context, what string, height int64, fn 
 			return err
 		}
 		// "could not find results" names two things (IsResultsMissing): the
-		// tip race, which clears in a second, and results the node never
+		// tip race, which clears within a block, and results the node never
 		// kept, which never come. /status says which. More than a block
 		// below the tip the height is as unavailable as a pruned one, a
 		// gap after the grace; retried as transient, it held the scan on
@@ -926,6 +946,9 @@ func (s *Scanner) retryRPCAt(ctx context.Context, what string, height int64, fn 
 			return &ErrHeightUnavailable{Height: height, Err: err}
 		}
 		wait := rpcBackoff(attempt)
+		if tipRace {
+			wait = tipRaceBackoff(attempt)
+		}
 		if unavailable {
 			// Never past the grace: a fixed thirty seconds after the
 			// twenty-second run grace made each height of a run cost
@@ -935,9 +958,16 @@ func (s *Scanner) retryRPCAt(ctx context.Context, what string, height int64, fn 
 		if panicked {
 			wait = appPanicWait
 		}
-		if !quietTipRace(attempt, tipRace) && (attempt < 3 || time.Now().After(nextWarn)) {
+		// The attempt as the log gate counts it: a tip race's two short
+		// waits are extra, so its first logged failure is a plain line and
+		// the WARNING pace starts after it, as on the ladder it had before.
+		n := attempt
+		if tipRace {
+			n = attempt - 2
+		}
+		if !quietTipRace(attempt, tipRace) && (n < 3 || time.Now().After(nextWarn)) {
 			level := ""
-			if attempt >= 3 {
+			if n >= 3 {
 				level = "WARNING: "
 				nextWarn = time.Now().Add(rpcWarnEvery)
 			}
@@ -954,13 +984,16 @@ func (s *Scanner) retryRPCAt(ctx context.Context, what string, height int64, fn 
 }
 
 // tipRaceQuiet is how many failed attempts of a tip race go unlogged. The
-// follow loop's safety poll can read a height in the second between the
+// follow loop's safety poll can read a height in the moment between the
 // node storing its block and committing it, and on Mocha in a week of
 // September 2026 that was 729 block_results and one params read, every one
 // answered on the second or third attempt: a log line and a status error
 // for each said nothing. A race that lasts longer is logged as any failure
-// is, from its third attempt.
-const tipRaceQuiet = 2
+// is, from its fifth attempt: the failures at 0, 0.25, 0.75 and 1.75 s are
+// quiet, and the fifth attempt comes at 3.75 s, where the third came at 3 s
+// when a tip race waited one and two seconds (tipRaceBackoff), so no race
+// that was quiet then is logged now.
+const tipRaceQuiet = 4
 
 func quietTipRace(attempt int, tipRace bool) bool { return tipRace && attempt < tipRaceQuiet }
 
@@ -1883,7 +1916,8 @@ func (s *Scanner) seedHosts(ctx context.Context, startHeight int64) {
 // lazySeed reads one validator's registration the first time it appears in
 // an assignment with nothing on record: the bonded seed misses a validator
 // that was jailed or unbonding when the scan started, and its registration
-// (which outlives bonding) needs no new event to stay in force. The state
+// (which outlives bonding until the chain's sweep removes it, see
+// eventSetFibreProviderInfo) needs no new event to stay in force. The state
 // after block h-1 is asked for, the last one committed when block h is
 // read: every change since the seed height would be an event on record,
 // block h's own included (they are read before its publications, and
@@ -1966,8 +2000,9 @@ func (s *Scanner) maybeReseedHosts(ctx context.Context, h int64) {
 // registrations may come after a settlement in it — as in force from
 // gapEnd+1. That is exact, not a guess: every block from gapEnd+1 to h-1
 // was read, events and all (gapEnd is the newest event-losing gap below
-// h), and a registration is never removed, so a validator whose host
-// changed in that span has an event on record and is left alone (Reseed),
+// h), and a registration is never set or changed without an event (the
+// chain's sweep can remove one silently, it cannot add one), so a validator
+// whose host changed in that span has an event on record and is left alone (Reseed),
 // and for every other one the value read is the value since gapEnd+1.
 // Settlements inside or before the gap keep their unknown_gap: nothing
 // here says what happened in it.
@@ -1994,11 +2029,13 @@ func (s *Scanner) reseedHosts(ctx context.Context, h, gapEnd int64) {
 
 // reseedOne reads one validator's registration after an event-losing gap:
 // the one the bulk re-read did not cover. Same rule as reseedHosts, for one
-// validator, read with FibreProviderInfo (registration outlives bonding,
-// so it answers for a validator AllBondedFibreProviders leaves out), at
+// validator, read with FibreProviderInfo (a registration outlives bonding
+// until the chain's sweep removes it, so it answers for a validator
+// AllBondedFibreProviders leaves out), at
 // h-1, recorded from the gap's end. An explicit "not registered" is
-// recorded as "none": it is the chain's answer, and nothing changed since
-// the gap's end, or an event would be on record. Asked once per validator
+// recorded as "none": it is the chain's answer, and no host was set since
+// the gap's end, or an event would be on record (an entry the chain's
+// sweep removed in that span left none). Asked once per validator
 // per gap in this process, and only after the bulk re-read for the gap
 // worked; reports whether an entry was added.
 func (s *Scanner) reseedOne(ctx context.Context, consAddrHex string, h int64) bool {

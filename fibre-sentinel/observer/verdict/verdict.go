@@ -120,8 +120,9 @@ func (r Row) EffectiveClass() probe.Classification {
 //   - FAULT (not served): the validator's last answer, when none served and
 //     none was this observer's gap: no such shard, rows that do not verify
 //     or fewer of its own than it holds, a wrong certificate, no registered
-//     host, an endpoint that could not be reached, a timeout, a rate limit
-//     or a server error, every time it was asked.
+//     host, an endpoint that could not be reached, a timeout, a refusal at
+//     the server's own limit (ResourceExhausted) or a server error, every
+//     time it was asked.
 //
 // Any other row counts as its blob's reading leaves it:
 //

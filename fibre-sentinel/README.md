@@ -156,7 +156,9 @@ sentinel-scan -rpc http://127.0.0.1:26657 -data-dir ./data -follow              
 ```
 
 The node must hold the blocks a fresh scan reads: the state before its start
-and the validator sets a promise window (1000 blocks) below it. A
+and the validator sets a promise window below it
+(`payment_promise_height_window`: 1,000 blocks through app v11, 3,250 from
+v12). A
 `-start-height` closer than that to the node's oldest block is refused with
 the lowest one it can serve, and a scan from the tip waits until the node
 holds that much (`deploy/README.md`, section 3).
@@ -279,7 +281,7 @@ earlier schedule only:
 | yes | no | any | any | **UNATTESTED** (no proof this validator ever stored the shard; outside every rate, in both directions) |
 | yes | yes | in-window (`t < must_serve_until`) | `NOT_FOUND` / `INVALID_ROWS` | **FAULT** (identity verified, and it did not serve what the chain proves it holds; a `NOT_FOUND` within 30 s of the deadline is `TOLERATED`) |
 | yes | yes | in-window | `SERVER_ERROR` | **SERVER_ERROR** (reached, answered with an error or an answer no client accepts) |
-| yes | yes | in-window | `RPC_THROTTLED` | **THROTTLED** (reached, refused with a rate limit: at the reading, no rows, as the client meets it) |
+| yes | yes | in-window | `RPC_THROTTLED` | **THROTTLED** (reached, refused at the server's own limit, `ResourceExhausted`: at the reading, no rows, as the client meets it) |
 | any | any | any | certificate not endorsed by this validator's consensus key | **IDENTITY_MISMATCH** (an unusable endpoint, shown as its status; not a fault) |
 | yes | yes | in-window | `DNS_FAIL` / `TCP_*` / `TLS_HANDSHAKE_FAIL` / `RPC_UNAVAILABLE` / `RPC_TIMEOUT` / `RPC_ERROR` | **UNREACHABLE** (from one vantage this is our path too) |
 | yes | yes | any | `NO_REGISTERED_HOST` | **NOT_REGISTERED** (jailing and unbonding drop the bonded entry) |
@@ -299,8 +301,8 @@ earlier schedule only:
 **Not served** is the only thing said against a validator: the chain *proves*
 it stored rows of a blob, and its own rows did not come back, at the reading
 and each time it was asked again — not found, bad rows or fewer of its own
-than it holds, no answer, a rejected certificate, an error, a rate limit or
-no registered host, as a reader using the client meets them. One gap of
+than it holds, no answer, a rejected certificate, an error, a refusal at the
+server's own limit or no registered host, as a reader using the client meets them. One gap of
 this observer's own among its answers, or an attempt it owed that is not on
 record, leaves it counted neither way. At a reading before full readings,
 or one labelled `enough`, it was said only when the blob could *not be
@@ -320,7 +322,9 @@ than counting the entries the transaction carries.
 A validator is asked for its own rows of every blob it endorsed, once at
 the reading and up to twice more when it did not serve. At most 16 blobs
 (`-blob-concurrency`) and 256 requests (`-concurrency`) are in flight at
-once, with 512 MiB of shards (`-in-flight-mib`); `-link-mbps`, set from the
+once, at most 12 connections are held to one validator's server
+(`-endpoint-concurrency`; 0 is no limit), with 512 MiB of shards
+(`-in-flight-mib`); `-link-mbps`, set from the
 observer's measured link, also holds the shard bytes in flight to what the
 link moves in half a request's time, so a timeout is never this observer's
 own full link. Shard bytes are let go no faster than 400 Mbit/s
@@ -330,8 +334,12 @@ readings leave room on the observer's port: at the default, no more than
 62.5 MB in any second.
 These only delay a request until its last start, the wait is never part of
 the request's own time, and every row records the load it was let go
-under and its wait (`observer_load`). The reading's
-own requests have no limit per validator, as the client has none; a later
+under and its wait (`observer_load`). Every request opens a connection of
+its own, where the client keeps one to a validator for all its requests;
+from celestia-app v12 a server allows 16 per source address by default
+(`max_connections_per_ip`) and closes the
+rest at once, so the readings' requests and the later attempts together
+hold at most 12 to one server. A later
 attempt waits while the same validator's previous one is in flight.
 `publications.jsonl` is tailed incrementally and a publication is
 forgotten once its reading is on record and it owes no attempt. On a

@@ -484,8 +484,11 @@ func (c *Chain) BondedFibreProvidersAt(parent context.Context, height int64) ([]
 
 // FibreProviderInfoAt is one validator's Fibre host registration as the
 // chain state stood at height (0 = latest), and whether one exists.
-// Registration is independent of bonding, so this answers for a jailed or
-// unbonding validator too, which AllBondedFibreProviders does not.
+// A registration stays on chain while its validator is jailed or unbonding,
+// until the chain's sweep removes it (seven days past the unbonding time:
+// through app version 11 for a jailed validator, from 12 for any that is
+// not bonded), so this answers for such a validator too, which
+// AllBondedFibreProviders does not.
 func (c *Chain) FibreProviderInfoAt(parent context.Context, consAddrBech32 string, height int64) (host string, found bool, err error) {
 	ctx, cancel := c.ctx(parent)
 	defer cancel()
@@ -696,7 +699,7 @@ func IsResultsNotPersisted(err error) bool {
 
 // IsResultsMissing reports CometBFT's answer to block_results for a height
 // whose FinalizeBlock response is not in its state store ("could not find
-// results for height #N"). At the tip it is a race and clears in a second:
+// results for height #N"). At the tip it is a race and clears in a moment:
 // the node stores the block, and /status names it, before it stores the
 // block's results. Below the tip it never clears: the node ran with
 // storage.discard_abci_responses = true when it produced that height, or

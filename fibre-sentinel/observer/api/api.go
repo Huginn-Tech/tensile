@@ -1406,8 +1406,8 @@ type attestationStats struct {
 //	               gap: no such shard, rows that do not verify or fewer of
 //	               its own than it holds, a wrong certificate, no registered
 //	               host, an endpoint that could not be reached, a timeout, a
-//	               rate limit or a server error, every time it was asked
-//	               (Not served on the site)
+//	               refusal at the server's own limit or a server error,
+//	               every time it was asked (Not served on the site)
 //	held_param_unverified
 //	               its only readings sit inside an x/fibre params range this
 //	               observer has not read every height of, so neither the
@@ -4641,8 +4641,9 @@ type probeRow struct {
 	// own rows; not_served is its last answer when none served and none was
 	// this observer's gap (no such shard, rows that do not verify or fewer of
 	// its own than it holds, a wrong certificate, no registered host, an
-	// endpoint that could not be reached, a timeout, a rate limit or a
-	// server error, every time); empty is an answer a later one replaced,
+	// endpoint that could not be reached, a timeout, a refusal at the
+	// server's own limit or a server error, every time); empty is an
+	// answer a later one replaced,
 	// one beside a served answer or this observer's gap, this observer's gap
 	// itself (rows of the blob that are not its own and that no settled
 	// promise explains among them), an answer whose next attempt is still to

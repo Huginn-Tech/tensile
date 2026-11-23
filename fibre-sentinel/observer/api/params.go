@@ -42,8 +42,13 @@ type paramEntry struct {
 	// Source: seed (read from state where the scan began; in force since
 	// at least then, possibly much earlier), event (an
 	// EventUpdateFibreParams in a transaction, effective for promises
-	// settled after that transaction), or finalize (the same event at end
-	// of block, e.g. governance, effective from the next block).
+	// settled after that transaction), finalize (the same event at end
+	// of block, e.g. governance, effective from the next block), or, for
+	// a change that came with no event (a chain upgrade's handler),
+	// verified (the value the scanner read from state at every height of
+	// the params-uncertainty range, from the first height that held it)
+	// and reconcile (the value state held at the scanner's periodic
+	// check, from the block after that check).
 	Source                     string `json:"source"`
 	WithdrawalDelayS           int64  `json:"withdrawal_delay_s"`
 	PaymentPromiseTimeoutS     int64  `json:"payment_promise_timeout_s"`
@@ -118,9 +123,11 @@ type protocolConstants struct {
 // the scan began (a seed entry, which says nothing about when it took
 // effect), then every EventUpdateFibreParams after it, dated from block
 // headers. The params can also change without an event (a chain upgrade's
-// migration); the scanner re-reads them from state and publishes any
-// disagreement as a params-uncertainty range (/v1/meta param_uncertainty)
-// rather than an entry here. The protocol constants are compiled into the
+// handler); the scanner re-reads them from state, publishes any
+// disagreement as a params-uncertainty range (/v1/meta param_uncertainty),
+// and adds what it read as entries here: a reconcile entry from the block
+// after the check that found it, and a verified entry for each value read
+// at every height of the range. The protocol constants are compiled into the
 // pinned celestia-app build and exposed by no RPC, so they are read from
 // that code, and the commit is named.
 type paramsResponse struct {
@@ -134,7 +141,9 @@ type paramsResponse struct {
 	Protocol protocolConstants `json:"protocol"`
 	// PriceFormula is x/fibre's charge for a blob, from which every fee on
 	// /v1/market, /v1/publishers and /v1/blobs is recomputed: the
-	// module's own event carries no amount.
+	// module's own event carries no amount. It is the formula of the app
+	// version the chain runs now (formulaAt); each recorded fee is at the
+	// rate of its own block.
 	PriceFormula priceFormula `json:"price_formula"`
 }
 
@@ -223,7 +232,10 @@ func (s *Server) handleParams(w http.ResponseWriter, r *http.Request) {
 		s.writeInternal(w, r.URL.Path, err)
 		return
 	}
-	resp := paramsResponse{History: hist, Protocol: pinnedProtocol(), PriceFormula: formula}
+	// The chain's app version as the collector last recorded it. One that
+	// cannot be read is none on record: the formula through app version 11.
+	appVersion, _ := s.st.Meta("app_version")
+	resp := paramsResponse{History: hist, Protocol: pinnedProtocol(), PriceFormula: formulaAt(appVersion)}
 	if n := len(hist); n > 0 {
 		cur := hist[n-1]
 		resp.Current = &cur
