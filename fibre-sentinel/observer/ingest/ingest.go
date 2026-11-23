@@ -397,8 +397,8 @@ var vantageNameRE = regexp.MustCompile(`^[a-z0-9-]{1,64}$`)
 //   - its height (validator_set_height, the tip when the round began), which
 //     must be one this chain could have been at when the row was taken,
 //     against the newest tip on record (the collector's chain poll, else
-//     the scanner's frontier). The window is wide on purpose: it allows a
-//     block a second however far the row is from that tip, plus maxLag
+//     the scanner's frontier). The window is wide on purpose: it allows two
+//     blocks a second however far the row is from that tip, plus maxLag
 //     blocks for a vantage whose node lagged, so a row of this chain is
 //     never refused by it, while a height from a chain millions of blocks
 //     away is.
@@ -431,9 +431,13 @@ const knownValidatorSQL = `SELECT EXISTS (SELECT 1 FROM validator_identities WHE
 	OR EXISTS (SELECT 1 FROM reachability WHERE validator_address = ? AND +vantage = ?)`
 
 // minBlockInterval and maxLag set the height window (see chainGuard).
-// Celestia's blocks are about six seconds apart on both networks.
+// minBlockInterval only has to be shorter than any block interval the chain
+// can hold: Celestia's blocks are about 2.6 seconds apart through app
+// version 11 and at least 0.8 seconds apart from 12. At a full second the
+// window refused this chain's own rows once they were more than about 4.6
+// days from the tip at 0.8 second blocks.
 const (
-	minBlockInterval = time.Second
+	minBlockInterval = 500 * time.Millisecond
 	maxLag           = 100_000
 )
 

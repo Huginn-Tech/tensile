@@ -1811,10 +1811,11 @@ func probeAttested(m probe.Measurement) any {
 // "Closed" means only that the pair stopped appearing in the bonded provider
 // list, which is what closed_reason records. It is not deregistration:
 // x/valaddr has no message for that, and its msg server rejects an empty
-// host, so a registration once made stays on chain. Jailing and unbonding
-// both remove a provider from the bonded list while the entry survives, so
-// treating a closure as the operator withdrawing its endpoint would be
-// reading an event that cannot happen.
+// host, so no operator can withdraw a registration. Jailing and unbonding
+// both remove a provider from the bonded list while the entry survives
+// until the chain's sweep removes it (scan/hosts.go), so treating a closure
+// as the operator withdrawing its endpoint would be reading an event that
+// cannot happen.
 func (s *Store) ObserveEndpoints(ctx context.Context, providers []scan.FibreProvider, height int64, now time.Time) (opened, closed int, err error) {
 	evs, err := s.ObserveEndpointEvents(ctx, providers, height, now)
 	for _, e := range evs {

@@ -151,11 +151,14 @@ const bytes = (b, d) => {
 // An exact size, one rule for every table and tooltip: two decimals in MiB and GiB, none in KiB, zeros kept.
 const size = (b) => bytes(b, b >= 2 ** 20 ? 2 : 0);
 // Rounds whole utia half up: toFixed would turn 47.105 into 47.10 and break 47.11 = 28.52 + 18.59.
-// With no d, the page's one money rule: three decimals under 1 TIA, two under 1,000, none above.
+// With no d, the page's one money rule: none above 1,000 TIA, two decimals under it, and under 0.1 TIA down to the utia,
+// never fewer than three: a blob's fee at 0.004 utia per gas is 0.00278, where three decimals said 0.003 and lost it.
+// So an amount under 0.001 TIA is written too (0.0004), where it read <0.001.
 const moneyD = (u) => (u < 1e5 ? 3 : u < 1e9 ? 2 : 0);
 const tiaN = (u, d) => {
   if (d == null && !u) return "0";
-  if (d == null && u < 500) return "<0.001";
+  if (d == null && u < 1) return "<0.001";
+  if (d == null && u < 1e5) return (Math.round(u) / 1e6).toFixed(6).replace(/(\.\d{3}\d*?)0+$/, "$1");
   const dd = d ?? moneyD(u);
   return (Math.round(u / 10 ** (6 - dd)) / 10 ** dd).toLocaleString("en-US", { minimumFractionDigits: dd, maximumFractionDigits: dd });
 };
@@ -229,8 +232,16 @@ const settled = () => once("settled", () => {
   for (const r of u.settlements) { const [t, size, i, fee, share] = r, ns = r[r.length - 1], pub = by.get(u.addresses[i]); if (pub && t >= t0 && t <= t1) out.push({ t, size, fee, share, ns, pub }); }
   return out;
 });
-const fee = (size) => { const f = U().params.price_formula; return (f.base_gas + f.gas_per_chunk * Math.ceil(size / f.chunk_bytes)) * f.utia_per_gas; };
+// utia per gas now, as [numerator, denominator]: the fraction the formula carries once the chain runs app version 12
+// (4 over 1,000), else utia_per_gas over 1, as the formula was through app version 11.
+const gasRate = () => { const f = U().params.price_formula; return f.utia_per_gas_numerator != null && f.utia_per_gas_denominator ? [f.utia_per_gas_numerator, f.utia_per_gas_denominator] : [f.utia_per_gas, 1]; };
+// A fee is whole utia: at the fraction the module rounds it up.
+const fee = (size) => { const f = U().params.price_formula, [n, d] = gasRate(); return Math.ceil(((f.base_gas + f.gas_per_chunk * Math.ceil(size / f.chunk_bytes)) * n) / d); };
 const perMib = (size) => fee(size) / (size / 2 ** 20);
+// A TIA per MiB figure: two decimals from 0.1 TIA up, which every price at one utia per gas is. Under that, the decimals
+// that give the formula's cheapest price two figures, so 0.00074 never reads 0.00.
+const rateD = () => Math.min(6, Math.max(2, 1 - Math.floor(Math.log10(perMib(U().params.max_blob_size_bytes) / 1e6)))) || 2;
+const rateN = (u) => tiaN(u, u >= 1e5 ? 2 : rateD());
 // Dates on one even step, counted back from the last day, so every time axis on the page lands on the same days.
 const dayTicks = (most = 6) => { const { days } = activeDays(), step = (hourly() ? [1, 2, 3, 4, 6, 12] : [1, 2, 5, 7, 14, 28, 56]).find((k) => (days.length - 1) / k < most) ?? 91, out = []; for (let i = days.length - 1; i >= 0; i -= step) out.unshift(days[i]); return out; };
 const DAY = 86400, HOUR = 3600;
@@ -461,13 +472,13 @@ function boot() {
 }
 
 return { $, $$, el, esc, sum, calm, narrow, phone, touch, keptFor, sorter, token, pct, sharePct, readyPct, int, count, bytes, size, tiaN, tia, tiaRange, day, dayOf, stamp,
-  state, hourly, stepS, on, set, lit, pin, MAX_PINS, area, boot, N, U, market, span, pubs, settled, fee, perMib,
+  state, hourly, stepS, on, set, lit, pin, MAX_PINS, area, boot, N, U, market, span, pubs, settled, gasRate, fee, perMib, rateN,
   activeDays, dayTicks, dailyRate, others, sameHosts: () => sameHosts, newPublishers, escrowFlow, blobEver, blobsLeft, runway, TAIL, RANKS, inkOn, agg, regionOf, regions, seg, showTip, tipAt, hideTip, tipHead, tipRow };
 })();
 
 /* ---------- top ---------- */
 try {
-const { $, $$, el, esc, sum, state, hourly, stepS, market, U, N, settled, span, perMib, area, on, bytes, size, int, count, tia, tiaN, pct, day, dayOf, stamp, showTip, hideTip, tipHead, tipRow, activeDays, dayTicks, dailyRate, others, newPublishers, escrowFlow } = M;
+const { $, $$, el, esc, sum, state, hourly, stepS, market, U, N, settled, span, perMib, rateN, area, on, bytes, size, int, count, tia, tiaN, pct, day, dayOf, stamp, showTip, hideTip, tipHead, tipRow, activeDays, dayTicks, dailyRate, others, newPublishers, escrowFlow } = M;
 
 const WINDOW = { "24h": "last 24 hours", "7d": "last 7 days", "30d": "last 30 days", all: "since launch" };
 const Period = () => WINDOW[state.win].replace(/^./, (ch) => ch.toUpperCase());
@@ -500,7 +511,7 @@ function dateAxis(svg, X, a, b, hero) {
     else axisEnd(svg, x, name, "middle");
   });
 }
-const range = () => { const P = U().params; return `${tiaN(perMib(P.max_blob_size_bytes), 2)}–${tiaN(perMib(P.price_formula.chunk_bytes), 2)}`; };
+const range = () => { const P = U().params; return `${rateN(perMib(P.max_blob_size_bytes))}–${rateN(perMib(P.price_formula.chunk_bytes))}`; };
 const dayAt = (t) => activeDays().days.find((d) => d.day === dayOf(t));
 
 /* ---------- every time chart answers to one cursor ---------- */
@@ -663,17 +674,19 @@ const dayEnds = (svg, g) => { axisEnd(svg, g.L, day(g.days[0].day), "start"); ax
 
 /* ---------- paid per MiB: one dot per active day, between the protocol's two prices ---------- */
 function drawRate() {
-  const svg = wipe(c("rate")), g = dayAxis(svg, RAIL_W + RAIL_GAP), P = U().params, days = dailyRate(), right = frame(svg).R;
-  const hi = perMib(P.price_formula.chunk_bytes), lo = perMib(P.max_blob_size_bytes), floor = g.B - FLOOR_RISE;
+  const svg = wipe(c("rate")), fr = frame(svg), P = U().params, days = dailyRate(), right = fr.R, floor = fr.B - FLOOR_RISE;
+  // The ends are the protocol's two prices now. A period that reaches back past a change of the gas price holds days
+  // outside them, and the scale then opens to those days, so no dot leaves the plot.
+  const rates = days.map((s) => s.rate), hi = Math.max(perMib(P.price_formula.chunk_bytes), ...rates), lo = Math.min(perMib(P.max_blob_size_bytes), ...rates);
+  // The protocol's two prices stand in their own gutter, so no dot ever meets them. The gutter is as wide as the wider
+  // of the two, RAIL_W at least: a price at 0.004 utia per gas (0.01112) is longer than one at one utia per gas (2.78).
+  const ends = [[fr.T, hi], [floor, lo]].map(([y, v]) => { const t = el("text", { x: right, y: y + 4, "text-anchor": "end" }, svg); t.textContent = rateN(v); return t; });
+  const g = dayAxis(svg, Math.max(RAIL_W, Math.ceil(Math.max(...ends.map((t) => t.getComputedTextLength())))) + RAIL_GAP);
   const Y = (v) => +(g.T + ((floor - g.T) * Math.log(hi / v)) / Math.log(hi / lo)).toFixed(1);
   // A dot never outgrows its day: a long period's days stand closer than a full dot is wide.
   const r = +clamp(g.per * .45, 1.5, DOT).toFixed(2);
   const cx = (s) => clamp(g.x(s.i), g.L + r, g.R - r);
-  for (const [y, v] of [[g.T, hi], [floor, lo]]) {
-    el("line", { class: "base", x1: g.L, x2: g.R, y1: y + .5, y2: y + .5 }, svg);
-    // The protocol's two prices stand in their own gutter, so no dot ever meets them.
-    el("text", { x: right, y: y + 4, "text-anchor": "end" }, svg).textContent = tiaN(v, 2);
-  }
+  for (const y of [g.T, floor]) el("line", { class: "base", x1: g.L, x2: g.R, y1: y + .5, y2: y + .5 }, svg);
   dayEnds(svg, g);
   // The period's average, the tile's figure, as the cost chart draws it: a dashed level the days read against.
   const avg = market().paid_per_mib_utia;
@@ -695,8 +708,8 @@ function drawRate() {
 
 function rateTip(t) {
   const d = dayAt(t), s = dailyRate().find((x) => x.day === d.day), o = others();
-  return tipHead(day(d.day)) + (s ? tipRow("TIA per MiB", tiaN(s.rate, 2)) + tipRow("Data", size(s.bytes)) + tipRow("Fees paid", tia(s.fees)) + tipRow("Price range", `${range()} TIA`) : tipRow("No settlements"))
-    + (o ? tipHead(Period()) + tipRow("Average paid", tiaN(market().paid_per_mib_utia, 2)) + tipRow(`Without ${o.top.display} (${pct(o.share)} of data)`, tiaN(o.rate, 2)) : "");
+  return tipHead(day(d.day)) + (s ? tipRow("TIA per MiB", rateN(s.rate)) + tipRow("Data", size(s.bytes)) + tipRow("Fees paid", tia(s.fees)) + tipRow("Price range", `${range()} TIA`) : tipRow("No settlements"))
+    + (o ? tipHead(Period()) + tipRow("Average paid", rateN(market().paid_per_mib_utia)) + tipRow(`Without ${o.top.display} (${pct(o.share)} of data)`, rateN(o.rate)) : "");
 }
 
 /* ---------- active days: a tick a day, lit or quiet ---------- */
@@ -777,7 +790,7 @@ function draw() {
   f("new").innerHTML = int(fresh.length) + side(WINDOW[state.win]);
   // One account with most of the data sets the average alone; the note is what the rest paid.
   const o = others();
-  f("rate").innerHTML = m.settlements ? unit(tiaN(m.paid_per_mib_utia, 2), "average paid") + side(o ? `others ${tiaN(o.rate, 2)}` : "") : "<small>no settlements</small>";
+  f("rate").innerHTML = m.settlements ? unit(rateN(m.paid_per_mib_utia), "average paid") + side(o ? `others ${rateN(o.rate)}` : "") : "<small>no settlements</small>";
   f("escrow").innerHTML = pct(escrowFlow().used) + side("since launch");
   f("days").innerHTML = unit(int(D.active), `of ${int(D.total)}`) + side("with a settlement");
   q('[data-tile="days"] h3').textContent = hourly() ? "Active hours" : "Active days";
@@ -805,7 +818,7 @@ hoverEscrow();
 
 /* ---------- cost ---------- */
 try {
-const { $, el, esc, sum, area, on, U, market, settled, others, fee, perMib, tia, tiaN, tiaRange, bytes, size, int, sharePct, tipHead, tipRow, showTip, hideTip } = M;
+const { $, el, esc, sum, area, on, U, market, settled, others, gasRate, fee, perMib, rateN, tia, tiaN, tiaRange, bytes, size, int, sharePct, tipHead, tipRow, showTip, hideTip } = M;
 
 const sizeRange = (a, b) => { const [x, u] = size(a).split(" "), [y, v] = size(b).split(" "); return u === v ? `${x}–${y} ${u}` : `${x} ${u}–${y} ${v}`; };
 
@@ -813,10 +826,16 @@ const q = (s) => $("#cost " + s);
 const wipe = (n) => { n.textContent = ""; return n; };
 const label = (parent, x, y, s, anchor = "start", cls = "") => { const t = el("text", { x, y, "text-anchor": anchor, class: cls }, parent); t.textContent = s; return t; };
 
-// One small dot per size settled, in the line's own teal; the rows under the plot say how much. The curve, grid and ticks never move between windows or networks.
+// One small dot per size settled, in the line's own teal; the rows under the plot say how much. The curve, grid and ticks never move between windows; they follow the network's price formula.
 // GUT_PHONE, AXIS_PHONE and SIZES: a phone's gutter holds the bare ticks, its axis one line, and that line names every third size.
 // KEY_BAND: the key takes the plot's upper part there, since no corner of so short a plot is clear of the curve.
-const GUT = 84, GUT_PHONE = 32, TICK = 10, YT = [2, 1, .5, .25], DOT_R = 3, T = 16, AXIS_PHONE = 24, SIZES = 3, KEY_BAND = 72;
+const GUT = 84, GUT_PHONE = 32, TICK = 10, DOT_R = 3, T = 16, AXIS_PHONE = 24, SIZES = 3, KEY_BAND = 72;
+// The gridlines, in TIA per MiB, from the curve's own range: four, each half the one above, under the dearest price
+// (top, in utia per MiB) from the largest of 2, 4 or 8 times a power of ten. That is 2, 1, .5, .25 at one utia per gas
+// and .008, .004, .002, .001 at 0.004.
+const gridOf = (top) => { const t = Math.max(...[2, 4, 8].map((c) => Number(`${c}e${Math.floor(Math.log10(top / 1e6 / c))}`))); return [t, t / 2, t / 4, t / 8]; };
+// The fewest decimals, two at least, that say a fee whole: 0.83 and 0.695 TIA at one utia per gas, 0.00278 at 0.004.
+const feeD = (u) => { let d = 2; while (d < 6 && u % 10 ** (6 - d)) d++; return d; };
 // BAR: the tallest share in either row, so the two rows' bars compare. LEVEL_CLEAR: a gridline this close to the level rests. UNDER: room the level's words need below it.
 // STOP: the level ends where the curve comes this near, so on the flat of the curve it never reads as a second line.
 const AXIS = 38, ROW = 46, BAR = 30, BAR_FEW = 22, BAR_TWO = 16, ROW_GAP = 6, CLEAR = 8, PAID_H = 14, LEVEL_CLEAR = 5, UNDER = 16, STOP = 4;
@@ -844,28 +863,39 @@ const top = (a, z, y, h) => { const r = Math.min(3, h, (z - a) / 2); return `M${
 
 function draw() {
   const u = U(), f = u.params.price_formula, lo = f.chunk_bytes, hi = u.params.max_blob_size_bytes, m = market();
-  q('[data-f="head"]').innerHTML = `<span class="pair">${esc(tiaN(perMib(lo), 2))}<em class="at">TIA per MiB at ${esc(bytes(lo))}</em></span><span class="pair"><em>to</em>${esc(tiaN(perMib(hi), 2))}<em class="at">at ${esc(bytes(hi))}</em></span>`;
+  q('[data-f="head"]').innerHTML = `<span class="pair">${esc(rateN(perMib(lo)))}<em class="at">TIA per MiB at ${esc(bytes(lo))}</em></span><span class="pair"><em>to</em>${esc(rateN(perMib(hi)))}<em class="at">at ${esc(bytes(hi))}</em></span>`;
 
-  const svg = wipe(q(".plot")), W = svg.clientWidth, H = svg.clientHeight, list = bands(), n = list.length, small = M.phone(), gut = small ? GUT_PHONE : GUT, roof = small ? KEY_BAND : T;
+  const svg = wipe(q(".plot")), W = svg.clientWidth, H = svg.clientHeight, list = bands(), n = list.length, small = M.phone(), roof = small ? KEY_BAND : T;
 
+  // The formula between chunks, at the gas price now (gasRate). It meets perMib at every whole chunk, and every settled size is one.
+  const [rn, rd] = gasRate(), r = rn / rd;
+  const price = (s) => ((f.base_gas + (f.gas_per_chunk * s) / lo) * rn) / rd / (s / 2 ** 20);
+  const sizeAt = (p) => Math.min(hi, Math.max(lo, (f.base_gas * r) / (p / 2 ** 20 - (f.gas_per_chunk * r) / lo)));
+  const yHi = price(lo), yLo = price(hi) * .66, YT = gridOf(yHi).filter((t) => t * 1e6 > yLo);
+  // A gridline's name: the top one says the unit where the gutter has room for words. The gutter is as wide as the
+  // widest name needs, GUT (a phone's GUT_PHONE) at least, which holds every name at one utia per gas ("2 TIA per MiB");
+  // at 0.004 a name is two digits longer ("0.008 TIA per MiB").
+  const tickName = (t) => (t === YT[0] && !small ? `${t} TIA per MiB` : String(t));
+  const widest = Math.max(0, ...YT.map((t) => { const s = label(svg, 0, 0, tickName(t), "end"), w = s.getComputedTextLength(); s.remove(); return w; }));
+  const gut = Math.max(small ? GUT_PHONE : GUT, Math.floor(widest) + TICK);
   const rows = small ? H : H - 2 * ROW - ROW_GAP, base = rows - (small ? AXIS_PHONE : AXIS), run = W - gut, oct = run / n;
-  // The formula between chunks. It meets perMib at every whole chunk, and every settled size is one.
-  const price = (s) => ((f.base_gas + (f.gas_per_chunk * s) / lo) * f.utia_per_gas) / (s / 2 ** 20);
-  const sizeAt = (p) => Math.min(hi, Math.max(lo, (f.base_gas * f.utia_per_gas) / (p / 2 ** 20 - (f.gas_per_chunk * f.utia_per_gas) / lo)));
-  const yHi = price(lo), yLo = price(hi) * .66, edge = (i) => Math.round(gut + oct * i);
+  const edge = (i) => Math.round(gut + oct * i);
   const X = (s) => gut + oct * (.5 + Math.log2(s / lo));
   const Y = (p) => roof + ((base - roof) * Math.log(yHi / p)) / Math.log(yHi / yLo);
   // Every size settled, each on the curve, biggest band last so a crowded end stays readable.
   const marks = list.flatMap((b) => [...new Map(b.rows.map((r) => [r.size, 0])).keys()].map((s) => ({ b, s, n: b.rows.filter((r) => r.size === s).length, x: X(s), y: Y(price(s)), r: DOT_R })));
   const distinct = marks.length, shown = distinct > 1;
-  const avoid = shown && m.settlements ? Y(m.paid_per_mib_utia) : null, nearLevel = (y) => avoid != null && Math.abs(y - avoid) < LEVEL_CLEAR;
+  // The average is a level on this curve only while it lies between the curve's two ends. A period that reaches back
+  // past a change of the gas price averages two rates, and that figure is on no point of the curve.
+  const level = shown && m.settlements > 0 && m.paid_per_mib_utia <= yHi * (1 + 1e-9) && m.paid_per_mib_utia >= price(hi) * (1 - 1e-9);
+  const avoid = level ? Y(m.paid_per_mib_utia) : null, nearLevel = (y) => avoid != null && Math.abs(y - avoid) < LEVEL_CLEAR;
 
   // The grid stays under the curve: each line ends where the curve reaches its value.
   for (const t of YT) {
     const p = t * 1e6, y = Math.round(Y(p)) + .5;
     if (nearLevel(y)) continue;
     el("line", { class: "grid", x1: gut, x2: X(sizeAt(p)), y1: y, y2: y }, svg);
-    label(svg, gut - TICK, y + 4, t === YT[0] && !small ? `${t} TIA per MiB` : String(t), "end");
+    label(svg, gut - TICK, y + 4, tickName(t), "end");
   }
   // A column's line stops at the level, so the level's words sit on an empty ground.
   const floorOf = (y) => (avoid != null && avoid > y ? Math.round(avoid) : base);
@@ -881,8 +911,8 @@ function draw() {
   marks.forEach((k) => G.dots.get(k.b).push(el("circle", { class: "dot fade", cx: k.x, cy: k.y, r: k.r, fill: DOT }, svg)));
 
   const rOf = (x) => Math.max(0, ...marks.filter((k) => Math.abs(k.x - x) < k.r + 8).map((k) => k.r));
-  const first = label(svg, X(lo) + rOf(X(lo)) + CLEAR, Y(yHi) - 4, tiaN(perMib(lo), 2), "start", "mid");
-  label(svg, X(hi), Y(price(hi)) - rOf(X(hi)) - CLEAR, tiaN(perMib(hi), 2), "middle", "mid");
+  const first = label(svg, X(lo) + rOf(X(lo)) + CLEAR, Y(yHi) - 4, rateN(perMib(lo)), "start", "mid");
+  label(svg, X(hi), Y(price(hi)) - rOf(X(hi)) - CLEAR, rateN(perMib(hi)), "middle", "mid");
 
   // What each mark is, on the empty corner above the curve's tail.
   const key = el("g", {}, svg), kY = small ? 10 : T + 4, kLine = label(key, 0, kY, "the line is the price, log scale", "start", "mid"), kDot = label(key, 0, kY + 16, "a dot is a size settled", "start", "mid");
@@ -890,10 +920,10 @@ function draw() {
   G.paid = null;
   let words = null;
   // One size settled means the dot already is the average: a second figure would only repeat it.
-  if (m.settlements && shown) {
+  if (level) {
     const p = m.paid_per_mib_utia, y = Math.round(Y(p)) + .5, x = X(sizeAt(yHi * (yLo / yHi) ** ((y - STOP - roof) / (base - roof))));
     el("line", { class: "level", x1: gut, x2: x, y1: y, y2: y }, svg);
-    const say = label(svg, gut + 6, base - y < UNDER ? y - 5 : y + 13, `Average paid ${tiaN(p, 2)}, weighted by data`, "start", "mid level-say");
+    const say = label(svg, gut + 6, base - y < UNDER ? y - 5 : y + 13, `Average paid ${rateN(p)}, weighted by data`, "start", "mid level-say");
     // A short level leaves no room left of the curve: the words go past the first price, where the curve has already fallen away.
     if (gut + 6 + say.getComputedTextLength() + 6 > x) { say.setAttribute("x", +first.getAttribute("x") + first.getComputedTextLength() + 10); say.setAttribute("y", first.getAttribute("y")); }
     words = say;
@@ -917,7 +947,7 @@ function draw() {
   if (!small) for (const b of list) {
     const s = b.tick, end = !b.i || b.i === n - 1, x = X(s);
     label(svg, x, ty, bytes(s), "middle", tone(b));
-    label(svg, x, ty + 16, end ? tia(fee(s), fee(s) % 10000 ? 3 : 2) : tiaN(fee(s), fee(s) % 10000 ? 3 : 2), "middle", tone(b));
+    label(svg, x, ty + 16, end ? tia(fee(s), feeD(fee(s))) : tiaN(fee(s), feeD(fee(s))), "middle", tone(b));
   }
 
   G.cells = new Map(list.map((b) => [b, []]));
@@ -941,29 +971,32 @@ function draw() {
   // The columns have no room on a phone, so their figures stand in a table, every size on its own line.
   q(".ctab").innerHTML = !small ? "" : `<table><thead><tr><th>Size</th><th>Fee per blob</th><th><span class="dt" data-h>Share of settlements</span></th><th><span class="dt" data-h>Share of data</span></th></tr></thead><tbody>${list.map((b) => {
     const peak = (share) => { const all = list.map(share), most = Math.max(...all); return share(b) === most && most && all.indexOf(most) === all.lastIndexOf(most) ? ' class="lead"' : ""; };
-    return `<tr data-b="${b.i}"><td>${bytes(b.tick)}</td><td>${tiaN(fee(b.tick), fee(b.tick) % 10000 ? 3 : 2)}</td><td${peak((x) => x.nShare)}>${b.n ? sharePct(b.nShare) : "0%"}</td><td${peak((x) => x.dShare)}>${b.n ? sharePct(b.dShare) : "0%"}</td></tr>`;
+    return `<tr data-b="${b.i}"><td>${bytes(b.tick)}</td><td>${tiaN(fee(b.tick), feeD(fee(b.tick)))}</td><td${peak((x) => x.nShare)}>${b.n ? sharePct(b.nShare) : "0%"}</td><td${peak((x) => x.dShare)}>${b.n ? sharePct(b.dShare) : "0%"}</td></tr>`;
   }).join("")}</tbody></table>`;
 
   G.cross = el("line", { class: "cross", visibility: "hidden" }, svg);
   G.cursor = el("circle", { class: "cursor", r: 4, visibility: "hidden" }, svg);
   Object.assign(G, { list, marks, oct, rows, base, X, Y, lo, hi, n, edge, gut, end: H });
   const spoken = list.filter((b) => b.n).map((b) => `around ${bytes(b.tick)}: ${sharePct(b.nShare)} of settlements, ${sharePct(b.dShare)} of data`).join("; ");
-  svg.setAttribute("aria-label", `TIA per MiB falls from ${tiaN(perMib(lo), 2)} to ${tiaN(perMib(hi), 2)} TIA as blobs grow. ${spoken}`);
+  svg.setAttribute("aria-label", `TIA per MiB falls from ${rateN(perMib(lo))} to ${rateN(perMib(hi))} TIA as blobs grow. ${spoken}`);
 }
 
-// A fee is a multiple of 5,000 utia, so a third decimal says it whole where two would round it: 0.695 TIA.
-const feeD = (u) => (u % 10000 ? 3 : 2);
+// What these settlements paid, per blob and per MiB, from their own rows: one figure, or lowest–highest where the sizes
+// differ or a change of the gas price lies inside the period. The curve's own tooltip gives the formula's price now.
+const paidFee = (rows) => { const f = rows.map((r) => r.fee), lo = Math.min(...f), hi = Math.max(...f); return lo === hi ? tia(lo, feeD(lo)) : `${tiaN(lo, feeD(lo))}–${tia(hi, feeD(hi))}`; };
+const paidRate = (rows) => { const p = rows.map((r) => r.fee / (r.size / 2 ** 20)), [cheap, dear] = [rateN(Math.min(...p)), rateN(Math.max(...p))]; return cheap === dear ? cheap : `${cheap}–${dear}`; };
+
 function tipBand(b) {
-  const lo = fee(b.min), hi = fee(b.max);
-  if (!b.n) return tipHead(`Around ${bytes(b.tick)}`) + tipRow("No settlements") + tipRow("Fee", tia(fee(b.tick), feeD(fee(b.tick)))) + tipRow("TIA per MiB", tiaN(perMib(b.tick), 2));
-  const one = b.min === b.max, [cheap, dear] = [tiaN(perMib(b.max), 2), tiaN(perMib(b.min), 2)];
+  if (!b.n) return tipHead(`Around ${bytes(b.tick)}`) + tipRow("No settlements") + tipRow("Fee", tia(fee(b.tick), feeD(fee(b.tick)))) + tipRow("TIA per MiB", rateN(perMib(b.tick)));
+  const one = b.min === b.max;
   return tipHead(one ? size(b.min) : `Around ${bytes(b.tick)}`, DOT) + (one ? "" : tipRow("Sizes", sizeRange(b.min, b.max))) + tipRow("Settlements", int(b.n))
-    + tipRow("Share of settlements", sharePct(b.nShare)) + tipRow("Share of data", sharePct(b.dShare)) + tipRow("Fee", lo === hi ? tia(lo, feeD(lo)) : `${tiaN(lo, feeD(lo))}–${tia(hi, feeD(hi))}`) + tipRow("TIA per MiB", cheap === dear ? cheap : `${cheap}–${dear}`);
+    + tipRow("Share of settlements", sharePct(b.nShare)) + tipRow("Share of data", sharePct(b.dShare)) + tipRow("Fee", paidFee(b.rows)) + tipRow("TIA per MiB", paidRate(b.rows));
 }
 
-// One settled size: its own count and fee, inside the band it lights.
+// One settled size: its own count and what it paid, inside the band it lights.
 function tipDot(k) {
-  return tipHead(size(k.s), DOT) + tipRow("Settlements", int(k.n)) + tipRow("Share of settlements", sharePct(k.n / market().settlements)) + tipRow("Fee", tia(fee(k.s), feeD(fee(k.s)))) + tipRow("TIA per MiB", tiaN(perMib(k.s), 2));
+  const rows = k.b.rows.filter((r) => r.size === k.s);
+  return tipHead(size(k.s), DOT) + tipRow("Settlements", int(k.n)) + tipRow("Share of settlements", sharePct(k.n / market().settlements)) + tipRow("Fee", paidFee(rows)) + tipRow("TIA per MiB", paidRate(rows));
 }
 
 function rest() {
@@ -986,8 +1019,8 @@ const SHARES = () => tipHead("Share rows") + tipRow("Each settlement counts at t
 
 function hook() {
   const svg = q(".plot"), tab = q(".ctab");
-  const curveTip = (s) => tipHead(`${size(s)} blob`) + tipRow("Fee", tia(fee(s), fee(s) % 10000 ? 3 : 2)) + tipRow("TIA per MiB", tiaN(perMib(s), 2)) + (s === G.hi ? tipRow("Largest blob allowed") : "");
-  const paidTip = () => { const m = market(), o = others(); return tipHead("Average paid") + tipRow("TIA per MiB", tiaN(m.paid_per_mib_utia, 2)) + tipRow("Fees paid", tia(m.fees_utia)) + tipRow("Data", size(m.bytes)) + (o ? tipRow(`Without ${o.top.display} (${sharePct(o.share)} of data)`, tiaN(o.rate, 2)) : ""); };
+  const curveTip = (s) => tipHead(`${size(s)} blob`) + tipRow("Fee", tia(fee(s), feeD(fee(s)))) + tipRow("TIA per MiB", rateN(perMib(s))) + (s === G.hi ? tipRow("Largest blob allowed") : "");
+  const paidTip = () => { const m = market(), o = others(); return tipHead("Average paid") + tipRow("TIA per MiB", rateN(m.paid_per_mib_utia)) + tipRow("Fees paid", tia(m.fees_utia)) + tipRow("Data", size(m.bytes)) + (o ? tipRow(`Without ${o.top.display} (${sharePct(o.share)} of data)`, rateN(o.rate)) : ""); };
   const leave = () => { rest(); hideTip(); };
   const onPaid = (x, y) => { const p = G.paid, b = p?.box; return p && ((x > p.x0 && x < p.x1 && y > p.y - 5 && y < p.y + PAID_H + 2) || (x > b.x && x < b.x + b.width && y > b.y && y < b.y + b.height)); };
 
@@ -1041,7 +1074,7 @@ hook();
 
 /* ---------- publishers ---------- */
 try {
-const { $, $$, esc, sum, area, on, seg, token, hourly, pubs, settled, market, span, U, tia, tiaN, bytes, size, stamp, day, dayOf, count, pct, sharePct, int, showTip, hideTip, tipHead, tipRow, activeDays, dayTicks, blobEver, blobsLeft, runway, TAIL } = M;
+const { $, $$, esc, sum, area, on, seg, token, hourly, pubs, settled, market, span, U, tia, tiaN, rateN, bytes, size, stamp, day, dayOf, count, pct, sharePct, int, showTip, hideTip, tipHead, tipRow, activeDays, dayTicks, blobEver, blobsLeft, runway, TAIL } = M;
 
 const TOP = 8, HOUR = 3600, MIB = 2 ** 20;
 // Activity. Strokes stand on one lattice for every row: PITCH css px apart, GAP px between them, so a busy row stays a trace at any width and screen scale.
@@ -1216,7 +1249,7 @@ function rowHtml(p, i) {
     <td class="w">${name}</td>
     <td class="a"><canvas role="img" aria-label="${esc(count(p.settlements, "settlement"))}"></canvas><span class="pb-n" data-l="Settlements">${int(p.settlements)}</span></td>
     <td class="d" data-l="Data · share"><div class="pb-d"><b>${inUnit(p.bytes, S.units.d)}</b><span>${size(p.bytes)}</span><em>${sharePct(p.bytes_share)}</em></div></td>
-    <td data-c="mib" data-l="TIA per MiB">${tiaN(p.paid_per_mib_utia, 2)}</td>
+    <td data-c="mib" data-l="TIA per MiB">${rateN(p.paid_per_mib_utia)}</td>
     <td data-c="avg" data-l="Avg blob"><div class="pb-d"><b>${inUnit(p.avg_blob_bytes, S.units.avg)}</b><span>${size(p.avg_blob_bytes)}</span></div></td>
     <td data-c="left" data-l="Blobs left in escrow"${left === 0 || left == null ? ' class="z"' : ""}>${left == null ? (p.others ? "" : "not known") : int(left)}</td>
   </tr>`;

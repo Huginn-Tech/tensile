@@ -2,6 +2,7 @@ package scan
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -170,6 +171,44 @@ func TestPaymentsInTx_ChargeByAppVersion(t *testing.T) {
 		for _, p := range ps {
 			if p.GasUnits != 830_000 || p.AmountUtia != c.want || p.Denom != "utia" {
 				t.Errorf("v%d %s: gas=%d amount=%d%s, want 830000 gas and %d utia", c.version, p.Kind, p.GasUnits, p.AmountUtia, p.Denom, c.want)
+			}
+		}
+	}
+}
+
+// A deposit and a withdrawal request signed with the upper-case form of an
+// address are recorded under the account the module moved: the string as
+// sent through app v11, the lower-case address from v12, the one a
+// settlement of the same key is charged to.
+func TestPaymentsInTx_SignerByAppVersion(t *testing.T) {
+	key := secp256k1.GenPrivKey()
+	lower, err := bech32.ConvertAndEncode(accountHRP, key.PubKey().Address())
+	if err != nil {
+		t.Fatal(err)
+	}
+	upper := strings.ToUpper(lower)
+	if upper == lower {
+		t.Fatalf("no upper-case form of %s", lower)
+	}
+	raw := rawTx(t,
+		depositMsg{&fibretypes.MsgDepositToEscrow{Signer: upper, Amount: sdk.NewInt64Coin("utia", 5_000_000)}},
+		withdrawMsg{&fibretypes.MsgRequestWithdrawal{Signer: upper, Amount: sdk.NewInt64Coin("utia", 7)}},
+	)
+	for _, c := range []struct {
+		version uint64
+		want    string
+	}{{FibreAppVersion, upper}, {11, upper}, {12, lower}} {
+		blk := &Block{Height: 200, Time: time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC), AppVersion: c.version}
+		ps, err := paymentsInTx(raw, blk, 0, "abcd", time.Now())
+		if err != nil {
+			t.Fatalf("v%d: %v", c.version, err)
+		}
+		if len(ps) != 2 {
+			t.Fatalf("v%d: want 2 payments, got %d: %+v", c.version, len(ps), ps)
+		}
+		for _, p := range ps {
+			if p.Publisher != c.want {
+				t.Errorf("v%d %s: publisher=%s, want %s", c.version, p.Kind, p.Publisher, c.want)
 			}
 		}
 	}

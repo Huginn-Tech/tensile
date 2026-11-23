@@ -653,8 +653,13 @@ func Run(ctx context.Context, in Input, coder *Coder, to StepTimeouts) (m Measur
 	// One handshake per probe. The certificate check runs inside it (see
 	// handshake.verify), and a download rides the same connection: the
 	// certificate the row records is the one that served the rows, and the
-	// observer holds one of the server's bounded connection slots, as a
-	// client does, not two.
+	// request takes one of the connections the server allows this
+	// observer's address, not two. A server allows few: 16 per source
+	// address from celestia-app v12, the rest closed at once (16 in all
+	// before). A client keeps one connection to a validator for all its
+	// requests; here every request has its own, so the prober holds at most
+	// Config.EndpointConcurrency (12) to one server at a time
+	// (endpoints.go).
 	hs := newHandshake(in, to)
 	if in.SkipDownload {
 		tc, _ := hs.run(ctx, rawConn)
@@ -1379,9 +1384,10 @@ func classifyDownloadError(err error) Outcome {
 			// refusing to deliver a shard it holds: a server error, reached
 			// and answered, never the observer's gap and never a throttle.
 			// Anything else is the server declining this request: the storage
-			// limiter today (upload path only), the per-peer rate limiter
-			// Celestia has announced for the download path, or any limiter an
-			// operator puts in front of the port.
+			// limiter (upload path only), from celestia-app v12 the request
+			// memory budget and the limit per source address every request
+			// is admitted against, or any limiter an operator puts in front
+			// of the port.
 			switch {
 			case strings.Contains(ls, "received message larger than max"), strings.Contains(ls, "after decompression larger than max"):
 				return OutcomeProbeError

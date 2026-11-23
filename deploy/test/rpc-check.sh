@@ -9,13 +9,24 @@
 #
 #   block, block_results  at every height it scans (block_results needs
 #                         storage.discard_abci_responses = false on the node)
-#   validators?height=    at the PROMISE height, up to PaymentPromiseHeightWindow
-#                         (1000) blocks below the settlement it is scanning
+#   validators?height=    at the PROMISE height, twice. The scanner asks when it
+#                         reads the settlement, up to PaymentPromiseHeightWindow
+#                         blocks later (1,000 through app v11, 3,250 from
+#                         v12). The prober asks again when it reads the blob,
+#                         ten minutes before the serving window ends: about 4
+#                         hours after the promise with the chain's defaults
+#                         (shard_retention 4 h), which is about 5,500 blocks at
+#                         the 2.6 s blocks through app v11 and about 18,000 at
+#                         the 0.8 s blocks from v12
 #   abci_query?height=    x/fibre params at every height of a params-uncertainty
 #                         range, up to 5000 heights back (scan.maxVerifyHeights)
 #
-# A node pruned tighter than that records scan gaps and holds verdicts, and
-# the site says so, but the operator should know before, not after.
+# A node pruned tighter than that records scan gaps, holds verdicts and leaves
+# blobs unread (NOT_PROBED), and the site says so, but the operator should
+# know before, not after. The prober's 4 hours is the longest of these, and
+# it is longer than a node on the default min-retain-blocks keeps: 3,000
+# blocks in celestia-app v11 and 9,750 in v12, about 2 hours 10 minutes on
+# both. Set min-retain-blocks = 0, or a count that covers the serving window.
 #
 # x/fibre answering "unknown query path" (code 6) is the expected state
 # before app version 10 and a failure from 10 on: a node that reports the
@@ -29,8 +40,14 @@
 #
 # Usage: deploy/test/rpc-check.sh <rpc-url> [second-rpc-url]
 #   RPC_CHAIN_ID  the chain expected (default mocha-5)
-#   RPC_LOOKBACK  how far back history must reach, in blocks (default 6000 =
-#                 1000 promise window + 5000 uncertainty verify)
+#   RPC_LOOKBACK  how far back history must reach, in blocks. The default
+#                 follows the node's app version, as the block pace does:
+#                 6000 through app v11 (the prober's 4 hours at 2.6 s blocks,
+#                 about 5,500; also the scanner's 1,000 promise window + 5000
+#                 uncertainty verify) and 22000 from v12 (the same 4 hours at
+#                 0.8 s blocks, about 18,000, with room; it also covers the
+#                 3,250 promise window + 5000). Below v12 a node that keeps
+#                 fewer than 22000 gets a warning, not a failure
 #
 # Exit 0 when every check passes, 1 otherwise. Needs curl and python3.
 set -o errexit -o nounset -o pipefail
@@ -40,7 +57,8 @@ set -o errexit -o nounset -o pipefail
 RPC="${1:?rpc url}"
 RPC2="${2:-}"
 WANT_CHAIN="${RPC_CHAIN_ID:-mocha-5}"
-LOOKBACK="${RPC_LOOKBACK:-6000}"
+LOOKBACK="${RPC_LOOKBACK:-}"
+V12_LOOKBACK=22000
 FIBRE_APP_VERSION=10
 
 # get <url> -> body on stdout; empty on transport failure.
@@ -89,6 +107,11 @@ if [ "$age" -le 120 ]; then pass "newest block ${age}s old"; else fail "newest b
 abci=$(get "$RPC/abci_info")
 appv=$(field "$abci" 'int(d["result"]["response"]["app_version"])')
 if [ -n "$appv" ]; then pass "app version $appv (x/fibre exists from $FIBRE_APP_VERSION)"; else fail "abci_info gave no app_version"; appv=0; fi
+# The default lookback follows the node's app version, as the block pace does.
+later=""
+if [ -z "$LOOKBACK" ]; then
+  if [ "$appv" -ge 12 ]; then LOOKBACK=$V12_LOOKBACK; else LOOKBACK=6000; later=$((tip - V12_LOOKBACK)); fi
+fi
 
 echo "== history the observer needs (lookback $LOOKBACK blocks)"
 need=$((tip - LOOKBACK))
@@ -97,6 +120,10 @@ if [ "$earliest" -le "$need" ]; then
   pass "earliest_block_height $earliest <= $need"
 else
   fail "earliest_block_height $earliest > $need: pruned tighter than the observer's lookback"
+fi
+# What the node will be asked for once the chain runs app v12: said now, never a failure before then.
+if [ -n "$later" ] && [ "$later" -ge 1 ] && [ "$earliest" -gt "$later" ]; then
+  warn "from app v12 (0.8 s blocks) the observer reads back $V12_LOOKBACK blocks; this node keeps $((tip - earliest))"
 fi
 h=$need
 blk=$(get "$RPC/block?height=$h")
@@ -113,7 +140,7 @@ vals=$(get "$RPC/validators?height=$h&page=1&per_page=100")
 vt=$(field "$vals" 'int(d["result"]["total"])')
 vn=$(field "$vals" 'len(d["result"]["validators"])')
 if [ -n "$vt" ]; then pass "validators at $h: $vn of $vt on page 1"
-else fail "validators at $h: $(rpc_err "$vals") — the scanner fetches the set at the promise height"; fi
+else fail "validators at $h: $(rpc_err "$vals") — the scanner fetches the set at the promise height, and the prober again when it reads the blob"; fi
 sp=$(get "$RPC/abci_query?path=%22/cosmos.staking.v1beta1.Query/Params%22&height=$h")
 code=$(field "$sp" 'd["result"]["response"]["code"]')
 if [ "$code" = "0" ]; then pass "abci_query at height $h answers (historical state kept)"

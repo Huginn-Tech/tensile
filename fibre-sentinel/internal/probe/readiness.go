@@ -47,9 +47,12 @@ type ReadinessResult struct {
 // uploads: the standard gRPC health Check for the server as a whole (service
 // ""), which celestia-app's Fibre server answers from v10.5 on. It rides the
 // connection whose certificate the probe just verified, so the answer is the
-// validator's own and costs its server no second connection slot, and the
-// connection is closed on return: the server keeps few. Check alone is asked;
-// the server does not implement Watch.
+// validator's own and costs its server no second connection, and the
+// connection is closed on return: a server allows few, 16 per source address
+// from celestia-app v12 with the rest closed at once (16 in all before), and
+// the prober's readings come from the same address (they hold at most 12 to
+// one server: endpoints.go). Check alone is asked; the server does not
+// implement Watch.
 func askReadiness(ctx context.Context, vantage string, tc *tls.Conn, timeout time.Duration) *ReadinessResult {
 	r := &ReadinessResult{}
 	t0 := time.Now()

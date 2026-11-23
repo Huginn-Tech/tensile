@@ -24,10 +24,16 @@ const (
 	OutcomeServerError Outcome = "SERVER_ERROR"
 	// OutcomeThrottled: the validator was reached, proved its identity and
 	// refused the request with ResourceExhausted that is not the observer's
-	// own receive bound: a server-side limit. Celestia has said a per-peer
-	// rate limiter is coming to the Fibre server; a probe it turns away says
-	// nothing about the shard, and filing it as the observer's own error
-	// would hide a limit set tight enough to keep real clients out.
+	// own receive bound: a refusal at the server's own limit. A Fibre server
+	// of celestia-app v11 or earlier has none on downloads; one of v12 admits
+	// every request against a request memory budget and a limit per source
+	// address, and answers with this code when one of them is full. A probe
+	// it turns away says nothing about the shard, and filing it as the
+	// observer's own error would hide a limit set tight enough to keep real
+	// clients out. The limit per source address is 8 requests being received
+	// at once, and this observer can have 12 open to one server
+	// (endpoints.go), so on a server whose memory budget is full a refusal
+	// can be of this observer's own making.
 	OutcomeThrottled Outcome = "RPC_THROTTLED"
 	// OutcomeRPCDeadline: the download did not finish within the observer's
 	// own deadline (base + size-scaled), on the earlier schedule. Never a
@@ -106,8 +112,9 @@ const (
 	// moment of the probe. Nobody can fetch its rows, but this is a registry
 	// state (jailing and unbonding remove a provider from the bonded list;
 	// the chain keeps the entry until the validator leaves staking state or
-	// has been jailed and unbonded for a week past its unbonding time), not
-	// a refusal to serve.
+	// has not been bonded for a week past its unbonding time: through app
+	// version 11 only if it is also jailed, from 12 jailed or not), not a
+	// refusal to serve.
 	ClassNotRegistered Classification = "NOT_REGISTERED"
 	// ClassShadowedShard: the rows that came back are genuine rows of this
 	// blob — they verify against the commitment — but their indices are not
@@ -155,9 +162,11 @@ const (
 	// point is visible as such on its own page.
 	ClassServerError Classification = "SERVER_ERROR"
 	// ClassThrottled: the endpoint was reached, proved its identity and
-	// answered the download with a rate limit. Shown beside the rate under
-	// its own name, never inside it, and the probe policy backs off from a
-	// validator that says so.
+	// refused the download at a limit of its own (ResourceExhausted: from
+	// celestia-app v12 the server's request memory budget or its limit per
+	// source address). Shown beside the rate under its own name, never
+	// inside it, and the probe policy backs off from a validator that says
+	// so.
 	ClassThrottled Classification = "THROTTLED"
 	// ClassTolerated: NOT_FOUND / unreachable in the grace window right after
 	// must_serve_until. Within measured prune lag; not held against the

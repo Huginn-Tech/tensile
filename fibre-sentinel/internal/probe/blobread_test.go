@@ -516,14 +516,17 @@ func TestAReadingThatCannotStartInTimeIsNotRead(t *testing.T) {
 	}
 }
 
-// The client has no limit per validator, and neither has the reading: two
-// promises over one blob, read at once, ask the validator they share at
-// once.
-func TestNoLimitPerValidator(t *testing.T) {
+// The client asks a validator for every blob at once, and so does the
+// reading while it is under its limit on connections to one server
+// (Config.EndpointConcurrency, here sentinel-probe's default): two promises
+// over one blob, read at once, ask the validator they share at once.
+func TestReadingsAskAValidatorAtOnce(t *testing.T) {
 	f := newReadFixture(t, 4, 8, []fakeVal{{rows: []int{0, 1, 2, 3}, serve: fakeSlow(400 * time.Millisecond)}})
 	other := *f
 	other.pub.PromiseHash = strings.Repeat("ee", 32)
 	p := readProber(t, f, &other)
+	p.cfg.EndpointConcurrency = DefaultEndpointConcurrency
+	p.initPace()
 	ms := readNow(t, p, f.pub, other.pub)
 	if len(ms) != 2 || !ms[0].Download.CommitmentVerified || !ms[1].Download.CommitmentVerified {
 		t.Fatalf("rows: %+v", ms)

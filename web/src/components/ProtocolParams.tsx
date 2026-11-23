@@ -67,7 +67,11 @@ export default function ProtocolParams() {
     if (target === here || here.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING) target.scrollIntoView({ block: "start" });
   }, [p]);
   const wait = <p className="muted">{error ? `The observer API is not answering (${error}); the values are at /api/v1/params.` : "Loading…"}</p>;
-  const c = p?.current ?? null;
+  // A change the scanner read from chain state leaves two entries: "verified" at the height it took effect from, and
+  // "reconcile" at the scanner's check after it, with the same values. The second is the first found again, so it is
+  // not a row of its own, and "On chain now" gives the first one's height.
+  const hist = p ? p.history.filter((e, i, a) => !(e.source === "reconcile" && e.changed.length === 0 && i > 0 && a[i - 1].source === "verified")) : [];
+  const c = hist.length ? hist[hist.length - 1] : p?.current ?? null;
   const k = p?.protocol;
   return (
     <>
@@ -100,16 +104,17 @@ export default function ProtocolParams() {
       )}
 
       <H3 id="params-history">Parameter history</H3>
-      {!p ? null : p.history.length > 1 ? (
+      {!p ? null : hist.length > 1 ? (
         <div className="tablewrap framed ref-table">
           <table>
             <thead><tr><th>From height</th><th>Block time (UTC)</th><th>Source</th><th>Changed</th></tr></thead>
             <tbody>
-              {[...p.history].reverse().map((e) => (
+              {[...hist].reverse().map((e) => (
                 <tr key={`${e.effective_from_height}-${e.effective_from_tx_index}`}>
                   <td className="mono">{e.effective_from_height.toLocaleString("en-US")}</td>
                   <td className="mono">{e.effective_from_time ? utc(e.effective_from_time) : <span className="faint">not read</span>}</td>
-                  <td>{e.source === "seed" ? "start of record" : e.source === "finalize" ? "end of block (governance)" : "transaction"}</td>
+                  {/* reconcile and verified: read from chain state, with no event on record for the change (an upgrade's handler announces none) */}
+                  <td>{e.source === "seed" ? "start of record" : e.source === "finalize" ? "end of block (governance)" : e.source === "reconcile" || e.source === "verified" ? "read from chain state (no event on record)" : "transaction"}</td>
                   <td className="wrap">{e.changed.length ? e.changed.map((f) => {
                     const v = values(e).find(([key]) => key === f);
                     return `${LABEL[f] ?? f} → ${v ? v[1] : "?"}`;

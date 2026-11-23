@@ -30,7 +30,8 @@ port, behind one Caddy with a site per network (see "Two networks").
   backup, its manifest and its remote proof of the exports, and the second
   vantage's pull use them.
 - A CometBFT RPC endpoint for the chain you observe. Use your own full node
-  (default pruning is fine; no archive node is needed) with
+  (no archive node is needed, but the default `min-retain-blocks` is too
+  low; see the end of this item) with
   `storage.discard_abci_responses = false` in `config.toml`: the scanner
   reads `block_results` for every block, and a node that discards ABCI
   responses answers "node is not persisting finalize block responses"
@@ -45,7 +46,17 @@ port, behind one Caddy with a site per network (see "Two networks").
   port), so it reads each block the moment the node has it. A proxy in
   front of the node has to pass websocket upgrades for that; without them
   the scanner follows by polling the tip every second, as before
-  (`-subscribe=false` turns the subscription off).
+  (`-subscribe=false` turns the subscription off). The node must keep
+  blocks for as long as a blob is served: the prober asks it for the
+  validator set at a promise's height when it reads the blob, ten minutes
+  before the serving window ends, which is about 4 hours after the promise
+  with the chain's defaults (`shard_retention` 4 h): about 5,500 blocks at
+  the 2.6 s blocks through app v11, about 18,000 at the 0.8 s blocks from
+  v12. The node's default `min-retain-blocks` (3,000 in celestia-app v11,
+  9,750 in v12) keeps about 2 hours 10 minutes on both, so set
+  `min-retain-blocks = 0` in `app.toml`, or a count that covers the serving
+  window (22,000 covers it at v12's pace). A blob whose validator set the
+  node no longer holds is not read (`NOT_PROBED`).
 - Before the chain runs app version 10, `x/fibre` and `x/valaddr` do not
   exist. The scanner logs "x/fibre is not active on this chain yet" and
   keeps following blocks, retrying the params query every 100 heights;
@@ -146,7 +157,9 @@ longer needs".
 
 `START_HEIGHT` is where a fresh scan starts (0, the default, is the tip).
 The node must hold the blocks a scan reads: the state before the start and
-the validator sets a promise window (1000 blocks) below it. A
+the validator sets a promise window below it
+(`payment_promise_height_window`: 1,000 blocks through app v11, 3,250 from
+v12). A
 `START_HEIGHT` closer than that to the node's oldest block is refused at
 start, with the lowest height the node can serve. A scan from the tip on a
 node that does not hold a promise window of blocks yet, one state-synced
@@ -182,11 +195,10 @@ starts with a stack trace, the message index cannot be read, and only the
 
 The prober asks a validator only for a blob it endorsed, in window, for its
 own rows, as the client asks for a shard, and asks it again, up to twice,
-only when its answer did not serve. The
-read-path rate limiting Celestia is designing (forum
-topic 2295) treats requests for shards a validator was never assigned as
-illegitimate; reading only real, in-window, assigned commitments keeps the
-observer's traffic on the right side of it.
+only when its answer did not serve. Every request is therefore one a client
+could make. What a Fibre server limits from celestia-app v12 is counted by
+source address, whatever is asked for: connections, and requests against
+its request-memory budget ("What the prober sustains" below).
 
 **When the host is the validator's fault** (the methodology's own rule
 is that this observer's trouble never counts against a validator). Under
@@ -223,9 +235,19 @@ of rows, and at 20 blobs a minute roughly 120 to 180 Mbit/s: arithmetic,
 not a measurement, and about three times what the earlier reading moved
 when it stopped at enough rows (12 to 20 validators and about 19 MiB a
 blob, about 50 Mbit/s). Every endorser is asked for every blob it
-endorsed; the reading's own requests have no limit per validator, as the
-client has none, and at most one later attempt is in flight to a
-validator. A scheduler run on the observer (82 shared fake validators with
+endorsed, on one connection per request (the client keeps one connection
+to a validator for all its requests). From celestia-app v12 a server
+allows 16 connections per source address by default
+(`max_connections_per_ip`) and closes the rest at once, so
+the prober holds at most 12 to one server (`-endpoint-concurrency`; 0 is
+no limit), the readings' requests and the later attempts together; a
+request past that waits as it does for the limits below. It costs reading
+capacity in one case: a server that every reading asks and that answers
+nothing holds each request for 30 s (15 s and the re-dial), and a reading
+keeps its blob slot until its last answer is in, so the prober then reads
+22 to 24 blobs a minute where 16 readings at once gave 32. At most one
+later attempt is in flight to a validator. A scheduler run on the
+observer (82 shared fake validators with
 mocha's row shape scaled to 1/16, 1.0 to 1.8 s per shard, production
 timeouts, loopback) read 60 of 60 blobs at 20 a minute (reading p50 1.9 s,
 max 3.0 s, no start lag) and 180 of 180 at 60 a minute (p50 2.5 s, max
@@ -233,8 +255,9 @@ max 3.0 s, no start lag) and 180 of 180 at 60 a minute (p50 2.5 s, max
 rows, and the earlier one-request-per-validator pacing, which only slowed
 it; at 120 a minute every blob was still read but the start lag grew to
 30 s in two minutes. The limits it keeps, 16 blobs and 256 requests at
-once, 512 MiB of shards in flight and a reading rate of 400 Mbit/s
-(`-blob-concurrency`, `-concurrency`, `-in-flight-mib`, `-max-read-mbps`),
+once, 12 connections to one server, 512 MiB of shards in flight and a
+reading rate of 400 Mbit/s (`-blob-concurrency`, `-concurrency`,
+`-endpoint-concurrency`, `-in-flight-mib`, `-max-read-mbps`),
 only delay a request: its 15 s start once it is let go, and it carries the
 phase its reading started in, so a request held back past
 `must_serve_until` counts as the client, which asks at once, would have
@@ -339,7 +362,7 @@ scan moves on. That includes `block_results` answering "could not find
 results for height" more than a block below the tip: the node never kept
 those results. At the tip the same answer is the second between the node
 storing a block and committing it; it is retried quietly and logged only
-if it lasts past the third attempt. A chain halt is warned about every
+if its fifth attempt fails too, about four seconds on. A chain halt is warned about every
 five minutes and waited out; `Restart=always` in the units is for
 crashes, not for outages. The
 scanner's block subscription is no exception: when it drops (a node
@@ -385,7 +408,7 @@ failing checks otherwise.
 | `work` | one of the collector's stages has failed for over ten minutes: `state`, `checkpoint`, `late verdicts`, `corrections`, `holds`, `retention`, `registry`, `export`, `heartbeat`, `hosting` or `avatars` (the store's side of the pictures: listing the identities due, storing one; a Keybase lookup that fails is not a stage's failure). The chain poll's success no longer hides it. |
 | `ingest` | lines have waited in a record file for ten minutes with the collector's cursor unmoved (`collector has ingested nothing for <d>`): its loop is stuck, and the site's figures stop moving. Where the API cannot read the record files, it fails once no cursor has moved for 15 minutes. |
 | `chain_polls` | a chain-side poll has not succeeded in time: the chain status and the endpoints for 15 minutes, the escrow for 15 minutes once Fibre is active, the validator identities for 26 hours. A poll never recorded fails once the collector has run longer than that. The last value stays served meanwhile, so this is the only sign. |
-| `scanner_lag` | the scanner is more than 200 blocks behind the chain. |
+| `scanner_lag` | the scanner is more than 650 blocks behind the chain: about 8.7 minutes at the 0.8 s blocks of app v12, about 28 minutes at the 2.6 s blocks before it. |
 | `chain_liveness` | the newest block the observer knows of, from the collector's poll or the scanner's own reading, is over ten minutes old: the chain or the node is halted. A stuck collector alone no longer reads as a halted chain. |
 | `vantages` | another vantage seen in the last seven days has sent no endpoint check for 20 minutes: its heartbeat died or the pull fails. |
 | `api_errors` | a route answered a 5xx, or its handler panicked, in the last ten minutes. A 503 is not counted: the API answers it on purpose, while a window is still being computed (which `snapshots` covers) and as `/v1/health`'s own verdict. The error is in the API's journal. |
@@ -2085,8 +2108,9 @@ can go: `sudo rm -r /var/lib/fibre-observer/mocha-txbackfill`.
   done by hand for every release a network moves to, and before mainnet
   starts ("7d. Mainnet: a fresh install", step 1).
 - **The scanner refuses `START_HEIGHT`, or waits for the node's history.**
-  A fresh scan needs the node to hold the promise window (1000 blocks)
-  below its start. A refused `START_HEIGHT` names the lowest height the
+  A fresh scan needs the node to hold the promise window
+  (`payment_promise_height_window`: 1,000 blocks through app v11, 3,250
+  from v12) below its start. A refused `START_HEIGHT` names the lowest height the
   node can serve: set that, or 0, or use a node with more history. A scan
   from the tip waiting on a freshly synced node starts by itself once the
   tip reaches the height its journal names.
@@ -2405,9 +2429,13 @@ differ from Mocha's, in order.
    A node restored from a state-sync snapshot holds nothing below it: let
    it build history until
    `sudo RPC_CHAIN_ID=celestia deploy/test/rpc-check.sh "$RPC"` passes
-   (6000 blocks behind the tip). The scanner refuses a `START_HEIGHT` the
-   node cannot serve, and a scan from the tip waits for the 1000 blocks it
-   needs (section 3).
+   (what the prober reads back, about 4 hours: 6,000 blocks behind the tip
+   through app v11, at 2.6 s blocks, and 22,000 from v12, at 0.8 s blocks;
+   `RPC_LOOKBACK` overrides). Keep that history from
+   then on: `min-retain-blocks = 0`, or a count that covers the serving
+   window (section 1). The scanner refuses a `START_HEIGHT` the
+   node cannot serve, and a scan from the tip waits for the promise window
+   it needs (1,000 blocks through app v11, 3,250 from v12; section 3).
 3. **The env file.** `/etc/fibre-observer/mainnet.env` from
    `deploy/observer.env.example`, installed as in section 3
    (`sudo install -m 0600 -o root -g root deploy/observer.env.example /etc/fibre-observer/mainnet.env`):
@@ -2510,7 +2538,7 @@ minutes and touch the running services, the last one takes a day.
 
 | script | question | touches | time |
 |---|---|---|---|
-| `rpc-check.sh <rpc> [rpc2]` | is the RPC node on the expected chain (`RPC_CHAIN_ID`, default `mocha-5`; `celestia` on mainnet), in sync, and keeping `block_results`, the validator set and historical state as far back as the observer reads (6000 blocks)? With a second node, do the two agree on a block hash? | nothing | seconds |
+| `rpc-check.sh <rpc> [rpc2]` | is the RPC node on the expected chain (`RPC_CHAIN_ID`, default `mocha-5`; `celestia` on mainnet), in sync, and keeping `block_results`, the validator set and historical state as far back as the observer reads (the prober's 4 hours: 6,000 blocks through app v11, 22,000 from v12; `RPC_LOOKBACK` overrides)? With a second node, do the two agree on a block hash? | nothing | seconds |
 | `exposure.sh` | is only ssh/http/https reachable from outside, is every unit enabled for a reboot, does HTTPS reach the API through Caddy, does a test alert actually arrive at every destination set (the webhook, the Telegram chat; neither set fails), are the env file, `rclone.conf` and litestream's env file closed to other accounts, is a sampling master key, if one is left, `600`? | posts one test message | seconds |
 | `persistence.sh` | live: do the checkpoints survive a restart, is the database sound? On one consistent cut of the record: no duplicate line, a rebuild from the cut alone holds exactly its records, and `sentinel-recompute` agrees with a second API serving that same cut, both as of the cut's timestamp | restarts collector + scanner; rebuilds into a temp dir; a throwaway API on `:18082` | minutes |
 | `restore.sh` | does the nightly copy verify against its manifest (every file present, at least the cut, hash and record count equal, every line a JSON record but the ones the cut lists, a live file rotated since read back from the copy's segments, the cut's own `state.json` put in place of the copy's, no master key), rebuild to exactly the cut's records, and serve them from a second API on a spare port? | starts a throwaway API on `:18081` | minutes |

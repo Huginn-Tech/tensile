@@ -90,7 +90,7 @@ export type ParamEntry = {
   effective_from_height: number;
   effective_from_tx_index: number;
   effective_from_time: string | null;
-  source: "seed" | "event" | "finalize" | string;
+  source: "seed" | "event" | "finalize" | "reconcile" | "verified" | string;
   withdrawal_delay_s: number;
   payment_promise_timeout_s: number;
   payment_promise_height_window: number;

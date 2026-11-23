@@ -15,6 +15,12 @@ import (
 // (celestia-app x/valaddr/types/msg.go). The keeper emits it as a legacy
 // event on every MsgSetFibreProviderInfo, set or update; there is no
 // removal message, and an empty host is refused by the message itself.
+// The chain can still drop an entry, with no event: its end-of-block sweep
+// removes the registration of a validator that has left staking state, or
+// has not been bonded for seven days past its unbonding time (through app
+// version 11 only if it is also jailed; from 12 jailed or not, and from 12
+// a host can be set only while the validator is bonded). This history does
+// not see that: a host stays the last one registered.
 const (
 	eventSetFibreProviderInfo = "set_fibre_provider_info"
 	attrValidatorConsAddress  = "validator_consensus_address"
@@ -31,8 +37,9 @@ const (
 	// the scan).
 	HostFromSeed = "seed"
 	// HostFromSeedLazy: no event on record and the validator was not in the
-	// bonded seed (jailed or unbonding when the scan started; registration
-	// outlives bonding), so its registration was read once, the first time
+	// bonded seed (jailed or unbonding when the scan started; a registration
+	// outlives bonding until the chain's sweep removes it, see
+	// eventSetFibreProviderInfo), so its registration was read once, the first time
 	// it appeared in an assignment, with a single FibreProviderInfo query at
 	// that settlement height. Every change since the scan's start would have
 	// been an event on record, so the value holds from the seed height on.
@@ -48,7 +55,9 @@ const (
 	// one validator's registration the first time it was needed) and the
 	// value recorded from the first height after the gap. Every block from
 	// there to the read height was read, events included, and a
-	// registration is never removed, so the value holds from the gap's end
+	// registration is never set or changed without an event (the chain's
+	// sweep can remove one silently, it cannot add one), so the value read
+	// holds from the gap's end
 	// for a validator with no event of its own in that span (one with an
 	// event is known from the event on, and unknown before it). Settlements
 	// inside or before the gap are untouched: still unknown_gap where the

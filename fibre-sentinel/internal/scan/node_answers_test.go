@@ -198,7 +198,8 @@ func TestMissingResultsAtTheTipAreTheRaceAndStayQuiet(t *testing.T) {
 
 // The params reconcile at the block just read meets the race one step
 // later: cosmos-sdk's "cannot query with height in the future" (code 26).
-// Quiet for two attempts like the results race; a third failure is logged.
+// Quiet for four attempts like the results race, the 3.75 seconds its short
+// waits take; a fifth failure is logged.
 func TestAHeightInTheFutureIsTheTipRace(t *testing.T) {
 	future := &ABCIError{Path: "/celestia.fibre.v1.Query/Params", Height: 900, Code: 26, Codespace: "sdk",
 		Log: "cannot query with height in the future; please provide a valid height: invalid height"}
@@ -211,12 +212,14 @@ func TestAHeightInTheFutureIsTheTipRace(t *testing.T) {
 	if IsHeightUnavailable(future) {
 		t.Fatal("a height in the future is not one the node will never have")
 	}
-	if !quietTipRace(0, true) || !quietTipRace(1, true) || quietTipRace(2, true) || quietTipRace(0, false) {
+	if !quietTipRace(0, true) || !quietTipRace(1, true) || !quietTipRace(2, true) || !quietTipRace(3, true) ||
+		quietTipRace(4, true) || quietTipRace(0, false) {
 		t.Fatal("quiet attempts of a tip race")
 	}
 
 	s := &Scanner{log: NewLogger(20)}
 	calls := 0
+	start := time.Now()
 	err := s.retryRPC(context.Background(), "params reconcile at height 900", func() error {
 		calls++
 		if calls == 1 {
@@ -227,8 +230,30 @@ func TestAHeightInTheFutureIsTheTipRace(t *testing.T) {
 	if err != nil || calls != 2 {
 		t.Fatalf("err=%v calls=%d", err, calls)
 	}
+	// The race's own first wait, not the second any other failure waits.
+	if waited := time.Since(start); waited < tipRaceBackoff(0) || waited >= rpcBackoff(0) {
+		t.Fatalf("the tip race waited %s, want %s or a little more", waited, tipRaceBackoff(0))
+	}
 	if got := s.log.lines(); got != "" {
 		t.Fatalf("logged:\n%s", got)
+	}
+}
+
+// A tip race is asked again within a block of app version 12 (0.8 seconds):
+// 250 ms, 500 ms, then the ladder every other failure starts on, which
+// itself is unchanged.
+func TestTipRaceBackoffStartsShortAndJoinsTheLadder(t *testing.T) {
+	want := []time.Duration{250 * time.Millisecond, 500 * time.Millisecond, time.Second, 2 * time.Second, 4 * time.Second,
+		8 * time.Second, 16 * time.Second, 30 * time.Second, 30 * time.Second}
+	for attempt, w := range want {
+		if got := tipRaceBackoff(attempt); got != w {
+			t.Errorf("tip race attempt %d: wait %s, want %s", attempt, got, w)
+		}
+	}
+	for attempt, w := range want[2:] {
+		if got := rpcBackoff(attempt); got != w {
+			t.Errorf("attempt %d: wait %s, want %s", attempt, got, w)
+		}
 	}
 }
 

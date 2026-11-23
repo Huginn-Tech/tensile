@@ -76,8 +76,11 @@ export function onBlobs(fn: (b: TipBlobs) => void): () => void {
 
 /** how far past its block's stamp a blob may be heard of and still be news; older, the page caught up on it */
 const HEARD_MS = 15000;
-/** a block, by the last blob this page timed past its block; Celestia's six seconds until one has */
-let blockMs = 6000;
+/**
+ * a block, by the last blob this page timed past its block; until one has, the 2.6 seconds of a block through app
+ * v11 (from v12 a block is 0.8 seconds, and the guess lasts one block at most)
+ */
+let blockMs = 2600;
 
 /**
  * When a blob settled, in ms on the observer's clock. A blob settles when its block is committed, about a block after

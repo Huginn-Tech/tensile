@@ -159,7 +159,8 @@ func TestAnAvailableBlobCountsNothingAgainstAnyone(t *testing.T) {
 
 // On an Unavailable blob every endorsing validator whose rows did not come
 // back is not served, whatever the client met: not found, a timeout, a
-// rate limit, a server error or a CANCELLED it sent, a certificate the
+// refusal at the server's own limit, a server error or a CANCELLED it
+// sent, a certificate the
 // client rejects, no registered host, a connect that timed out or found no
 // route, or a request that failed on this observer's side while others
 // reached their validators. Every validator whose rows came back verified

@@ -64,7 +64,7 @@ const NO_THROUGHPUT = "No shard of 2 MiB or more downloaded yet";
 const WORDS: Record<string, [string, string]> = {
   HEALTHY: ["Served", "ok"], FAULT: ["Not served", "fault"], UNATTESTED: ["Not endorsed", "unsigned"], NOT_PROBED: ["Not read by Tensile", "gone"],
   EXPECTED_GONE: ["Expected gone", "gone"], UNREACHABLE: ["Unreachable", "other"], NOT_REGISTERED: ["No endpoint", "none"],
-  IDENTITY_EXPIRED: ["Certificate expired", "other"], IDENTITY_MISMATCH: ["Wrong certificate", "other"], THROTTLED: ["Rate limited", "other"],
+  IDENTITY_EXPIRED: ["Certificate expired", "other"], IDENTITY_MISMATCH: ["Wrong certificate", "other"], THROTTLED: ["Server limit", "other"],
   SERVER_ERROR: ["Server error", "other"], RETENTION_UNVERIFIED: ["Deadline unverified", "gone"], TOLERATED: ["Tolerated", "other"],
   UNREACHABLE_POST_WINDOW: ["Unreachable after window", "gone"], SERVED_PAST_WINDOW: ["Served after window", "gone"],
   SHADOWED_SHARD: ["Shadowed", "other"], UNMATCHED_GENUINE: ["Unmatched genuine rows", "other"], PROBE_ERROR: ["Read failed", "gone"],
@@ -532,11 +532,11 @@ function Page() {
   if (c?.readiness) {
     const r = c.readiness;
     stages.push(["Readiness", r === "serving" ? true : r === "not_serving" ? false : null,
-      r === "not_serving" ? "not ready" : r === "not_reported" ? "not reported" : r === "unmeasured" ? "no answer" : "",
+      r === "not_serving" ? "not ready" : r === "not_reported" ? "not reported" : r === "unmeasured" ? "no result" : "",
       r === "serving" ? "The server reported itself ready for uploads: its own checks of the app node, Fibre module, signer, active set, provider registration and store all pass."
         : r === "not_serving" ? "The server reported itself not ready for uploads: at least one of its own checks fails — app node, Fibre module, signer, active set, provider registration or store. Which one is in the operator's log. Uploads to it may fail."
         : r === "not_reported" ? "This endpoint does not report upload readiness."
-        : "The readiness question got no answer in time."]);
+        : "The readiness question gave no result: no answer in time, or an answer that is not a readiness status (a refusal or an error)."]);
   }
   const firstFail = stages.findIndex(([, ok]) => ok === false);
   // what state the endpoint is in, in words, when it needs a look: before activation there is nothing to conclude,
@@ -626,7 +626,7 @@ function Page() {
             {v.host
               ? <EndpointFact host={v.host} since={endpointSince} />
               : v.last_host
-                ? <><dt>Last endpoint</dt><dd title="Still registered on chain; the validator left the bonded set."><span className="vd-id"><Host s={v.last_host} /></span>{v.endpoint_closed_at && <em>left {dateUTC(v.endpoint_closed_at)}</em>}</dd></>
+                ? <><dt>Last endpoint</dt><dd title="Last endpoint on record; the validator left the bonded set."><span className="vd-id"><Host s={v.last_host} /></span>{v.endpoint_closed_at && <em>left {dateUTC(v.endpoint_closed_at)}</em>}</dd></>
                 : <><dt>Endpoint</dt><dd className="vd-none" title={noEndpoint && diag ? diag.text : undefined}><em>none registered</em>
                   {noEndpoint && diag?.docs && <a href={diag.docs.href} rel="noopener noreferrer" target="_blank">{diag.docs.word} →</a>}</dd></>}
           </div>

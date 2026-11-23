@@ -226,3 +226,41 @@ func TestAVantageFileFromAnotherChainStopsBeforeItsFirstRow(t *testing.T) {
 		t.Fatalf("the cursor moved past the refused row: %d", off)
 	}
 }
+
+// A vantage file read from far back is still this chain's when blocks are
+// 0.8 seconds apart (app version 12): ten days before the tip on record the
+// chain was 1,080,000 blocks lower, more than a block a second allows. A
+// height millions of blocks away is refused as before.
+func TestAVantageBacklogAtSubSecondBlocksIsThisChain(t *testing.T) {
+	st := openStore(t)
+	data := t.TempDir()
+	own := filepath.Join(data, "reachability.jsonl")
+	vdir := filepath.Join(data, ingest.VantagesDir)
+	now := time.Date(2026, 9, 25, 11, 0, 0, 0, time.UTC)
+
+	os.WriteFile(own, []byte(beatAt("ut-1", "aa", 0, 1_400_000)+"\n"), 0o644)
+	if r, err := ingest.Reachability(st, own, now); err != nil || r.Inserted != 1 {
+		t.Fatalf("own file: %+v %v", r, err)
+	}
+	st.SetMeta("chain_height", "1400600", now)
+	st.SetMeta("chain_tip_time", store.TS(now), now)
+
+	old := func(vantage string, height int64) string {
+		at := now.Add(-10 * 24 * time.Hour).Format(time.RFC3339)
+		return fmt.Sprintf(`{"vantage":%q,"validator_address":"aa","validator_host":"h:7980","validator_set_height":%d,"scheduled_at":%q,"started_at":%q,"tcp":{"ok":true},"tls":{"ok":true},"outcome":"REACHABLE"}`,
+			vantage, height, at, at)
+	}
+	de := filepath.Join(vdir, "de-1", "reachability.jsonl")
+	os.MkdirAll(filepath.Dir(de), 0o755)
+	os.WriteFile(de, []byte(old("de-1", 1_400_600-1_080_000)+"\n"), 0o644)
+	if r, err := ingest.VantageReachability(st, de, "ut-1", now); err != nil || r.Inserted != 1 {
+		t.Fatalf("a row ten days back at 0.8 second blocks was refused: %+v %v", r, err)
+	}
+
+	other := filepath.Join(vdir, "mo-1", "reachability.jsonl")
+	os.MkdirAll(filepath.Dir(other), 0o755)
+	os.WriteFile(other, []byte(old("mo-1", 9_200_000)+"\n"), 0o644)
+	if r, err := ingest.VantageReachability(st, other, "ut-1", now); !errors.Is(err, ingest.ErrOtherChain) || r.Inserted != 0 {
+		t.Fatalf("a height millions of blocks away was not refused: %+v %v", r, err)
+	}
+}

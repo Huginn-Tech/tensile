@@ -93,6 +93,17 @@ type reachEvent struct {
 	endpoint  string    // the address it connected to; "" when refused
 	family    string    // the endpoint's IP version; "" when refused
 	validator string    // whose endpoint it was
+	host      string    // the registered host:port the request was dialled at
+}
+
+// slotHost is the host whose connection slot a connect to the event's
+// endpoint takes (endpoints.go): the one its request was dialled at, or the
+// address itself when the event names none.
+func (e reachEvent) slotHost() string {
+	if e.host != "" {
+		return e.host
+	}
+	return e.endpoint
 }
 
 // resolveEvent is a lookup of a validator's host name that this observer's
@@ -138,7 +149,7 @@ func (l *reachLog) note(m Measurement) {
 			}
 		}
 	}
-	l.ev = append(l.ev, reachEvent{at: at, endpoint: ep, family: fam, validator: m.ValidatorAddress})
+	l.ev = append(l.ev, reachEvent{at: at, endpoint: ep, family: fam, validator: m.ValidatorAddress, host: m.ValidatorHost})
 	l.ev = keepSince(l.ev, cut, func(e reachEvent) time.Time { return e.at })
 }
 
@@ -184,19 +195,20 @@ func (l *reachLog) resolvedNames(from, to time.Time, except string) int {
 }
 
 // recentEndpoints is up to n of the addresses connected to last over the IP
-// version family ("" any), newest first, each once, none of them except's.
-func (l *reachLog) recentEndpoints(n int, except, family string) []string {
+// version family ("" any), newest first, each once, none of them except's,
+// each as the event that reached it.
+func (l *reachLog) recentEndpoints(n int, except, family string) []reachEvent {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	seen := map[string]bool{}
-	var out []string
+	var out []reachEvent
 	for i := len(l.ev) - 1; i >= 0 && len(out) < n; i-- {
 		e := l.ev[i]
 		if e.endpoint == "" || seen[e.endpoint] || (except != "" && e.validator == except) || (family != "" && e.family != family) {
 			continue
 		}
 		seen[e.endpoint] = true
-		out = append(out, e.endpoint)
+		out = append(out, e)
 	}
 	return out
 }
@@ -251,6 +263,8 @@ func (l *reachLog) check(kind string, run func() bool) bool {
 // the failing validator's (except), three seconds each, at once. One that
 // connects says the network is up. With none to try (nothing reached in
 // half an hour) it is not shown up. One check answers for ten seconds.
+// Each connect is one of the connections the prober holds to that server
+// (connects).
 func (p *Prober) networkUp(ctx context.Context, except, family string) bool {
 	return p.reach.check("tcp "+family, func() bool {
 		eps := p.reach.recentEndpoints(3, except, family)
@@ -261,13 +275,8 @@ func (p *Prober) networkUp(ctx context.Context, except, family string) bool {
 		defer cancel()
 		res := make(chan bool, len(eps))
 		for _, ep := range eps {
-			go func(ep string) {
-				var d net.Dialer
-				c, err := d.DialContext(cctx, "tcp", ep)
-				if err == nil {
-					_ = c.Close()
-				}
-				res <- err == nil
+			go func(ep reachEvent) {
+				res <- p.connects(cctx, ep)
 			}(ep)
 		}
 		up := false
@@ -278,6 +287,28 @@ func (p *Prober) networkUp(ctx context.Context, except, family string) bool {
 		}
 		return up
 	})
+}
+
+// connects reports whether a TCP connect to the address ep reached, closed
+// at once, succeeds within ctx. It takes one of the connection slots the
+// prober keeps for that server (endpoints.go), under the host ep's request
+// was dialled at, and gives it back once the connection is closed. It waits
+// for the slot within ctx, the check's own three seconds, never longer: a
+// request of the same server may hold its slot while its answer is judged
+// (Prober.attempt), and with none free in that time the server is not shown
+// answering.
+func (p *Prober) connects(ctx context.Context, ep reachEvent) bool {
+	free, ok := p.endpoints.acquire(ctx, ep.slotHost(), nil)
+	if !ok {
+		return false
+	}
+	defer free()
+	var d net.Dialer
+	c, err := d.DialContext(ctx, "tcp", ep.endpoint)
+	if err == nil {
+		_ = c.Close()
+	}
+	return err == nil
 }
 
 // resolverUp reports whether this observer's resolver answers a lookup no

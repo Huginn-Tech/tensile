@@ -83,6 +83,25 @@ test("fees read in TIA", () => {
   assert.equal(s.short(720_000), "0.72");
 });
 
+// a day of one blob at 0.004 utia per gas: 2,780 utia, where two decimals ticked 0, 0, 0
+test("the ticks of a day of small fees differ", () => {
+  assert.deepEqual(dayScale([2_780], "fees").ticks.map((t) => t.label), ["0.001", "0.002", "0.003"]);
+  assert.deepEqual(dayScale([28_520_000, 27_000_000], "fees").ticks.map((t) => t.label), ["10", "20", "30"]);
+});
+
+// the figure over the bar of such a day, where two decimals said "<.01" for one blob and "0.01" for two, three and five
+test("the figure over a day of small fees keeps two digits", () => {
+  const s = dayScale([2_780, 5_560, 13_900], "fees");
+  assert.equal(s.short(2_780), "0.0028");
+  assert.equal(s.short(5_560), "0.0056");
+  assert.equal(s.short(13_900), "0.014");
+  assert.equal(dayScale([2_780], "fees").short(2_780), "0.0028");
+  // from 0.1 TIA up, and sizes, as before
+  assert.equal(dayScale([28_520_000, 720_000], "fees").short(720_000), "0.72");
+  assert.equal(dayScale([100_000], "fees").short(100_000), "0.10");
+  assert.equal(dayScale([6 * MIB, 4 * MIB], "bytes").short(0.004 * MIB), "<.01");
+});
+
 test("a period with nothing draws nothing", () => {
   const s = dayScale([0, 0, 0], "n");
   assert.equal(s.log, false);

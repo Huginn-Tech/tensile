@@ -160,6 +160,11 @@ func decodeTxMsgs(txBytes []byte) []txMsg {
 // are charged at the new rate, with a warning (recordEconomy), until one is.
 const minGasPriceAppVersion = 12
 
+// MinGasPriceAppVersion is minGasPriceAppVersion for the API, whose
+// published price formula (/v1/params price_formula) changes at the same
+// version.
+const MinGasPriceAppVersion = minGasPriceAppVersion
+
 // chargeUtia is what the module charges, in utia, for a promise's gas in a
 // block that ran under appVersion.
 func chargeUtia(appVersion, gas uint64) uint64 {
@@ -227,7 +232,7 @@ func paymentsInTx(txBytes []byte, blk *Block, txIndex int, txHash string, now ti
 			}
 			p := base
 			p.Kind = PaymentDeposit
-			p.Publisher = msg.Signer
+			p.Publisher = escrowSigner(blk.AppVersion, msg.Signer)
 			p.Denom, p.AmountUtia = coinAmount(msg.Amount)
 			out = append(out, p)
 		case msgWithdrawalTypeURL:
@@ -237,7 +242,7 @@ func paymentsInTx(txBytes []byte, blk *Block, txIndex int, txHash string, now ti
 			}
 			p := base
 			p.Kind = PaymentWithdrawalRequest
-			p.Publisher = msg.Signer
+			p.Publisher = escrowSigner(blk.AppVersion, msg.Signer)
 			p.Denom, p.AmountUtia = coinAmount(msg.Amount)
 			out = append(out, p)
 		}

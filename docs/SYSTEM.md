@@ -603,7 +603,8 @@ the way celestia-app's Fibre client asks for a shard (a full reading, label
   IPv4 first and the families taking turns, the next 250 ms after the one
   before unless it has connected or failed; the first to connect is the
   endpoint
-- a rate limit, a `CANCELLED` the server sends, a timeout, an ICMP
+- a refusal at the server's own limit (`ResourceExhausted`), a `CANCELLED`
+  the server sends, a timeout, an ICMP
   unreachable or a lookup that failed other than with "no such host" from
   a validator is that validator's rows not coming back, as the client sees
   it, only when this observer's own side is shown working: at a full
@@ -618,16 +619,22 @@ the way celestia-app's Fibre client asks for a shard (a full reading, label
   within the clock offset and a minute of its edge, is rewritten to
   `PROBE_ERROR` with the wire outcome in `raw_error`
 - load: 16 blobs (`-blob-concurrency`) and 256 requests (`-concurrency`)
-  at once, 512 MiB of shards in flight (`-in-flight-mib`), and with
+  at once, at most 12 connections to one validator's server
+  (`-endpoint-concurrency`; 0 is no limit), 512 MiB of shards in flight
+  (`-in-flight-mib`), and with
   `-link-mbps` set, no more shard bytes than the link moves in half a
   request's time; shard bytes let go no faster than 400 Mbit/s
   (`-max-read-mbps`: a token bucket charged each request's whole expected
   shard, with a quarter of a second of burst, so the readings leave room
   on the observer's port); a request waits for room until its last
   start, its time starts once it is let go, and it carries the phase the
-  reading started in, so the wait changes nothing. Every row records `observer_load`. The
-  reading's own requests have no limit per validator, as the client has
-  none; a later attempt waits while the same validator's previous attempt
+  reading started in, so the wait changes nothing. Every row records `observer_load`. Every
+  request opens a connection of its own, where the client keeps one to a
+  validator for all its requests; from celestia-app v12 a server allows 16
+  per source address by default (`max_connections_per_ip`) and closes the
+  rest at once, so the readings'
+  requests and the later attempts together hold at most 12 to one server;
+  a later attempt waits while the same validator's previous attempt
   is in flight
 
 The reading ends as the client's `Download` does: available, or
@@ -766,7 +773,8 @@ GET /v1/publishers/{addr}/txs one account's Fibre transactions, successful and f
                               paged over its whole record (?view=all|escrow, ?limit=, ?offset=):
                               a withdrawal request with its payout, escrow with its statement (sums)
 GET /v1/params                x/fibre params + change log (heights, block times), pinned protocol
-                              constants, the fee formula (price_formula)
+                              constants, the fee formula (price_formula), which follows the
+                              chain's app version (the 0.004 utia per gas rate from 12)
 GET /v1/signing               endorsements per settled promise against the ⅔ quorum
 GET /v1/hosting               where the registered endpoints are hosted, and how concentrated
 ```

@@ -23,7 +23,7 @@ export type DayScale = {
   ticks: { v: number; label: string }[];
   /** the indexes of the days far over the rest */
   busy: Set<number>;
-  /** a value as a figure in the plot's unit: "2,364", "6", "0.25" */
+  /** a value as a figure in the plot's unit: "2,364", "6", "0.25"; a fee under 0.1 TIA keeps two significant figures ("0.0028"), where two decimals said "<.01" */
   short: (v: number) => string;
 };
 
@@ -77,7 +77,12 @@ function roundTop(max: number, whole: boolean): { top: number; step: number; k: 
 }
 
 const group = (x: number) => Math.round(x).toLocaleString("en-US");
-const tick = (x: number) => (x >= 1e6 ? `${+(x / 1e6).toFixed(1)}M` : x >= 1e4 ? `${+(x / 1e3).toFixed(1)}K` : (+x.toFixed(2)).toLocaleString("en-US"));
+/** a gridline's figure; under 0.1 it keeps its decimals, down to a millionth (the utia of a TIA), so the ticks of a day of small fees differ: 0.001, 0.002, 0.003, where two decimals said 0 for each */
+const tick = (x: number) =>
+  x >= 1e6 ? `${+(x / 1e6).toFixed(1)}M`
+  : x >= 1e4 ? `${+(x / 1e3).toFixed(1)}K`
+  : x < 0.1 ? (+x.toFixed(6)).toLocaleString("en-US", { maximumFractionDigits: 6 })
+  : (+x.toFixed(2)).toLocaleString("en-US");
 
 export function dayScale(vals: number[], measure: DayMeasure): DayScale {
   const act = vals.filter((v) => v > 0).sort((a, b) => a - b);
@@ -102,7 +107,11 @@ export function dayScale(vals: number[], measure: DayMeasure): DayScale {
   const short = (v: number): string => {
     if (v === 0) return "0";
     const x = v / u.div;
-    return x >= 1e4 ? `${Math.round(x / 1e3)}K` : x >= 100 ? group(x) : x >= 1 ? (Number.isInteger(x) ? String(x) : x.toFixed(1)) : x >= 0.005 ? x.toFixed(2) : "<.01";
+    return x >= 1e4 ? `${Math.round(x / 1e3)}K`
+      : x >= 100 ? group(x)
+      : x >= 1 ? (Number.isInteger(x) ? String(x) : x.toFixed(1))
+      : measure === "fees" && x < 0.1 ? String(+x.toPrecision(2))
+      : x >= 0.005 ? x.toFixed(2) : "<.01";
   };
   if (!log) {
     const t = roundTop(max / u.div, measure === "n");

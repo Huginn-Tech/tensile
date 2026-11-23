@@ -125,7 +125,8 @@ func classes(cs ...probe.Classification) string { return fmt.Sprint(cs) }
 // validator's own is not served (no such shard, rows that do not verify or
 // fewer of its own than it holds, a wrong or lapsed certificate, an
 // endpoint that refused, timed out or could not be routed to, no
-// registered host, a timeout, a rate limit, a server error or a shard no
+// registered host, a timeout, a refusal at the server's own limit, a
+// server error or a shard no
 // client can use); this observer's own failures are its gap and count
 // neither way, and so do genuine rows that are not the validator's own and
 // that no settled promise explains (more of them, or fewer). One answer

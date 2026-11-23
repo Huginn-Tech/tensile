@@ -61,8 +61,8 @@ const VERDICTS: Record<string, Def> = {
     def: "An error, or an answer no client accepts, instead of the shard. Not served when it is the validator's last answer, unless one of its requests failed on Tensile's side, was not made, or brought back rows of the blob that are not its own.",
   },
   THROTTLED: {
-    label: "rate limited", tier: "hold",
-    def: "Refused with a rate limit instead of the shard. Not served when it is the validator's last answer, unless one of its requests failed on Tensile's side, was not made, or brought back rows of the blob that are not its own.",
+    label: "server limit", tier: "hold",
+    def: "Refused at the server's own limit (ResourceExhausted) instead of the shard. Not served when it is the validator's last answer, unless one of its requests failed on Tensile's side, was not made, or brought back rows of the blob that are not its own.",
   },
   UNATTESTED: {
     label: "not endorsed", tier: "held",
