@@ -1,6 +1,7 @@
 package assign
 
 import (
+	"strconv"
 	"testing"
 )
 
@@ -109,6 +110,11 @@ func TestPinnedConstants(t *testing.T) {
 	}
 	if len(PinnedCelestiaAppCommit) != 40 {
 		t.Errorf("PinnedCelestiaAppCommit is not a full SHA: %q", PinnedCelestiaAppCommit)
+	}
+	// The prober compares the chain with the major and /v1/health with the
+	// version. A pin bump that moves only one of them fails here.
+	if want := "v" + strconv.FormatUint(PinnedCelestiaAppMajor, 10); PinnedCelestiaAppVersion != want {
+		t.Errorf("PinnedCelestiaAppVersion = %q and PinnedCelestiaAppMajor = %d: the version must be %q", PinnedCelestiaAppVersion, PinnedCelestiaAppMajor, want)
 	}
 }
 

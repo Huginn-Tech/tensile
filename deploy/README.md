@@ -236,7 +236,9 @@ not a measurement, and about three times what the earlier reading moved
 when it stopped at enough rows (12 to 20 validators and about 19 MiB a
 blob, about 50 Mbit/s). Every endorser is asked for every blob it
 endorsed, on one connection per request (the client keeps one connection
-to a validator for all its requests). From celestia-app v12 a server
+to a validator for all its requests). A server before v12 allows 16
+connections in all, for every client together and not per source address,
+and leaves the rest waiting to be accepted. From celestia-app v12 a server
 allows 16 connections per source address by default
 (`max_connections_per_ip`) and closes the rest at once, so
 the prober holds at most 12 to one server (`-endpoint-concurrency`; 0 is
@@ -2092,12 +2094,22 @@ can go: `sudo rm -r /var/lib/fibre-observer/mocha-txbackfill`.
 - **The chain upgraded past the pin** (`pin_status: chain_ahead`). The row
   assignment this observer computes depends on constants pinned to a
   celestia-app commit (`fibre-assign/params.go`), and a new major may change
-  them. Until the pin is bumped, verdicts about who holds which rows may be
-  wrong, and the site shows a banner. To bump: diff `fibre`, `x/fibre`,
-  `x/valaddr`, `proto` and `specs` between the pinned commit and the release
-  tag, update `PinnedCelestiaAppCommit`, `PinnedCelestiaAppVersion` and the
-  `celestia-app` line plus the copied `replace` block in
-  `fibre-sentinel/go.mod`, re-run `fibre-assign/reftest`, rebuild, deploy.
+  them. Until the pin is bumped, the prober records every reading that
+  depends on the assignment as `PROBE_ERROR` ("assignment pin stale"), so
+  no verdict says who holds which rows; `/v1/health` fails its `pin` check
+  and the health watcher alerts. The site shows nothing about it. To bump:
+  diff `fibre`, `x/fibre`, `x/valaddr`, `proto` and `specs` between the
+  pinned commit and the release tag, then update together
+  `PinnedCelestiaAppCommit`, `PinnedCelestiaAppVersion` and
+  `PinnedCelestiaAppMajor` (`fibre-assign/params.go`), `pinnedAppVersions`
+  (`fibre-sentinel/internal/failedtx/explain.go`) and the `celestia-app`
+  line plus the copied `replace` block in `fibre-sentinel/go.mod`, re-run
+  `fibre-assign/reftest`, rebuild, deploy. The prober compares the chain
+  with the major and `/v1/health` with the version: a major left behind
+  would turn every such reading into `PROBE_ERROR` while `/v1/health`
+  reads `matches`. The tests fail on that mismatch (`TestPinnedConstants`
+  in `fibre-assign`, and the `failedtx` test that holds the highest
+  version in `pinnedAppVersions` to the major).
   The bump also adds the pin it leaves to `assignPins` in
   `internal/slim` when reftest is bit-identical across the two: the slim
   record computes a validator's rows again only under a pin listed there,
