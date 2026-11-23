@@ -52,7 +52,7 @@ if f:
         days_left = f[-1] / ((d[-1]-d[0]) / hours * 24)
         print(f"  at this growth the disk fills in {days_left:.0f} days")
         if days_left < 60: warn.append(f"disk full in {days_left:.0f} days at the observed growth")
-for k, thr, unit in (("scanner_lag_blocks", 200, "blocks"), ("chain_age_s", 600, "s"), ("ingest_lag_bytes", 1 << 20, "bytes"), ("compute_ms", 5000, "ms")):
+for k, thr, unit in (("scanner_lag_blocks", 650, "blocks"), ("chain_age_s", 600, "s"), ("ingest_lag_bytes", 1 << 20, "bytes"), ("compute_ms", 5000, "ms")):
     c = col(k)
     if not c: continue
     p95 = sorted(c)[int(len(c) * 0.95) - 1] if len(c) >= 20 else max(c)

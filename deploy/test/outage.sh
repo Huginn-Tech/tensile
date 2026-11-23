@@ -11,7 +11,8 @@
 #      failing check with another name does not count. /v1/network keeps
 #      serving its last figures throughout, which is the design.
 #   B. source restored. Within RECOVER_MIN minutes: health 200, the scanner
-#      within twenty blocks of the chain tip, no scan gap added (a transport
+#      within 65 blocks of the chain tip (52 s at the 0.8 s blocks of app
+#      v12, the time 20 blocks were at 2.6 s), no scan gap added (a transport
 #      failure is retried, never recorded as a gap the node could not
 #      serve), every row count at or above what it was, and no duplicate
 #      line in the record.
@@ -147,7 +148,7 @@ restore_env
 # shellcheck disable=SC2086
 systemctl restart $READERS
 if wait_for $((RECOVER_MIN * 60)) "health not 200 yet" healthy; then pass "health 200 again"; else fail "health $(http_code "$HEALTH" "$H") $RECOVER_MIN min after the source came back: $(health_bad_checks "$H")"; fi
-caught_up() { read -r h _ <<<"$(scanned)"; t=$(tip); [ "$t" -gt 0 ] && [ $((t - h)) -le 20 ]; }
+caught_up() { read -r h _ <<<"$(scanned)"; t=$(tip); [ "$t" -gt 0 ] && [ $((t - h)) -le 65 ]; }
 if wait_for $((RECOVER_MIN * 60)) "scanner catching up" caught_up; then
   read -r h1 gaps1 <<<"$(scanned)"; pass "scanner at $h1, tip $(tip): caught up"
 else
