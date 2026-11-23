@@ -304,7 +304,7 @@ export default function Methodology() {
             <p>The answer is the server&rsquo;s own and enters no percentage: Reachability and the service rate stay as they are, and Endpoint now keeps showing whether the server is reachable. In the validator list&rsquo;s Upload readiness column:</p>
             <Rules rows={[
               ["Ready", "The server reports that all of its own checks pass: app node, Fibre module, signer, active set, provider registration and store."],
-              ["Not ready", "The server reported at least one of those checks failing, in two checks in a row. The answer does not say which; the operator’s log does. Uploads to it may fail. It still counts as reachable."],
+              ["Not ready", "The server reported at least one of those checks failing, in two checks in a row. The answer does not say which; the operator’s log does. Uploads to it may fail. It still counts as reachable. On the map and the providers dial it is shown in amber, like an unreachable host or one with a wrong certificate, and the answer does not enter the Reachability percentage."],
               ["—", "No answer to show: the server does not answer the question, as one before v10.5 does not; or the newest check could not ask it; or the server answered not ready once; or the endpoint is not reachable. The reason is on hover."],
             ]} />
           </Def>
@@ -335,7 +335,7 @@ export default function Methodology() {
           <p>Those carry Tensile&rsquo;s eye: <strong>Available</strong> on a publisher&rsquo;s page, and the <strong>Tensile</strong> column beside its blobs, as defined under <a href="#available">Available</a>.</p>
           <dl className="ref-terms">
             <Term id="fees" term="Fees">
-              The module&rsquo;s charge for a blob, taken from the publisher&rsquo;s escrow; not the settlement transaction&rsquo;s own fee. No event carries the amount, so it is recomputed with the module&rsquo;s formula, at one utia per gas in blocks through app version 11; 0.004 utia per gas, rounded up to the whole utia, from app version 12:
+              The module&rsquo;s charge for a blob, taken from the publisher&rsquo;s escrow; not the settlement transaction&rsquo;s own fee. The module&rsquo;s own event carries no amount, so it is recomputed with the module&rsquo;s formula, at one utia per gas in blocks through app version 11; 0.004 utia per gas, rounded up to the whole utia, from app version 12:
               <Formula note="the same charge when a promise times out">650,000 + 45,000 × ceil(blob size / 256 KiB) gas</Formula>
               The transaction fee is separate: the fee payer pays it from its bank balance, and it is in no figure.
             </Term>

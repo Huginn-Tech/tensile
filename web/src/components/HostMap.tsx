@@ -759,6 +759,9 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
     const n = c.hosts.length, bw = badgeW(n, narrow), bh = badgeH(n, narrow);
     return { c, x, y, bw, bh, hit: Math.max(24, bw + 4, bh + 4) };
   }).filter((p) => p.x >= p.bw / 2 - 2 && p.x <= width - p.bw / 2 + 2 && p.y >= p.bh / 2 - 2 && p.y <= height - p.bh / 2 + 2) : [];
+  // the open place only while its badge is drawn: a badge that split or merged under a zoom has a new id, and its old
+  // one left without a mouse leave, so nothing is held dimmed for a popover that is not shown
+  const openId = open && placed.some((p) => p.c.id === open) ? open : null;
 
   // ---- counts ----
   const countries = hosted.size - (hosted.has("") ? 1 : 0);
@@ -782,7 +785,7 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
 
   return (
     <section className="cm" aria-label="Map of Fibre providers">
-      <div className={`cm-atlas${zoomed ? " zoomed" : ""}${near ? " near" : ""}${open ? " has-open" : ""}`} ref={box}
+      <div className={`cm-atlas${zoomed ? " zoomed" : ""}${near ? " near" : ""}${openId ? " has-open" : ""}`} ref={box}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}
         onDoubleClick={onDoubleClick}>
         <div className="cm-vp">
@@ -806,7 +809,7 @@ export default function HostMap({ rows }: { rows: Validator[] | null }) {
         <canvas className="cm-fx" ref={fx} aria-hidden="true" />
         <ul className="cm-pins" aria-label="Fibre providers by location">
           {placed.map(({ c, x, y, bw, bh, hit }) => {
-            const isOpen = open === c.id;
+            const isOpen = openId === c.id;
             const place = placeLabel(c);
             const tally = WORDS.map((w) => [w, c.hosts.filter((h) => wordOf(h) === w).length] as const).filter(([, n]) => n > 0);
             const unreach = c.hosts.filter(amber).length;

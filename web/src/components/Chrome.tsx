@@ -117,7 +117,7 @@ function NetworkChip({ meta, error }: { meta: Meta | null; error: string | null 
   // a click elsewhere or Escape closes the menu, as a menu is expected to
   useEffect(() => {
     const close = (e: Event) => { const el = box.current; if (el?.open && !(e instanceof KeyboardEvent ? false : el.contains(e.target as Node))) el.open = false; };
-    const key = (e: KeyboardEvent) => { if (e.key === "Escape" && box.current?.open) box.current.open = false; };
+    const key = (e: KeyboardEvent) => { const el = box.current; if (e.key === "Escape" && el?.open) { const inside = el.contains(document.activeElement); el.open = false; if (inside) el.querySelector("summary")?.focus(); } };
     document.addEventListener("click", close);
     document.addEventListener("keydown", key);
     return () => { document.removeEventListener("click", close); document.removeEventListener("keydown", key); };
