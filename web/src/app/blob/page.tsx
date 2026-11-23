@@ -70,7 +70,7 @@ const SERVICE: Record<string, [string, string]> = {
 /** why a reading returned no rows, in a few words */
 const REASON: Record<string, string> = {
   UNREACHABLE: "no answer", IDENTITY_MISMATCH: "wrong certificate", IDENTITY_EXPIRED: "certificate expired",
-  SERVER_ERROR: "server error", THROTTLED: "rate limited", NOT_REGISTERED: "no endpoint",
+  SERVER_ERROR: "server error", THROTTLED: "server limit", NOT_REGISTERED: "no endpoint",
 };
 const reasonOf = (p: BlobReading | undefined): string => {
   if (!p) return "";

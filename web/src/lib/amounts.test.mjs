@@ -12,7 +12,79 @@ const load = (file) => {
   const js = ts.transpileModule(src, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 } }).outputText;
   return import(`data:text/javascript;base64,${Buffer.from(js).toString("base64")}`);
 };
-const { coins, feeTia, exactCoin, shortCoin } = await load("./amounts.ts");
+const { coins, feeTia, exactCoin, shortCoin, tia, blobFee } = await load("./amounts.ts");
+
+// /v1/params price_formula as a chain through app version 11 publishes it, and with what one on app version 12 adds
+const THROUGH_11 = { base_gas: 650000, gas_per_chunk: 45000, chunk_bytes: 262144, utia_per_gas: 1, note: "" };
+const FROM_12 = { ...THROUGH_11, from_app_version: 12, utia_per_gas_numerator: 4, utia_per_gas_denominator: 1000, rounding: "ceil" };
+const KiB = 1024, MiB = 1024 * KiB;
+
+test("tia writes every amount from 0.1 TIA up as it always did", () => {
+  assert.equal(tia(null), "—");
+  assert.equal(tia(undefined), "—");
+  assert.equal(tia(0), "0 TIA");
+  // a blob's fee at one utia per gas: 256 KiB, 1 MiB, 16 MiB, 128 MiB
+  assert.equal(tia(695000), "0.695 TIA");
+  assert.equal(tia(830000), "0.830 TIA");
+  assert.equal(tia(3530000), "3.530 TIA");
+  assert.equal(tia(23690000), "23.69 TIA");
+  assert.equal(tia(100000), "0.100 TIA");
+  assert.equal(tia(123400000), "123.4 TIA");
+  assert.equal(tia(6000000000), "6,000 TIA");
+  assert.equal(tia(695000, { unit: false }), "0.695");
+});
+
+test("tia writes an amount under 0.1 TIA down to the utia", () => {
+  // a blob's fee at 0.004 utia per gas: 256 KiB, 16 MiB, 128 MiB; three decimals said 0.003, 0.014, 0.095
+  assert.equal(tia(2780), "0.00278 TIA");
+  assert.equal(tia(14120), "0.01412 TIA");
+  assert.equal(tia(94760), "0.09476 TIA");
+  assert.equal(tia(2500), "0.0025 TIA");
+  assert.equal(tia(-2780), "-0.00278 TIA");
+  assert.equal(tia(2780, { unit: false }), "0.00278");
+  // an average, not a whole number of utia: to the nearest utia
+  assert.equal(tia(740.3125), "0.00074 TIA");
+});
+
+test("tia leaves an amount three decimals already said whole as it was", () => {
+  assert.equal(tia(50000), "0.050 TIA");
+  assert.equal(tia(10000), "0.010 TIA");
+  assert.equal(tia(1000), "0.001 TIA");
+  assert.equal(tia(-50000), "-0.050 TIA");
+  // and one under 0.001 TIA, which was always written to the utia
+  assert.equal(tia(800), "0.0008 TIA");
+  assert.equal(tia(1), "0.000001 TIA");
+});
+
+test("blobFee through app version 11 is the gas at utia_per_gas, as it was", () => {
+  assert.equal(blobFee(THROUGH_11, 256 * KiB), 695000);
+  assert.equal(blobFee(THROUGH_11, 256 * KiB + 1), 740000);
+  assert.equal(blobFee(THROUGH_11, MiB), 830000);
+  assert.equal(blobFee(THROUGH_11, 16 * MiB), 3530000);
+  assert.equal(blobFee(THROUGH_11, 128 * MiB), 23690000);
+});
+
+test("blobFee from app version 12 is the gas at the fraction, rounded up to the whole utia", () => {
+  assert.equal(blobFee(FROM_12, 256 * KiB), 2780);
+  assert.equal(blobFee(FROM_12, 256 * KiB + 1), 2960);
+  assert.equal(blobFee(FROM_12, MiB), 3320);
+  assert.equal(blobFee(FROM_12, 16 * MiB), 14120);
+  assert.equal(blobFee(FROM_12, 128 * MiB), 94760);
+  // an account's average blob is no whole number of bytes
+  assert.equal(blobFee(FROM_12, 300000.5), 2960);
+  // the round-up, on gas the fraction does not divide: 1, 250 and 251 gas at 4/1000
+  const gasOnly = (gas) => ({ ...FROM_12, base_gas: gas, gas_per_chunk: 0 });
+  assert.equal(blobFee(gasOnly(1), 1), 1);
+  assert.equal(blobFee(gasOnly(250), 1), 1);
+  assert.equal(blobFee(gasOnly(251), 1), 2);
+});
+
+test("a blob's fee from app version 12 is 250 times smaller and still written whole", () => {
+  for (const [size, text] of [[256 * KiB, "0.00278 TIA"], [MiB, "0.00332 TIA"], [16 * MiB, "0.01412 TIA"], [128 * MiB, "0.09476 TIA"]]) {
+    assert.equal(blobFee(FROM_12, size) * 250, blobFee(THROUGH_11, size));
+    assert.equal(tia(blobFee(FROM_12, size)), text);
+  }
+});
 
 test("feeTia writes a transaction fee in TIA down to the utia", () => {
   assert.equal(feeTia("8000utia"), "0.008 TIA");

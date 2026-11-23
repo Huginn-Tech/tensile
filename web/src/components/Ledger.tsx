@@ -225,9 +225,19 @@ function take(v: Shown, f: Feed): Shown {
 /** the publisher of a row: who paid, else who submitted it */
 const payer = (b: Blob) => b.publisher || b.signer;
 
-/** a column of amounts keeps one precision, so the digits stack: the finest tia() gives any of them, so a 0.695 TIA fee never rounds to 1 beside a deposit of thousands */
-export function decimals(amounts: number[]): number {
-  return Math.max(0, ...amounts.filter((a) => a !== 0).map((a) => { const v = Math.abs(a) / 1e6; return v >= 1000 ? 0 : v >= 100 ? 1 : v >= 10 ? 2 : 3; }));
+/** the decimals an amount asks of its column: three under 10 TIA, however small, then fewer as it grows */
+const coarse = (a: number) => { const v = Math.abs(a) / 1e6; return v >= 1000 ? 0 : v >= 100 ? 1 : v >= 10 ? 2 : 3; };
+/** the decimals tia() writes a blob's charge with: the same from 0.1 TIA up, and down to the utia under it */
+const fine = (a: number) => { const s = tia(Math.abs(a), { unit: false }), dot = s.indexOf("."); return dot < 0 ? 0 : s.length - dot - 1; };
+/**
+ * a column of amounts keeps one precision, so the digits stack: the finest any of them asks, so a 0.695 TIA fee never
+ * rounds to 1 beside a deposit of thousands. The precision past three decimals comes from blob charges only (fees: a
+ * blob's fee, a timed-out promise's charge, their totals): one under 0.1 TIA, which tia() writes down to the utia,
+ * keeps its digits (0.00278, not 0.003). A deposit, a withdrawal or a balance (amounts) never asks for more than
+ * three, however small; its every digit is on hover
+ */
+export function decimals(amounts: number[], fees: number[] = []): number {
+  return Math.max(0, ...amounts.filter((a) => a !== 0).map(coarse), ...fees.filter((a) => a !== 0).map(fine));
 }
 const tiaAt = (utia: number, dec: number) => `${(utia / 1e6).toLocaleString("en-US", { minimumFractionDigits: dec, maximumFractionDigits: dec })} TIA`;
 const tiaExact = (utia: number) => `${(utia / 1e6).toLocaleString("en-US", { minimumFractionDigits: 6 })} TIA`;
@@ -525,7 +535,10 @@ export default function Ledger({ feed, size, live, skew, onePublisher = false, s
   }, [onePublisher, shown.rows]);
 
   // the amounts' one precision, over the page
-  const dec = onePublisher ? decimals(shown.rows.map((b) => (isBlob(b) ? b.charge?.fee_utia ?? 0 : 0))) : 3;
+  const dec = onePublisher ? decimals([], shown.rows.map((b) => (isBlob(b) ? b.charge?.fee_utia ?? 0 : 0))) : 3;
+  // a fee under 0.1 TIA is written down to the utia, two digits longer than the fee column holds: on a page with one
+  // the column is wider (fee-utia), and a page without one keeps the widths it had
+  const feeUtia = shown.rows.some((b) => isBlob(b) && !!b.charge && b.charge.fee_utia > 0 && b.charge.fee_utia < 100_000);
 
   const fresh = motion ? shown.move?.fresh : undefined;
   const cols = (onePublisher ? 9 : 10) + (status ? 1 : 0);
@@ -547,7 +560,7 @@ export default function Ledger({ feed, size, live, skew, onePublisher = false, s
         <div className={`lg-tw${waiting ? " is-waiting" : ""}`} aria-busy={waiting || !shown.loaded}>
           {!shown.loaded && (!feed.error || feed.unanswered) && <span className="sr-only">Loading…</span>}
           {/* the Status column's room: the Blobs list's (lg-st), or one publisher's list's own (pst) */}
-          <table ref={tableRef} className={`lg-t${onePublisher ? " lg-one" : ""}${status ? (onePublisher ? " pst" : " lg-st") : ""}`}>
+          <table ref={tableRef} className={`lg-t${onePublisher ? " lg-one" : ""}${status ? (onePublisher ? " pst" : " lg-st") : ""}${feeUtia ? " fee-utia" : ""}`}>
             <LedgerHead one={onePublisher} status={status} />
             <tbody ref={bodyRef}>
               {!shown.loaded && (feed.error && !feed.unanswered

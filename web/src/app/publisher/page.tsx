@@ -265,8 +265,8 @@ function Publisher({ addr }: { addr: string }) {
   const sums = txsHere?.sums;
   if (e && !e.denom && sums && sums.deposited_utia - sums.fees_utia - sums.charged_utia - sums.withdrawn_utia === e.balance_utia) {
     foot.push({ label: "Deposited", utia: sums.deposited_utia, sign: "+" });
-    if (sums.fees_utia) foot.push({ label: `Fees paid for ${plural(sums.settlements, "settlement")}`, utia: sums.fees_utia, sign: "−" });
-    if (sums.charged_utia) foot.push({ label: "Charged for timed-out promises", utia: sums.charged_utia, sign: "−" });
+    if (sums.fees_utia) foot.push({ label: `Fees paid for ${plural(sums.settlements, "settlement")}`, utia: sums.fees_utia, sign: "−", fee: true });
+    if (sums.charged_utia) foot.push({ label: "Charged for timed-out promises", utia: sums.charged_utia, sign: "−", fee: true });
     if (sums.withdrawn_utia) foot.push({ label: "Withdrawn", utia: sums.withdrawn_utia, sign: "−" });
     foot.push({ label: "Escrow now", utia: e.balance_utia, sign: "", tot: true });
   }

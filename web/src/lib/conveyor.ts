@@ -2,9 +2,10 @@
  * The overview's recent-blobs grid moves like a conveyor: the blobs a beat brings (a block's, all settled at one
  * moment) come in one at a time, STEP_MS apart, in one slide that eases at each place, rather than in one jump of
  * several places. A lone blob slides in SLIDE_MS as it always did. The first place moves the moment the beat is drawn,
- * so nothing comes later than before; a beat of many shortens its steps so the whole slide stays within MAX_MS, well
- * inside a block, and the grid never falls behind the chain. Nothing is read for it: the grid's one read per block
- * brings the beat, and the slide is the tapes' transform alone.
+ * so nothing comes later than before; a beat of many shortens its steps so the whole slide stays within MAX_MS, and
+ * the grid keeps up with the chain: that is well inside a block through app v11 (about 2.6 s) and about one block from
+ * v12 (0.8 s at the least), where a block that comes while the last one still slides goes on as it settles. Nothing is
+ * read for it: the grid's one read per block brings the beat, and the slide is the tapes' transform alone.
  */
 
 /** a lone blob's slide */

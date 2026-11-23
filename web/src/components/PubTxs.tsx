@@ -55,8 +55,11 @@ export type PubTxs = {
   /** Escrow only */
   sums?: PubTxSums;
 };
-/** the statement's lines under Escrow's last page: the labels up to the Amount column, the figures in it */
-export type Foot = { label: string; utia: number; sign: string; tot?: boolean }[];
+/**
+ * the statement's lines under Escrow's last page: the labels up to the Amount column, the figures in it; fee marks a
+ * total of blob charges, which sets the column's precision as a blob's fee does (decimals)
+ */
+export type Foot = { label: string; utia: number; sign: string; tot?: boolean; fee?: boolean }[];
 
 type Col = "bh" | "tm" | "x" | "k" | "am" | "st";
 const COLS: Col[] = ["bh", "tm", "x", "k", "am", "st"];
@@ -173,7 +176,13 @@ export default function TxList({ view, offset, data, error, page, size, onPage, 
   const rows = mine?.txs ?? [];
   const last = !!mine && !waiting && page >= Math.ceil(mine.total / size);
   const lines = esc && last ? foot : [];
-  const dec = decimals([...rows.map((t) => (t.status === "failed" ? 0 : t.amount_utia ?? 0)), ...lines.map((f) => f.utia)]);
+  // the column's precision: a blob's fee and a timed-out promise's charge as charges, every other movement as an amount
+  const moved = rows.filter((t) => t.status !== "failed");
+  const charge = (t: PubTx) => t.kind === "settlement" || t.kind === "timeout";
+  const dec = decimals(
+    [...moved.filter((t) => !charge(t)).map((t) => t.amount_utia ?? 0), ...lines.filter((f) => !f.fee).map((f) => f.utia)],
+    [...moved.filter(charge).map((t) => t.amount_utia ?? 0), ...lines.filter((f) => f.fee).map((f) => f.utia)],
+  );
   // the amounts right-aligned in one box as wide as the widest on the page, the box centred under its head, so the
   // digits stack and the column stays centred
   const ref = useRef<HTMLTableElement>(null);

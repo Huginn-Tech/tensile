@@ -6,7 +6,11 @@
  * runs ahead of the chain.
  */
 
-/** Celestia's block time before the page has a measure of its own (mainnet and Mocha, October 2026: 2.9 s) */
+/**
+ * a block's length before the page has a measure of its own: what mainnet and Mocha measured in October 2026 (2.9 s).
+ * It is a guess only: from app v12 a block can be as short as 0.8 s, and the page's own measure takes over after
+ * BLOCK_SPAN blocks
+ */
 export const BLOCK_MS_GUESS = 2890;
 /** blocks seen before their own pace is trusted over the guess */
 export const BLOCK_SPAN = 40;
