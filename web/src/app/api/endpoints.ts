@@ -696,7 +696,7 @@ export const GROUPS: Group[] = [
         id: "validators",
         path: "/v1/validators",
         summary: "Every validator on record, with service, endorsements and hosting.",
-        desc: "A validator that is not bonded and has no open endpoint is listed only for a period that holds something of it; `/v1/validators/{addr}` answers for it in any period.",
+        desc: "A validator that is not bonded and has no open endpoint is listed only for a period that holds something of it; `/v1/validators/{addr}` answers for it in any period. The site's validator list shows only the rows with `jailed` false and `bond_status` BOND_STATUS_BONDED.",
         params: [windowParam, asOf],
         example: EX_VALIDATORS,
       },

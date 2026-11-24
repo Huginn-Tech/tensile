@@ -64,10 +64,10 @@ function certificate(reason: string | undefined): string {
 
 /** the endpoint right now: the chain's own words first, then the newest handshake */
 export function endpoint(v: Validator): { dot: string; word: string; title: string; warn?: boolean } {
-  if (v.jailed) return { dot: "none", word: "Jailed", title: "Jailed: out of the bonded set, so not checked. Shards it endorsed are still owed." };
+  if (v.jailed) return { dot: "none", word: "Jailed", title: "Jailed: out of the bonded set, so its endpoint is not checked. Shards it endorsed are still owed." };
   if (!bonded(v)) {
     const w = v.bond_status!.replace("BOND_STATUS_", "").toLowerCase();
-    return { dot: "none", word: "Not bonded", title: `${w.charAt(0).toUpperCase()}${w.slice(1)}: out of the bonded set, so not checked.` };
+    return { dot: "none", word: "Not bonded", title: `${w.charAt(0).toUpperCase()}${w.slice(1)}: out of the bonded set, so its endpoint is not checked. Shards it endorsed are still owed.` };
   }
   if (!v.host) return { dot: "none", word: "No endpoint", title: v.last_host ? `No open Fibre endpoint; last registered ${v.last_host}.` : "No Fibre provider registered." };
   if (v.reachable === null) return { dot: "none", word: "Not checked yet", title: `${v.host}: no handshake attempted yet.` };
@@ -359,6 +359,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
                   : filter === "unreachable" ? "Every registered endpoint answered its newest check."
                   : filter === "cert" ? "No endpoint answered its newest check with a certificate a publisher rejects."
                   : filter === "providers" ? "No bonded validator has registered a Fibre provider yet."
+                  : filter === "notready" ? "No reachable endpoint reported itself not ready in its last two checks."
                   : "Every bonded validator has registered a Fibre provider."}
               </td></tr>
             )}

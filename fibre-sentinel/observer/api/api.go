@@ -2417,8 +2417,9 @@ type validatorRow struct {
 	Website   string `json:"website,omitempty"`
 	// Jailed and BondStatus are the chain's own words about the validator,
 	// unlike everything else on this row, which this observer measured. A
-	// jailed validator still owes the shards it signed for, so these are
-	// shown rather than used to drop anyone from the table.
+	// jailed validator still owes the shards it signed for, so the API keeps
+	// its row; the site's validator list leaves out a row that is jailed or
+	// not bonded.
 	Jailed     bool   `json:"jailed"`
 	BondStatus string `json:"bond_status,omitempty"`
 	// SignaledUpgrade says whether this validator has signalled for the app
