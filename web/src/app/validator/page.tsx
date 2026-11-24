@@ -470,7 +470,10 @@ function Page() {
   const measuring = !!o && o.total > 0 && decided < MIN_RATED && o.pending > 0;
   const att = v.attestation;
   const sig = v.signing;
-  const load = v.load && v.load.rows_per_blob > 0 ? v.load : null;
+  // out of the bonded set it has no rows on the newest settled blob, and what it stored in the period or still holds
+  // is real: those two figures stay, and only Rows per blob goes blank (rowsPerBlob)
+  const load = v.load && (v.load.rows_per_blob > 0 || (!bonded && (v.load.promises > 0 || v.load.stored_bytes > 0))) ? v.load : null;
+  const rowsPerBlob = load && load.rows_per_blob > 0 ? load.rows_per_blob : null;
   const site = safeSite(v.website);
   // the endpoint's date only when it says something the provider date beside the name does not: a re-registration
   const endpointSince = v.endpoint_since && (!v.provider_since || shortDate(v.endpoint_since) !== shortDate(v.provider_since)) ? v.endpoint_since : null;
@@ -691,7 +694,7 @@ function Page() {
         {/* the period's other figures in one row under them, each in a frame of its own: separate measurements, read one
             by one */}
         <div className="vd-boxes">
-          <div className="vd-box" title={!bonded ? "Out of the bonded set: not checked." : reach ? `${int(reach.num)} of ${int(reach.den)} checks in the period completed TLS with this validator’s certificate; not signing uptime.${v.last_unreachable_at ? ` Last unreachable ${utcWord(v.last_unreachable_at)}.` : ""}` : "No handshake yet."}>
+          <div className="vd-box" title={!bonded ? "Out of the bonded set: its endpoint is not checked." : reach ? `${int(reach.num)} of ${int(reach.den)} checks in the period completed TLS with this validator’s certificate; not signing uptime.${v.last_unreachable_at ? ` Last unreachable ${utcWord(v.last_unreachable_at)}.` : ""}` : "No handshake yet."}>
             <span className="vd-lbl">Reachability</span>
             <span className="vd-fv"><b>{reach ? pctOf(reach.num, reach.den) : "—"}</b>{reach && <em>{int(reach.num)} / {int(reach.den)}</em>}</span>
           </div>
@@ -735,11 +738,11 @@ function Page() {
             <span className="vd-lbl">Held now</span>
             <span className="vd-fv"><b>{load ? unit(bytes(load.stored_bytes)) : "—"}</b></span>
           </div>
-          <div className={"vd-ocf" + (load ? "" : " na")} title="Rows it is assigned of each blob, by stake whatever the blob size; from the newest settled blob.">
+          <div className={"vd-ocf" + (rowsPerBlob ? "" : " na")} title="Rows it is assigned of each blob, by stake whatever the blob size; from the newest settled blob.">
             <span className="vd-lbl">Rows per blob</span>
-            <span className="vd-fv"><b>{load ? int(load.rows_per_blob) : "—"}</b></span>
+            <span className="vd-fv"><b>{rowsPerBlob ? int(rowsPerBlob) : "—"}</b></span>
           </div>
-          <div className="vd-ocf" title="Its stake as the chain records it now, the figure the Validators list sorts by.">
+          <div className="vd-ocf" title={bonded ? "Its stake as the chain records it now, the figure the Validators list sorts by." : "Its voting power at its last assignment, before it left the bonded set."}>
             <span className="vd-lbl">Voting power</span>
             <span className="vd-fv"><b>{int(v.voting_power)}</b>{bondWord && <em>· {bondWord}</em>}</span>
           </div>
