@@ -454,12 +454,14 @@ One sentence each, and what a reader should conclude.
   (`identity_status` is the published word). Heartbeats exist only
   while the validator is in `AllBondedFibreProviders`, so a jailed or
   unbonded validator's denominator stops growing: its endpoint is not
-  checked, and shards it endorsed are still read. It is not in the site's
-  validator table unless searched for, or listed by the table's filter for
-  validators out of the bonded set, which has those with a record in the
-  selected period. Its page says Jailed or Not bonded
-  first (the chain's own `jailed` and `bond_status`), then `host`, then the
-  latest handshake, and shows no reachability figure. "Reachable
+  checked, and shards it endorsed are still read. The site's validator
+  table leaves it out; the table's search finds it, and its filter for
+  validators out of the bonded set lists those with a record in the
+  selected period. Its page says Jailed or Not bonded (the chain's own
+  `jailed` and `bond_status`) and shows no reachability figure. For a
+  bonded validator the status word is liveness only: `host`, then the
+  latest handshake; a fault never appears there, it has its own column.
+  "Reachable
   now" (`reachable`) is the newest heartbeat or probe (any phase, assigned or
   not, gaps excluded) with TCP and TLS both successful. `last_reachable_at`
   and `last_unreachable_at` say how long the current state has held.
