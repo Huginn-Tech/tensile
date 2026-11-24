@@ -455,7 +455,9 @@ One sentence each, and what a reader should conclude.
   while the validator is in `AllBondedFibreProviders`, so a jailed or
   unbonded validator's denominator stops growing: its endpoint is not
   checked, and shards it endorsed are still read. It is not in the site's
-  validator table unless searched for. Its page says Jailed or Not bonded
+  validator table unless searched for, or listed by the table's filter for
+  validators out of the bonded set, which has those with a record in the
+  selected period. Its page says Jailed or Not bonded
   first (the chain's own `jailed` and `bond_status`), then `host`, then the
   latest handshake, and shows no reachability figure. "Reachable
   now" (`reachable`) is the newest heartbeat or probe (any phase, assigned or
