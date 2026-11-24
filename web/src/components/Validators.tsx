@@ -26,9 +26,10 @@ import { usePhone } from "@/lib/phone";
  */
 
 const bonded = (v: Validator) => !v.jailed && (!v.bond_status || v.bond_status === "BOND_STATUS_BONDED");
-// Out of the bonded set (jailed, unbonding) with nothing in the period: no promise assigned it rows, no obligation, no
-// endorsed shard. Its row would only say so; the list leaves it out unless a search names it, and its page stays.
-const idle = (v: Validator) => !bonded(v) && !v.obligations?.total && !(v.signing && (v.signing.assigned > 0 || v.signing.unknown > 0)) && !(v.load && v.load.promises > 0);
+// Out of the bonded set (jailed, unbonding, unbonded): the list is of the validators in the set now, in every period,
+// so it leaves the row out unless a search names it. Its page stays, with what it did in the period, and the row is
+// back once the validator is bonded again.
+const idle = (v: Validator) => !bonded(v);
 
 // Whether a row is the validator this observer's own operator runs. It marks
 // and nothing else: no filter, no exclusion, no adjustment.
