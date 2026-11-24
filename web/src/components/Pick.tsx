@@ -38,7 +38,8 @@ export default function Pick<T extends string>({ value, options, onChange, label
   const pick = (i: number) => {
     setOpen(false);
     button.current?.focus();
-    if (options[i].value !== value) onChange(options[i].value);
+    // an option can leave the list while the menu is open (one shown only while the data has a row for it)
+    if (options[i] && options[i].value !== value) onChange(options[i].value);
   };
   const key = (e: KeyboardEvent) => {
     if (!open) {

@@ -54,8 +54,9 @@ answers every download with a server error, and one that rate-limits most
 downloads. On an available blob their failures count neither way, which is
 the case the pages must word right. Two more are jailed: their
 endpoint rows are closed with the reason the collector records and their
-heartbeats stop at that moment, which is how the table's "jailed" word and
-the validator page's "left the bonded list" line get exercised.
+heartbeats stop at that moment. The table leaves them out (search for one
+to see its "Jailed" word), and the validator page's "left the bonded list"
+line is exercised as before.
 
 The reachability heartbeat is generated at its real cadence — every five
 minutes for seven days, so 2,016 samples per registered validator — because

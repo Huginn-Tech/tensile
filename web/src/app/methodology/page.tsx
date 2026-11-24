@@ -126,7 +126,7 @@ export default function Methodology() {
             <div role="listitem">
               <p className="ref-scope-k"><b>Endpoint checks</b><span>every five minutes · two locations</span></p>
               <div className="ref-scope-v">
-                <p>Every registered Fibre endpoint is checked for DNS, TCP, a TLS 1.3 handshake and a certificate signed by the validator&rsquo;s consensus key. No blob data is asked for.</p>
+                <p>Every bonded validator&rsquo;s registered Fibre endpoint is checked for DNS, TCP, a TLS 1.3 handshake and a certificate signed by the validator&rsquo;s consensus key. No blob data is asked for.</p>
                 <p className="ref-scope-g"><a href="#reachability">Reachability</a><a href="#endpoint-checks">TLS identity</a><a href="#readiness">Upload readiness</a></p>
               </div>
             </div>
@@ -292,7 +292,7 @@ export default function Methodology() {
             </More>
           </Def>
 
-          <Def id="endpoint-checks" name="Endpoint checks" say="Every five minutes, the registered Fibre endpoint of each bonded validator gets DNS, TCP, a TLS 1.3 handshake and a check that its certificate is signed by the validator’s consensus key. An endpoint newly registered, or moved to another host, gets its first check within about a minute. One that could not be reached is tried again every half minute; only the try that reaches it is recorded, and it then sits out its next five-minute check, so every endpoint is counted the same number of times.">
+          <Def id="endpoint-checks" name="Endpoint checks" say="Every five minutes, the registered Fibre endpoint of each bonded validator gets DNS, TCP, a TLS 1.3 handshake and a check that its certificate is signed by the validator’s consensus key. An endpoint newly registered, or moved to another host, gets its first check within about a minute. One that could not be reached is tried again every half minute; only the try that reaches it is recorded, and it then sits out its next five-minute check, so every endpoint is counted the same number of times. A validator that is jailed or not bonded has no endpoint check and is left out of the validator list until it is bonded again. A search of the list still finds it, the list’s filter shows those with a record in the selected period, and the validator’s own page keeps its record.">
             <p>No blob data is asked for. The checks give <a href="#reachability">Reachability</a> and the validator&rsquo;s TLS identity:</p>
             <Rules rows={[
               ["verified", "The certificate is signed by this validator’s consensus key."],

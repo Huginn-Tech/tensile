@@ -544,8 +544,9 @@ type ValidatorIdentity struct {
 	Tokens string
 	Jailed bool
 	// Status is BOND_STATUS_BONDED, _UNBONDING or _UNBONDED. A validator that
-	// is not bonded still owes the shards it signed for, so this is shown
-	// rather than used to filter anyone out.
+	// is not bonded still owes the shards it signed for, so nothing is
+	// filtered out here: the API keeps its row, and the site's validator list
+	// leaves it out.
 	Status string
 }
 

@@ -2,12 +2,12 @@
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { type Validator, int, pctOf, ago, utcWord, whenUTC, shortMid, failedWords } from "@/lib/api";
+import { type Validator, type Obligations, useApi, int, pctOf, ago, utcWord, whenUTC, shortMid, failedWords } from "@/lib/api";
 import { WINDOWS, periodName } from "@/lib/window";
 import Avatar from "./Avatar";
 import Copy from "./Copy";
 import Info from "./Info";
-import Pick from "./Pick";
+import Pick, { type PickOption } from "./Pick";
 import { endpointState } from "./Readiness";
 import { HostFlag, HostingCell } from "./Hosting";
 import { SELF_VALIDATOR } from "@/lib/site";
@@ -26,9 +26,20 @@ import { usePhone } from "@/lib/phone";
  */
 
 const bonded = (v: Validator) => !v.jailed && (!v.bond_status || v.bond_status === "BOND_STATUS_BONDED");
-// Out of the bonded set (jailed, unbonding) with nothing in the period: no promise assigned it rows, no obligation, no
-// endorsed shard. Its row would only say so; the list leaves it out unless a search names it, and its page stays.
-const idle = (v: Validator) => !bonded(v) && !v.obligations?.total && !(v.signing && (v.signing.assigned > 0 || v.signing.unknown > 0)) && !(v.load && v.load.promises > 0);
+// Out of the bonded set (jailed, unbonding, unbonded): the list is of the validators in the set now, in every period,
+// so it leaves the row out unless a search names it or the filter for the validators out of the set is chosen. The
+// filter lists the ones the period has a row of; the search also finds one the period holds nothing of, in the all-time
+// list. Its page stays, with what it did in the period, and the row is back once the validator is bonded again.
+const idle = (v: Validator) => !bonded(v);
+
+// A row the search took from the all-time list, for a period that holds nothing of the validator: the all-time figures
+// are not the period's, so they go, and its cells read as any absent figure does. When it last endorsed is the whole
+// record's in every period's row, and stays.
+const NONE: Obligations = { total: 0, served: 0, broken: 0, not_counted: 0, pending: 0, rate: { num: 0, den: 0, value: null } };
+const blank = (v: Validator): Validator => ({
+  ...v, obligations: NONE, provisional_faults: undefined, load: undefined, last_served_at: null,
+  signing: v.signing && { assigned: 0, signed: 0, unknown: 0, last_endorsed_at: v.signing.last_endorsed_at },
+});
 
 // Whether a row is the validator this observer's own operator runs. It marks
 // and nothing else: no filter, no exclusion, no adjustment.
@@ -37,7 +48,7 @@ function isSelf(v: Validator): boolean {
   return [v.address, v.cons_address, v.operator_address].some((a) => !!a && a.toLowerCase() === SELF_VALIDATOR);
 }
 
-type Filter = "all" | "providers" | "unreachable" | "cert" | "notready" | "nohost";
+type Filter = "all" | "providers" | "unreachable" | "cert" | "notready" | "nohost" | "out";
 type SortKey = "power" | "signed";
 
 /** each order's heading; per: it counts the selected period, which follows it in brackets */
@@ -63,10 +74,10 @@ function certificate(reason: string | undefined): string {
 
 /** the endpoint right now: the chain's own words first, then the newest handshake */
 export function endpoint(v: Validator): { dot: string; word: string; title: string; warn?: boolean } {
-  if (v.jailed) return { dot: "none", word: "Jailed", title: "Jailed: out of the bonded set, so not checked. Shards it endorsed are still owed." };
+  if (v.jailed) return { dot: "none", word: "Jailed", title: "Jailed: out of the bonded set, so its endpoint is not checked. Shards it endorsed are still owed." };
   if (!bonded(v)) {
     const w = v.bond_status!.replace("BOND_STATUS_", "").toLowerCase();
-    return { dot: "none", word: "Not bonded", title: `${w.charAt(0).toUpperCase()}${w.slice(1)}: out of the bonded set, so not checked.` };
+    return { dot: "none", word: "Not bonded", title: `${w.charAt(0).toUpperCase()}${w.slice(1)}: out of the bonded set, so its endpoint is not checked. Shards it endorsed are still owed.` };
   }
   if (!v.host) return { dot: "none", word: "No endpoint", title: v.last_host ? `No open Fibre endpoint; last registered ${v.last_host}.` : "No Fibre provider registered." };
   if (v.reachable === null) return { dot: "none", word: "Not checked yet", title: `${v.host}: no handshake attempted yet.` };
@@ -197,20 +208,37 @@ export default function Validators({ rows, window: win, notLive, loading, failed
     cert: rows.filter((v) => bonded(v) && !!v.host && endpointState(v) === "cert").length,
     notready: rows.filter((v) => bonded(v) && !!v.host && endpointState(v) === "reachable" && v.readiness === "not_ready").length,
     nohost: rows.filter((v) => bonded(v) && !v.host).length,
+    out: rows.filter(idle).length,
   }), [rows]);
+  // the choice of the validators out of the set is in the menu only while the period has a row of one, or while it is
+  // the choice made: the control never holds a value that is not among its choices
+  const outOption: PickOption<Filter>[] = counts.out > 0 || filter === "out" ? [{ value: "out", label: "Out of the bonded set", count: counts.out, dot: "none" }] : [];
 
   // The hosting column only exists while the lookup is on (observer/hosting):
   // a column of dashes would read as "nobody knows", which is not what off means.
   // A phone's row has no room for it: the flag after the name says it there.
   const showHosting = useMemo(() => rows.some((v) => !!v.hosting), [rows]) && !phone;
   const needle = q.trim().toLowerCase();
+  // A validator out of the set is in a period's list only while the period holds something of it, and in the all-time
+  // list always (the API's listedRows). So a search of two characters or more, on another period, reads that list too:
+  // asked once, at no interval, only while such a search is on and the period's own list is on screen (a null path asks
+  // nothing, and ends the stream). While it is on its way, or if it fails, the table is as it was: nothing is said of it.
+  const wide = needle.length >= 2 && win !== "all" && (filter === "all" || filter === "out") && rows.length > 0;
+  const whole = useApi<{ validators: Validator[] }>(wide ? "/v1/validators?window=all" : null, 0);
+  // of that list, the validators out of the set that the period's list does not have, with no figure of the period
+  const extra = useMemo<Validator[]>(() => {
+    if (!wide) return [];
+    const have = new Set(rows.map((v) => v.address));
+    return (whole.data?.validators ?? []).filter((v) => idle(v) && !have.has(v.address)).map(blank);
+  }, [wide, whole.data, rows]);
   const list = useMemo(() => {
-    const pool = rows.filter((v) => {
+    const pool = [...rows, ...extra].filter((v) => {
       switch (filter) {
         case "providers": return bonded(v) && !!v.host;
         case "unreachable": case "cert": return bonded(v) && !!v.host && endpointState(v) === filter;
         case "notready": return bonded(v) && !!v.host && endpointState(v) === "reachable" && v.readiness === "not_ready";
         case "nohost": return bonded(v) && !v.host;
+        case "out": return idle(v);
         default: return !idle(v) || !!needle;
       }
     }).filter((v) => !needle
@@ -230,7 +258,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
       const more = sort.key === "signed" ? (b.signing?.assigned ?? 0) - (a.signing?.assigned ?? 0) : 0;
       return (av - bv) * sort.dir || more || b.voting_power - a.voting_power;
     });
-  }, [rows, filter, needle, sort]);
+  }, [rows, extra, filter, needle, sort]);
 
   // a new order is read from its first row: on a phone the list of orders closes and, with the head resting mid-list, the
   // list's top comes back under the head. The page moves up, so the header's tabs come back: its full height is counted
@@ -316,6 +344,7 @@ export default function Validators({ rows, window: win, notLive, loading, failed
             { value: "cert", label: "Wrong certificate now", count: counts.cert, dot: "hold" },
             { value: "notready", label: "Not ready now", count: counts.notready, dot: "hold" },
             { value: "nohost", label: "No endpoint", count: counts.nohost, dot: "none" },
+            ...outOption,
           ]} />
         </div>
       </div>
@@ -358,6 +387,8 @@ export default function Validators({ rows, window: win, notLive, loading, failed
                   : filter === "unreachable" ? "Every registered endpoint answered its newest check."
                   : filter === "cert" ? "No endpoint answered its newest check with a certificate a publisher rejects."
                   : filter === "providers" ? "No bonded validator has registered a Fibre provider yet."
+                  : filter === "notready" ? "No reachable endpoint reported itself not ready in its last two checks."
+                  : filter === "out" ? "No validator with a record in this period is out of the bonded set."
                   : "Every bonded validator has registered a Fibre provider."}
               </td></tr>
             )}

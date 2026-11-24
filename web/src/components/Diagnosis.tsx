@@ -54,7 +54,7 @@ export function diagnose(v: ValidatorDetail, c: EndpointCheck | undefined, decid
     const word = v.bond_status.replace("BOND_STATUS_", "").toLowerCase();
     return {
       tone: "none", title: `${word[0].toUpperCase()}${word.slice(1)}: out of the bonded set`,
-      text: "Only bonded validators are in the Fibre provider list, so nothing is checked. Shards it endorsed while bonded are still owed.",
+      text: "Only bonded validators are in the Fibre provider list, so its endpoint is not checked. Shards it endorsed while bonded are still owed.",
     };
   }
   if (!v.host) {
