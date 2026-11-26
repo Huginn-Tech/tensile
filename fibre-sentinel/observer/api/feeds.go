@@ -718,6 +718,22 @@ func (s *Server) bondedListEntries(ctx context.Context, bech, hexAddr, name stri
 			return nil, err
 		}
 	}
+	// A host change closes the old (validator, host) pair and opens the new
+	// one in the same poll. The validator never left the list, and the
+	// change has its own entry from the chain's event, so neither half is
+	// published here.
+	type move struct{ bech, at string }
+	closedAt, openedAt := map[move]string{}, map[move]string{}
+	for _, e := range eps {
+		openedAt[move{e.bech, e.first}] = e.host
+		if e.closed.Valid {
+			closedAt[move{e.bech, e.closed.String}] = e.host
+		}
+	}
+	hostChange := func(bech, at, host string, other map[move]string) bool {
+		h, ok := other[move{bech, at}]
+		return ok && h != host
+	}
 	var out []feed.Entry
 	for _, e := range eps {
 		addr := hexAddr
@@ -734,7 +750,7 @@ func (s *Server) bondedListEntries(ctx context.Context, bech, hexAddr, name stri
 		}
 		base := []string{"tensile", fm.chainID, addr}
 		atStart := e.first == fm.firstPoll
-		if !(atStart && skipFirstPoll) {
+		if !(atStart && skipFirstPoll) && !hostChange(e.bech, e.first, e.host, closedAt) {
 			at := parseTS(e.first)
 			en := feed.Entry{Kind: "bonded-joined", At: at, Link: validatorLink(addr, ops[addr]),
 				ID: feed.TagID(authority, feedTagDate, append(base, "bonded-joined", idTime(at))...)}
@@ -747,7 +763,7 @@ func (s *Server) bondedListEntries(ctx context.Context, bech, hexAddr, name stri
 			}
 			out = append(out, en)
 		}
-		if e.closed.Valid {
+		if e.closed.Valid && !hostChange(e.bech, e.closed.String, e.host, openedAt) {
 			at := parseTS(e.closed.String)
 			en := feed.Entry{Kind: "bonded-left", At: at, Link: validatorLink(addr, ops[addr]),
 				ID:    feed.TagID(authority, feedTagDate, append(base, "bonded-left", idTime(at))...),

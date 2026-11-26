@@ -34,11 +34,19 @@ type Event struct {
 	// Identity is the identity verdict for KindIdentityProblem.
 	Identity string
 	// Since is the start of the episode a recovery ends (KindRecovered,
-	// KindIdentityRestored), so the entry can say how long it lasted.
+	// KindIdentityRestored), so the entry can say how long it lasted. Zero
+	// when the episode was not watched throughout (MaxBeatGap): its length
+	// is then not known.
 	Since time.Time
 	// Beats is how many consecutive beats confirmed the change.
 	Beats int
 }
+
+// MaxBeatGap is the longest pause between two beats that still counts as
+// watching. A validator out of the bonded provider list (jailed, unbonding)
+// is not checked at all, so an episode that spans such a pause has no known
+// length: it may have been put right on the first day and nobody looked.
+const MaxBeatGap = time.Hour
 
 // Transitions walks the beats (oldest first) and reports when the endpoint
 // became unreachable, when it recovered, when its certificate stopped being
@@ -65,9 +73,13 @@ func Transitions(beats []Beat, n int) []Event {
 	state := unknown
 	var runStart time.Time
 	runLen, runState := 0, unknown
-	var downSince time.Time
+	var downSince, prevAt, gapAt time.Time
 	var runHost string
 	for _, b := range beats {
+		if !prevAt.IsZero() && b.At.Sub(prevAt) > MaxBeatGap {
+			gapAt = b.At
+		}
+		prevAt = b.At
 		s := down
 		if b.Reachable {
 			s = up
@@ -86,7 +98,11 @@ func Transitions(beats []Beat, n int) []Event {
 			out = append(out, Event{Kind: KindUnreachable, At: runStart, Host: runHost, Beats: runLen})
 			downSince = runStart
 		case s == up:
-			out = append(out, Event{Kind: KindRecovered, At: runStart, Host: runHost, Since: downSince, Beats: runLen})
+			since := downSince
+			if gapAt.After(since) {
+				since = time.Time{} // not watched throughout
+			}
+			out = append(out, Event{Kind: KindRecovered, At: runStart, Host: runHost, Since: since, Beats: runLen})
 		}
 		state = s
 	}
@@ -98,7 +114,12 @@ func Transitions(beats []Beat, n int) []Event {
 	var idRunStart, idSince time.Time
 	idRunLen, idRun := 0, ""
 	var idHost string
+	prevAt, gapAt = time.Time{}, time.Time{}
 	for _, b := range beats {
+		if !prevAt.IsZero() && b.At.Sub(prevAt) > MaxBeatGap {
+			gapAt = b.At
+		}
+		prevAt = b.At
 		if !b.Reachable || b.Identity == "" {
 			continue
 		}
@@ -113,7 +134,11 @@ func Transitions(beats []Beat, n int) []Event {
 		case idState == "":
 			// baseline
 		case b.Identity == "verified":
-			out = append(out, Event{Kind: KindIdentityRestored, At: idRunStart, Host: idHost, Since: idSince, Beats: idRunLen})
+			since := idSince
+			if gapAt.After(since) {
+				since = time.Time{} // not watched throughout
+			}
+			out = append(out, Event{Kind: KindIdentityRestored, At: idRunStart, Host: idHost, Since: since, Beats: idRunLen})
 		default:
 			// verified -> problem, or one problem turning into another
 			// (expired -> mismatch is a new fact worth an entry).
