@@ -362,6 +362,45 @@ func TestNetworkFeed(t *testing.T) {
 	}
 }
 
+// A validator that only changed its host never left the bonded provider
+// list: the pair the poll closed and the one it opened in the same poll are
+// not a departure and a join. A validator that dropped out of the poll is.
+func TestFeedHostChangeIsNotLeaving(t *testing.T) {
+	f := newHostingFixture(t)
+	moved := f.started.Add(time.Hour)
+	provs := []scan.FibreProvider{
+		{ConsAddressBech32: f.bechs[0], Host: f.hosts[0]},
+		{ConsAddressBech32: f.bechs[1], Host: "new.example:7980"},
+	}
+	if _, _, err := f.st.ObserveEndpoints(context.Background(), provs, 200, moved); err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(api.New(f.st, "test"))
+	defer ts.Close()
+	count := func(path string) map[string]int {
+		resp, d := fetchAtom(t, ts, path, nil)
+		if resp.StatusCode != 200 {
+			t.Fatalf("%s: status %d", path, resp.StatusCode)
+		}
+		n := map[string]int{}
+		for _, e := range d.Entries {
+			n[e.Category.Term]++
+		}
+		return n
+	}
+	// Beta moved: its first-poll listing stays, nothing says it left or joined again
+	if n := count("/v1/validators/" + f.addrs[1] + "/feed.atom"); n["bonded-left"] != 0 || n["bonded-joined"] != 1 {
+		t.Fatalf("the moved validator: %v", n)
+	}
+	// Gamma dropped out of the poll: that is a departure
+	if n := count("/v1/validators/" + f.addrs[2] + "/feed.atom"); n["bonded-left"] != 1 {
+		t.Fatalf("the validator that left: %v", n)
+	}
+	if n := count("/v1/feed.atom"); n["bonded-left"] != 1 || n["bonded-joined"] != 0 {
+		t.Fatalf("network feed: %v", n)
+	}
+}
+
 // reachRecord is the Record the collector gives a hosting Refresher: the store's reading of a reachability row's
 // raw_json, which keeps the slim form.
 func reachRecord(st *store.Store) func(ctx context.Context, raw []byte) ([]byte, error) {

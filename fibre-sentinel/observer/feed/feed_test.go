@@ -64,6 +64,42 @@ func TestTransitions(t *testing.T) {
 	if !evs[0].At.Equal(t0.Add(15*time.Minute)) || !evs[1].At.Equal(t0.Add(35*time.Minute)) || !evs[1].Since.Equal(evs[0].At) {
 		t.Fatalf("dates: %+v", evs)
 	}
+	// a pause in the checks (the validator out of the bonded list) inside an
+	// episode: the recovery is still news, its length is not known
+	gap := beats("UUUDDDDUUU")
+	for i := 5; i < len(gap); i++ {
+		gap[i].At = gap[i].At.Add(72 * time.Hour)
+	}
+	evs = Transitions(gap, 3)
+	if kinds(evs) != "unreachable,recovered" || !evs[1].Since.IsZero() {
+		t.Fatalf("a pause inside the episode: %+v", evs)
+	}
+	// a pause before the episode leaves its length alone
+	gap = beats("UUUDDDDUUU")
+	for i := 2; i < len(gap); i++ {
+		gap[i].At = gap[i].At.Add(72 * time.Hour)
+	}
+	evs = Transitions(gap, 3)
+	if kinds(evs) != "unreachable,recovered" || !evs[1].Since.Equal(evs[0].At) {
+		t.Fatalf("a pause before the episode: %+v", evs)
+	}
+	// a pause after the recovery began is not part of the episode
+	gap = beats("UUUDDDDUUU")
+	for i := 8; i < len(gap); i++ {
+		gap[i].At = gap[i].At.Add(72 * time.Hour)
+	}
+	evs = Transitions(gap, 3)
+	if kinds(evs) != "unreachable,recovered" || !evs[1].Since.Equal(evs[0].At) {
+		t.Fatalf("a pause after the recovery began: %+v", evs)
+	}
+	idgap := beats("UUUEEEEUUU")
+	for i := 5; i < len(idgap); i++ {
+		idgap[i].At = idgap[i].At.Add(72 * time.Hour)
+	}
+	evs = Transitions(idgap, 3)
+	if kinds(evs) != "identity,identity-restored" || !evs[1].Since.IsZero() {
+		t.Fatalf("a pause inside an identity episode: %+v", evs)
+	}
 	// the same input gives the same events: IDs built from them are stable
 	a, b := Transitions(beats("UUUDDDUUUEEEU"), 3), Transitions(beats("UUUDDDUUUEEEU"), 3)
 	if kinds(a) != kinds(b) || !a[0].At.Equal(b[0].At) {
