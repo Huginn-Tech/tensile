@@ -46,7 +46,9 @@ type Event struct {
 // watching. A validator out of the bonded provider list (jailed, unbonding)
 // is not checked at all, so an episode that spans such a pause has no known
 // length: it may have been put right on the first day and nobody looked.
-const MaxBeatGap = time.Hour
+// Four rounds of the five-minute heartbeat: one or two missed rounds are not
+// a pause.
+const MaxBeatGap = 20 * time.Minute
 
 // Transitions walks the beats (oldest first) and reports when the endpoint
 // became unreachable, when it recovered, when its certificate stopped being
@@ -99,7 +101,7 @@ func Transitions(beats []Beat, n int) []Event {
 			downSince = runStart
 		case s == up:
 			since := downSince
-			if gapAt.After(since) {
+			if gapAt.After(since) && !gapAt.After(runStart) {
 				since = time.Time{} // not watched throughout
 			}
 			out = append(out, Event{Kind: KindRecovered, At: runStart, Host: runHost, Since: since, Beats: runLen})
@@ -135,7 +137,7 @@ func Transitions(beats []Beat, n int) []Event {
 			// baseline
 		case b.Identity == "verified":
 			since := idSince
-			if gapAt.After(since) {
+			if gapAt.After(since) && !gapAt.After(idRunStart) {
 				since = time.Time{} // not watched throughout
 			}
 			out = append(out, Event{Kind: KindIdentityRestored, At: idRunStart, Host: idHost, Since: since, Beats: idRunLen})

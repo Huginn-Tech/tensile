@@ -83,6 +83,15 @@ func TestTransitions(t *testing.T) {
 	if kinds(evs) != "unreachable,recovered" || !evs[1].Since.Equal(evs[0].At) {
 		t.Fatalf("a pause before the episode: %+v", evs)
 	}
+	// a pause after the recovery began is not part of the episode
+	gap = beats("UUUDDDDUUU")
+	for i := 8; i < len(gap); i++ {
+		gap[i].At = gap[i].At.Add(72 * time.Hour)
+	}
+	evs = Transitions(gap, 3)
+	if kinds(evs) != "unreachable,recovered" || !evs[1].Since.Equal(evs[0].At) {
+		t.Fatalf("a pause after the recovery began: %+v", evs)
+	}
 	idgap := beats("UUUEEEEUUU")
 	for i := 5; i < len(idgap); i++ {
 		idgap[i].At = idgap[i].At.Add(72 * time.Hour)

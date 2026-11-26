@@ -677,6 +677,7 @@ func (s *Server) bondedListEntries(ctx context.Context, bech, hexAddr, name stri
 		COALESCE(e.closed_reason, ''), COALESCE(i.moniker, '')
 		FROM endpoints e LEFT JOIN validator_identities i ON i.cons_address = ?`
 	args := []any{hexAddr}
+	cut := ""
 	if bech != "" {
 		q += ` WHERE e.validator_cons_address = ?`
 		args = append(args, bech)
@@ -685,7 +686,7 @@ func (s *Server) bondedListEntries(ctx context.Context, bech, hexAddr, name stri
 		// Network-wide: the join key is per row, so it is done in Go below.
 		q = `SELECT validator_cons_address, host, first_seen_at, first_seen_height, closed_at, closed_height,
 			COALESCE(closed_reason, ''), '' FROM endpoints WHERE first_seen_at >= ? OR closed_at >= ?`
-		cut := store.TS(s.now().Add(-feed.MaxAge))
+		cut = store.TS(s.now().Add(-feed.MaxAge))
 		args = []any{cut, cut}
 	}
 	rows, err := s.st.DB().QueryContext(ctx, q, args...)
@@ -720,8 +721,8 @@ func (s *Server) bondedListEntries(ctx context.Context, bech, hexAddr, name stri
 	}
 	// A host change closes the old (validator, host) pair and opens the new
 	// one in the same poll. The validator never left the list, and the
-	// change has its own entry from the chain's event, so neither half is
-	// published here.
+	// change normally has its own entry from the chain's event, so neither
+	// half is published here.
 	type move struct{ bech, at string }
 	closedAt, openedAt := map[move]string{}, map[move]string{}
 	for _, e := range eps {
@@ -750,7 +751,10 @@ func (s *Server) bondedListEntries(ctx context.Context, bech, hexAddr, name stri
 		}
 		base := []string{"tensile", fm.chainID, addr}
 		atStart := e.first == fm.firstPoll
-		if !(atStart && skipFirstPoll) && !hostChange(e.bech, e.first, e.host, closedAt) {
+		// A row selected only because it closed inside the span: its opening
+		// is older than the span, and the row that would show it to be a host
+		// change was not selected.
+		if !(atStart && skipFirstPoll) && !hostChange(e.bech, e.first, e.host, closedAt) && !(cut != "" && e.first < cut) {
 			at := parseTS(e.first)
 			en := feed.Entry{Kind: "bonded-joined", At: at, Link: validatorLink(addr, ops[addr]),
 				ID: feed.TagID(authority, feedTagDate, append(base, "bonded-joined", idTime(at))...)}
